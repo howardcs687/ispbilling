@@ -51,7 +51,10 @@ import {
   MessageSquare,
   FileText,
   Send,
-  ArrowRight
+  ArrowRight,
+  Gauge,
+  Download, // Added for Ookla UI
+  Upload // Added for Ookla UI
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -85,6 +88,63 @@ const TICKETS_COLLECTION = 'isp_tickets_v1';
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
 // --- Components ---
+
+// UPDATED Speed Test Component (Ookla Style)
+const SpeedTest = () => {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 h-full min-h-[500px] flex flex-col items-center justify-center text-center animate-in fade-in duration-500 relative overflow-hidden">
+      
+      {/* Background Elements to mimic Ookla vibe */}
+      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-100 to-white opacity-50 pointer-events-none"></div>
+      
+      <div className="relative z-10 flex flex-col items-center w-full max-w-lg">
+        <div className="mb-8">
+           <div className="bg-black text-white px-6 py-2 rounded-full inline-flex items-center gap-2 mb-4 shadow-lg">
+              <Gauge size={20} className="text-green-400" />
+              <span className="font-black tracking-tighter text-xl">SPEEDTEST</span>
+              <span className="font-light text-slate-400 text-sm">by Ookla</span>
+           </div>
+           <h2 className="text-3xl font-bold text-slate-800 mb-2">Test Your Connection</h2>
+           <p className="text-slate-500">Launch the secure speed test to measure your internet performance.</p>
+        </div>
+        
+        <button 
+          onClick={() => window.open('https://www.speedtest.net/', 'Ookla Speedtest', 'width=800,height=600')}
+          className="group relative flex items-center justify-center w-40 h-40 rounded-full bg-transparent border-4 border-blue-100 hover:border-blue-200 transition-all duration-500 focus:outline-none"
+        >
+           {/* The Big GO Button */}
+           <div className="absolute inset-0 m-2 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 shadow-xl shadow-blue-200 group-hover:scale-105 transition-transform duration-300 flex items-center justify-center">
+              <span className="text-4xl font-black text-white tracking-widest group-hover:tracking-[0.2em] transition-all">GO</span>
+           </div>
+           
+           {/* Pulse Effect */}
+           <div className="absolute -inset-4 rounded-full border border-blue-100 opacity-0 group-hover:opacity-100 group-hover:animate-ping"></div>
+        </button>
+        
+        <div className="mt-12 grid grid-cols-3 gap-8 w-full text-slate-400">
+          <div className="flex flex-col items-center gap-2">
+             <div className="p-3 bg-slate-50 rounded-full">
+               <Activity size={20} />
+             </div>
+             <span className="text-xs font-bold uppercase tracking-widest">Ping</span>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+             <div className="p-3 bg-slate-50 rounded-full">
+               <Download size={20} />
+             </div>
+             <span className="text-xs font-bold uppercase tracking-widest">Download</span>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+             <div className="p-3 bg-slate-50 rounded-full">
+               <Upload size={20} />
+             </div>
+             <span className="text-xs font-bold uppercase tracking-widest">Upload</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // 1. Shared Layout
 const Layout = ({ children, user, onLogout }) => {
@@ -337,12 +397,20 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
           Overview
         </button>
         <button 
+          onClick={() => setActiveTab('speedtest')}
+          className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'speedtest' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}
+        >
+          <Gauge size={16} /> Speed Test
+        </button>
+        <button 
           onClick={() => setActiveTab('support')}
           className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'support' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}
         >
           Support & Tickets
         </button>
       </div>
+
+      {activeTab === 'speedtest' && <SpeedTest />}
 
       {activeTab === 'overview' && (
         <>
@@ -796,16 +864,18 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
     <div className="space-y-6 animate-in fade-in">
       {/* Admin Tabs */}
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit flex space-x-1 overflow-x-auto max-w-full mx-auto md:mx-0">
-         {['subscribers', 'payments', 'tickets', 'plans'].map(tab => (
+         {['subscribers', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => ( // Added speedtest
             <button
                key={tab}
                onClick={() => setActiveTab(tab)}
-               className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}
+               className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}
             >
-               {tab}
+               {tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab}
             </button>
          ))}
       </div>
+
+      {activeTab === 'speedtest' && <SpeedTest />}
 
       {activeTab === 'subscribers' && (
         <>
