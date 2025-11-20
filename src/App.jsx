@@ -42,7 +42,8 @@ import {
   Mail,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  RefreshCw
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -138,7 +139,7 @@ const Layout = ({ children, user, onLogout }) => {
 };
 
 // 2. Login Component
-const Login = ({ onLogin, onRegisterAdmin }) => {
+const Login = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState(''); 
   const [loading, setLoading] = useState(false);
@@ -242,15 +243,9 @@ const Login = ({ onLogin, onRegisterAdmin }) => {
               {loading ? 'Signing In...' : 'Sign In'}
             </button>
           </form>
-
-          <div className="mt-6 text-center">
-             <button 
-                onClick={onRegisterAdmin}
-                className="text-xs text-slate-400 hover:text-blue-600 underline"
-             >
-               First time? Create Admin Account
-             </button>
-          </div>
+          
+          {/* Removed the "Create Admin Account" link for security */}
+          
         </div>
       </div>
     </div>
@@ -1025,17 +1020,6 @@ export default function App() {
     await signOut(auth);
   };
 
-  const handleRegisterAdmin = async () => {
-    try {
-      // This is a helper to create the FIRST admin account.
-      // In a real app, you'd disable this or use the console.
-      await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, "admin12345");
-      alert(`Admin account created!\nEmail: ${ADMIN_EMAIL}\nPass: admin12345\n\nPlease change this password later.`);
-    } catch (e) {
-      alert("Could not create admin. It likely already exists. Try logging in with admin@swiftnet.com / admin12345");
-    }
-  };
-
   const handlePayment = async (id, refNumber) => {
     if (!refNumber) return;
     try {
@@ -1055,7 +1039,7 @@ export default function App() {
   if (loading) return <div className="min-h-screen flex items-center justify-center text-blue-600">Loading SwiftNet...</div>;
 
   if (!user) {
-    return <Login onLogin={() => {}} onRegisterAdmin={handleRegisterAdmin} />;
+    return <Login onLogin={() => {}} />;
   }
 
   return (
