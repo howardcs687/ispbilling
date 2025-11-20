@@ -225,22 +225,15 @@ const Login = ({ onLogin }) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-700 text-white font-semibold py-3 rounded-lg hover:bg-blue-800 transition-all active:scale-95 disabled:opacity-50"
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-3.5 rounded-xl shadow-lg hover:shadow-blue-500/30 hover:translate-y-[-1px] transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {loading ? 'Verifying...' : 'Sign In'}
+              {loading ? 'Verifying Credentials...' : 'Sign In'}
             </button>
           </form>
           
-          {mode === 'subscriber' && (
-             <p className="text-center text-xs text-slate-400 mt-4">
-               Demo User: <strong>john_doe</strong> | Account: <strong>1001</strong>
-             </p>
-          )}
-           {mode === 'admin' && (
-             <p className="text-center text-xs text-slate-400 mt-4">
-               Pin: <strong>1234</strong>
-             </p>
-          )}
+          {/* Credential hints removed for security */}
+          <div className="mt-6 text-center">
+          </div>
         </div>
       </div>
     </div>
