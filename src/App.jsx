@@ -405,10 +405,15 @@ const SubscriberDashboard = ({ userData, onPay }) => {
               </p>
               
               <div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8">
+                {/* UPDATED: Now points to your static file in the public folder */}
                 <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PAY:${userData.accountNumber}:${userData.balance.toFixed(2)}:SWIFTNET`}
+                  src="/qr-code.png"
                   alt="Payment QR"
                   className="w-48 h-48 object-contain"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "https://placehold.co/200x200?text=QR+Image+Missing"; // Fallback if file not found
+                  }}
                 />
               </div>
 
