@@ -43,7 +43,8 @@ import {
   Lock,
   Eye,
   EyeOff,
-  RefreshCw
+  RefreshCw,
+  Calendar // Added this missing import
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -244,8 +245,7 @@ const Login = ({ onLogin }) => {
             </button>
           </form>
           
-          {/* Removed the "Create Admin Account" link for security */}
-          
+          {/* Removed create admin link */}
         </div>
       </div>
     </div>
