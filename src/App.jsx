@@ -6,7 +6,8 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  updatePassword
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -449,7 +450,9 @@ const AdminDashboard = ({ subscribers }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
-  const [showDateModal, setShowDateModal] = useState(null); 
+  const [showDateModal, setShowDateModal] = useState(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false); // New state
+  const [adminNewPass, setAdminNewPass] = useState(''); // New state
   
   const [plans, setPlans] = useState([]);
   const [newPlanName, setNewPlanName] = useState('');
@@ -502,6 +505,28 @@ const AdminDashboard = ({ subscribers }) => {
       });
     } catch (e) {
       console.error("Error adding bill", e);
+    }
+  };
+
+  // Function to change admin password
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (adminNewPass.length < 6) {
+      alert("Password must be at least 6 characters");
+      return;
+    }
+    try {
+      const user = auth.currentUser;
+      await updatePassword(user, adminNewPass);
+      alert("Password updated successfully!");
+      setShowPasswordModal(false);
+      setAdminNewPass('');
+    } catch (error) {
+      if (error.code === 'auth/requires-recent-login') {
+        alert("For security, please logout and login again before changing your password.");
+      } else {
+        alert("Failed to update password: " + error.message);
+      }
     }
   };
 
@@ -591,6 +616,13 @@ const AdminDashboard = ({ subscribers }) => {
           <p className="text-slate-500 text-sm mt-1">Manage accounts, plans, and billing.</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+           <button 
+            onClick={() => setShowPasswordModal(true)}
+            className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-sm"
+          >
+            <Lock size={18} />
+            Change Password
+          </button>
           <button 
             onClick={() => setShowPlanModal(true)}
             className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-sm"
@@ -873,6 +905,46 @@ const AdminDashboard = ({ subscribers }) => {
                 className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors"
               >
                 Update Date
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-blue-700 p-5 flex justify-between items-center">
+              <h3 className="text-white font-bold flex items-center gap-2">
+                <Lock size={20} />
+                Change Admin Password
+              </h3>
+              <button onClick={() => setShowPasswordModal(false)} className="text-white/80 hover:text-white">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleChangePassword} className="p-6 space-y-4">
+              <p className="text-sm text-slate-600">
+                  Enter a new password for your admin account.
+              </p>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Password</label>
+                <input
+                  type="password"
+                  required
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={adminNewPass}
+                  onChange={(e) => setAdminNewPass(e.target.value)}
+                  placeholder="New secure password"
+                />
+              </div>
+              <button 
+                type="submit"
+                className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors"
+              >
+                Update Password
               </button>
             </form>
           </div>
