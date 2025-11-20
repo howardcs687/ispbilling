@@ -85,14 +85,15 @@ const ADMIN_EMAIL = 'admin@swiftnet.com';
 
 // --- Components ---
 
-// 1. Shared Layout
+// 1. Shared Layout - Updated for Better Responsiveness
 const Layout = ({ children, user, onLogout }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-indigo-50 font-sans text-slate-800">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-indigo-50 font-sans text-slate-800 flex flex-col">
       <nav className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white shadow-lg sticky top-0 z-50 backdrop-blur-sm bg-opacity-95">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Expanded max-width to screen-2xl for better desktop fit */}
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-2">
               <div className="bg-white/10 p-2 rounded-lg">
@@ -141,7 +142,8 @@ const Layout = ({ children, user, onLogout }) => {
         )}
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Main content expands to fill space better on large screens */}
+      <main className="flex-grow max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>
     </div>
@@ -260,12 +262,11 @@ const Login = ({ onLogin }) => {
 
 // 3. Subscriber Dashboard
 const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
-  const [activeTab, setActiveTab] = useState('overview'); // overview | support
+  const [activeTab, setActiveTab] = useState('overview'); 
   const [showQR, setShowQR] = useState(false);
   const [refNumber, setRefNumber] = useState('');
   const [submitting, setSubmitting] = useState(false);
   
-  // Ticket State
   const [newTicket, setNewTicket] = useState({ subject: '', message: '' });
   const [ticketLoading, setTicketLoading] = useState(false);
 
@@ -294,7 +295,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
     setTicketLoading(true);
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
-        userId: userData.uid, // Use userData.uid or userData.id depending on how it was saved
+        userId: userData.uid, 
         username: userData.username,
         subject: newTicket.subject,
         message: newTicket.message,
@@ -311,7 +312,6 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
     setTicketLoading(false);
   };
 
-  // Icon helper for announcements
   const getIcon = (type) => {
     switch(type) {
       case 'warning': return <AlertCircle size={18} />;
@@ -330,17 +330,16 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Mobile-friendly Tab Nav */}
-      <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6">
+      <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
         <button 
           onClick={() => setActiveTab('overview')}
-          className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'overview' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}
+          className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'overview' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}
         >
           Overview
         </button>
         <button 
           onClick={() => setActiveTab('support')}
-          className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'support' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}
+          className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'support' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}
         >
           Support & Tickets
         </button>
@@ -348,8 +347,8 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
 
       {activeTab === 'overview' && (
         <>
-          {/* Header Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+          {/* Responsive Grid: 1 col mobile, 2 col tablet, 3 col desktop */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 hover:shadow-lg transition-shadow duration-300">
               <div className={`p-4 rounded-2xl ${userData.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
                 <Activity size={28} />
@@ -372,7 +371,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 hover:shadow-lg transition-shadow duration-300">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 hover:shadow-lg transition-shadow duration-300 sm:col-span-2 lg:col-span-1">
               <div className="p-4 rounded-2xl bg-indigo-50 text-indigo-600">
                 <CreditCard size={28} />
               </div>
@@ -383,9 +382,9 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
             </div>
           </div>
 
-          {/* Main Content Area */}
+          {/* Main Content - Adjusts grid for better filling */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden h-fit">
               <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                 <h3 className="font-bold text-slate-800">Billing Overview</h3>
                 {userData.balance > 0 && <span className="text-[10px] uppercase font-bold bg-red-100 text-red-600 px-3 py-1 rounded-full">Payment Due</span>}
@@ -421,7 +420,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit">
               <h3 className="font-bold text-slate-800 mb-6">System Notifications</h3>
               
               <div className="space-y-4">
@@ -463,7 +462,6 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
 
       {activeTab === 'support' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-           {/* Ticket Form */}
            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-1 h-fit">
               <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                 <MessageSquare size={20} className="text-blue-600"/>
@@ -504,10 +502,9 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
               </form>
            </div>
 
-           {/* Ticket List */}
-           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-2">
+           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-2 h-fit">
               <h3 className="font-bold text-slate-800 mb-4">My Ticket History</h3>
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[600px] overflow-y-auto">
                 {tickets && tickets.length > 0 ? (
                   tickets.map(ticket => (
                     <div key={ticket.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50 hover:border-blue-200 transition-colors">
@@ -602,7 +599,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
 
 // 4. Admin Dashboard
 const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
-  const [activeTab, setActiveTab] = useState('subscribers'); // subscribers | payments | tickets | plans
+  const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
@@ -791,7 +788,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
   return (
     <div className="space-y-6 animate-in fade-in">
       {/* Admin Tabs */}
-      <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit flex space-x-1 overflow-x-auto max-w-full">
+      <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit flex space-x-1 overflow-x-auto max-w-full mx-auto md:mx-0">
          {['subscribers', 'payments', 'tickets', 'plans'].map(tab => (
             <button
                key={tab}
@@ -959,6 +956,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
       {activeTab === 'tickets' && (
          <div className="space-y-4">
              <h2 className="text-xl font-bold text-slate-800">Support Tickets</h2>
+             <div className="grid grid-cols-1 gap-4">
              {tickets && tickets.length > 0 ? tickets.map(ticket => (
                <div key={ticket.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                   <div className="flex justify-between items-start mb-3">
@@ -1004,6 +1002,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
              )) : (
                 <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400">No tickets found.</div>
              )}
+             </div>
          </div>
       )}
 
