@@ -50,7 +50,8 @@ import {
   Megaphone,
   MessageSquare,
   FileText,
-  Send
+  Send,
+  ArrowRight
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -79,21 +80,20 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'swiftnet-production'
 const COLLECTION_NAME = 'isp_users_v1'; 
 const PLANS_COLLECTION = 'isp_plans_v1';
 const ANNOUNCEMENTS_COLLECTION = 'isp_announcements_v1';
-const PAYMENTS_COLLECTION = 'isp_payments_v1'; // New collection for payment logs
-const TICKETS_COLLECTION = 'isp_tickets_v1';   // New collection for support tickets
+const PAYMENTS_COLLECTION = 'isp_payments_v1'; 
+const TICKETS_COLLECTION = 'isp_tickets_v1';   
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
 // --- Components ---
 
-// 1. Shared Layout - Updated for Better Responsiveness
+// 1. Shared Layout
 const Layout = ({ children, user, onLogout }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-indigo-50 font-sans text-slate-800 flex flex-col">
       <nav className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white shadow-lg sticky top-0 z-50 backdrop-blur-sm bg-opacity-95">
-        {/* Expanded max-width to screen-2xl for better desktop fit */}
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-2">
               <div className="bg-white/10 p-2 rounded-lg">
@@ -142,8 +142,7 @@ const Layout = ({ children, user, onLogout }) => {
         )}
       </nav>
 
-      {/* Main content expands to fill space better on large screens */}
-      <main className="flex-grow max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-grow w-full px-4 sm:px-6 lg:px-8 py-6">
         {children}
       </main>
     </div>
@@ -421,7 +420,15 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit">
-              <h3 className="font-bold text-slate-800 mb-6">System Notifications</h3>
+              <div className="flex justify-between items-center mb-6">
+                  <h3 className="font-bold text-slate-800">System Notifications</h3>
+                  <button 
+                    onClick={() => setActiveTab('support')} 
+                    className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                  >
+                    Report Issue <ArrowRight size={14} />
+                  </button>
+              </div>
               
               <div className="space-y-4">
                 {userData.status === 'disconnected' && (
@@ -1153,34 +1160,32 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
-  // 2. Payments (Admin Only)
+  // 2. Payments (Admin Only) - REMOVED orderBy to fix missing index error
   useEffect(() => {
     if (!user || user.role !== 'admin') return;
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), orderBy('date', 'desc'));
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Sort in client-side JavaScript
+      data.sort((a, b) => new Date(b.date) - new Date(a.date));
       setPayments(data);
     });
     return () => unsubscribe();
   }, [user]);
 
-  // 3. Tickets (Admin sees all, User sees theirs)
+  // 3. Tickets (Admin sees all, User sees theirs) - REMOVED orderBy to fix missing index error
   useEffect(() => {
     if (!user) return;
     let q;
     if (user.role === 'admin') {
-      q = query(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), orderBy('date', 'desc'));
+      q = query(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION));
     } else {
-      q = query(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), where('userId', '==', user.uid)); // Filter by user ID
-      // Note: Compound queries (where + orderBy) require an index. 
-      // For now, we sort in client-side if index fails, or just fetch by userId.
-      // To keep it simple without index error:
-      // We'll just fetch by userId and sort in Javascript if needed.
+      q = query(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), where('userId', '==', user.uid)); 
     }
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      // Client side sort to avoid index requirement error for compound queries immediately
+      // Client side sort
       data.sort((a,b) => new Date(b.date) - new Date(a.date));
       setTickets(data);
     });
@@ -1199,12 +1204,14 @@ export default function App() {
      return () => unsubscribe();
   }, [user]);
 
-  // 5. Announcements (Everyone)
+  // 5. Announcements (Everyone) - REMOVED orderBy to fix missing index error
   useEffect(() => {
     if (!user) return;
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), orderBy('date', 'desc'));
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION));
     const unsubscribe = onSnapshot(q, (snapshot) => {
        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+       // Client side sort
+       data.sort((a,b) => new Date(b.date) - new Date(a.date));
        setAnnouncements(data);
     });
     return () => unsubscribe();
