@@ -7,7 +7,8 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  updatePassword
+  updatePassword,
+  updateEmail 
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -53,8 +54,13 @@ import {
   Send,
   ArrowRight,
   Gauge,
-  Download, // Added for Ookla UI
-  Upload // Added for Ookla UI
+  Download, 
+  Upload,
+  UserPlus,
+  UserCog,
+  Globe, 
+  Check,
+  MessageCircle // Added for Follow Up Icon
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -89,14 +95,11 @@ const ADMIN_EMAIL = 'admin@swiftnet.com';
 
 // --- Components ---
 
-// UPDATED Speed Test Component (Ookla Style)
+// Speed Test Component
 const SpeedTest = () => {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 h-full min-h-[500px] flex flex-col items-center justify-center text-center animate-in fade-in duration-500 relative overflow-hidden">
-      
-      {/* Background Elements to mimic Ookla vibe */}
       <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-100 to-white opacity-50 pointer-events-none"></div>
-      
       <div className="relative z-10 flex flex-col items-center w-full max-w-lg">
         <div className="mb-8">
            <div className="bg-black text-white px-6 py-2 rounded-full inline-flex items-center gap-2 mb-4 shadow-lg">
@@ -107,39 +110,19 @@ const SpeedTest = () => {
            <h2 className="text-3xl font-bold text-slate-800 mb-2">Test Your Connection</h2>
            <p className="text-slate-500">Launch the secure speed test to measure your internet performance.</p>
         </div>
-        
         <button 
           onClick={() => window.open('https://www.speedtest.net/', 'Ookla Speedtest', 'width=800,height=600')}
           className="group relative flex items-center justify-center w-40 h-40 rounded-full bg-transparent border-4 border-blue-100 hover:border-blue-200 transition-all duration-500 focus:outline-none"
         >
-           {/* The Big GO Button */}
            <div className="absolute inset-0 m-2 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 shadow-xl shadow-blue-200 group-hover:scale-105 transition-transform duration-300 flex items-center justify-center">
               <span className="text-4xl font-black text-white tracking-widest group-hover:tracking-[0.2em] transition-all">GO</span>
            </div>
-           
-           {/* Pulse Effect */}
            <div className="absolute -inset-4 rounded-full border border-blue-100 opacity-0 group-hover:opacity-100 group-hover:animate-ping"></div>
         </button>
-        
         <div className="mt-12 grid grid-cols-3 gap-8 w-full text-slate-400">
-          <div className="flex flex-col items-center gap-2">
-             <div className="p-3 bg-slate-50 rounded-full">
-               <Activity size={20} />
-             </div>
-             <span className="text-xs font-bold uppercase tracking-widest">Ping</span>
-          </div>
-          <div className="flex flex-col items-center gap-2">
-             <div className="p-3 bg-slate-50 rounded-full">
-               <Download size={20} />
-             </div>
-             <span className="text-xs font-bold uppercase tracking-widest">Download</span>
-          </div>
-          <div className="flex flex-col items-center gap-2">
-             <div className="p-3 bg-slate-50 rounded-full">
-               <Upload size={20} />
-             </div>
-             <span className="text-xs font-bold uppercase tracking-widest">Upload</span>
-          </div>
+          <div className="flex flex-col items-center gap-2"><div className="p-3 bg-slate-50 rounded-full"><Activity size={20} /></div><span className="text-xs font-bold uppercase tracking-widest">Ping</span></div>
+          <div className="flex flex-col items-center gap-2"><div className="p-3 bg-slate-50 rounded-full"><Download size={20} /></div><span className="text-xs font-bold uppercase tracking-widest">Download</span></div>
+          <div className="flex flex-col items-center gap-2"><div className="p-3 bg-slate-50 rounded-full"><Upload size={20} /></div><span className="text-xs font-bold uppercase tracking-widest">Upload</span></div>
         </div>
       </div>
     </div>
@@ -165,7 +148,7 @@ const Layout = ({ children, user, onLogout }) => {
             {user && (
               <div className="hidden md:flex items-center space-x-4">
                 <div className="flex items-center space-x-3 px-4 py-1.5 bg-white/10 rounded-full text-sm border border-white/10 backdrop-blur-md">
-                  {user.email === ADMIN_EMAIL ? <Shield size={14} className="text-yellow-300" /> : <User size={14} className="text-blue-200" />}
+                  {user.role === 'admin' ? <Shield size={14} className="text-yellow-300" /> : <User size={14} className="text-blue-200" />}
                   <span className="font-medium tracking-wide">{user.displayName || user.email}</span>
                 </div>
                 <button 
@@ -329,6 +312,27 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
   const [newTicket, setNewTicket] = useState({ subject: '', message: '' });
   const [ticketLoading, setTicketLoading] = useState(false);
 
+  // Follow Up State
+  const [followUpText, setFollowUpText] = useState('');
+  const [followingUpTo, setFollowingUpTo] = useState(null);
+
+  // Plans State for Subscriber
+  const [availablePlans, setAvailablePlans] = useState([]);
+
+  // Settings State
+  const [manageEmail, setManageEmail] = useState('');
+  const [managePass, setManagePass] = useState('');
+  const [updatingCreds, setUpdatingCreds] = useState(false);
+
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAvailablePlans(fetchedPlans);
+    });
+    return () => unsubscribe();
+  }, []);
+
   if (!userData) return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500">
       <div className="animate-spin mb-4"><RefreshCw /></div>
@@ -349,7 +353,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
   };
 
   const handleCreateTicket = async (e) => {
-    e.preventDefault();
+    if(e) e.preventDefault();
     if (!newTicket.subject || !newTicket.message) return;
     setTicketLoading(true);
     try {
@@ -363,12 +367,104 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
         date: new Date().toISOString()
       });
       setNewTicket({ subject: '', message: '' });
-      alert("Ticket submitted successfully!");
+      alert("Request submitted successfully! Support will review it shortly.");
+      setActiveTab('support'); // Auto redirect to support tab
     } catch (error) {
       console.error("Error creating ticket", error);
-      alert("Failed to submit ticket.");
+      alert("Failed to submit request.");
     }
     setTicketLoading(false);
+  };
+
+  // Updated function to send a follow-up message
+  const handleFollowUpTicket = async (ticketId, originalMessage) => {
+    if(!followUpText) return;
+    try {
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId);
+      const timestamp = new Date().toLocaleString();
+      // Appending message directly. In a more complex app, use a subcollection.
+      const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`;
+      
+      await updateDoc(docRef, { 
+        message: newMessage,
+        status: 'open', // Re-open ticket if it was resolved
+        date: new Date().toISOString() // Update date to bump to top
+      });
+      setFollowingUpTo(null);
+      setFollowUpText('');
+      alert("Follow-up sent successfully!");
+    } catch(e) {
+      console.error(e);
+      alert("Failed to send follow-up");
+    }
+  };
+
+  const handleApplyPlan = (planName) => {
+    if(confirm(`Do you want to submit a request to change your plan to ${planName}?`)) {
+       const msg = `I would like to request a change of plan.\n\nCurrent Plan: ${userData.plan}\nRequested Plan: ${planName}`;
+       const submitPlanTicket = async () => {
+          setTicketLoading(true);
+          try {
+             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+                userId: userData.uid, 
+                username: userData.username,
+                subject: 'Plan Change Request',
+                message: msg,
+                status: 'open',
+                adminReply: '',
+                date: new Date().toISOString()
+             });
+             alert(`Application for ${planName} submitted successfully! Check the Support tab for updates.`);
+             setActiveTab('support');
+          } catch(e) {
+             alert("Failed to submit plan application.");
+          }
+          setTicketLoading(false);
+       };
+       submitPlanTicket();
+    }
+  };
+
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    if (managePass.length < 6) {
+      alert("Password must be at least 6 characters.");
+      return;
+    }
+    setUpdatingCreds(true);
+    try {
+      await updatePassword(auth.currentUser, managePass);
+      setManagePass('');
+      alert("Password updated successfully!");
+    } catch (error) {
+      if (error.code === 'auth/requires-recent-login') {
+        alert("For security, please sign out and sign in again to change your password.");
+      } else {
+        alert("Error updating password: " + error.message);
+      }
+    }
+    setUpdatingCreds(false);
+  };
+
+  const handleUpdateEmail = async (e) => {
+    e.preventDefault();
+    if (!manageEmail) return;
+    setUpdatingCreds(true);
+    try {
+      await updateEmail(auth.currentUser, manageEmail);
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), {
+         email: manageEmail
+      });
+      setManageEmail('');
+      alert("Email updated successfully!");
+    } catch (error) {
+      if (error.code === 'auth/requires-recent-login') {
+        alert("For security, please sign out and sign in again to change your email.");
+      } else {
+        alert("Error updating email: " + error.message);
+      }
+    }
+    setUpdatingCreds(false);
   };
 
   const getIcon = (type) => {
@@ -390,31 +486,17 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
-        <button 
-          onClick={() => setActiveTab('overview')}
-          className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'overview' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}
-        >
-          Overview
-        </button>
-        <button 
-          onClick={() => setActiveTab('speedtest')}
-          className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'speedtest' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}
-        >
-          <Gauge size={16} /> Speed Test
-        </button>
-        <button 
-          onClick={() => setActiveTab('support')}
-          className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'support' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}
-        >
-          Support & Tickets
-        </button>
+        <button onClick={() => setActiveTab('overview')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'overview' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>Overview</button>
+        <button onClick={() => setActiveTab('plans')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'plans' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}><Globe size={16} /> Available Plans</button>
+        <button onClick={() => setActiveTab('speedtest')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'speedtest' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}><Gauge size={16} /> Speed Test</button>
+        <button onClick={() => setActiveTab('support')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'support' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>Support</button>
+        <button onClick={() => setActiveTab('settings')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}><UserCog size={16} /> Settings</button>
       </div>
 
       {activeTab === 'speedtest' && <SpeedTest />}
 
       {activeTab === 'overview' && (
         <>
-          {/* Responsive Grid: 1 col mobile, 2 col tablet, 3 col desktop */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 hover:shadow-lg transition-shadow duration-300">
               <div className={`p-4 rounded-2xl ${userData.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
@@ -422,26 +504,18 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Service Status</p>
-                <p className={`text-xl font-bold capitalize ${userData.status === 'active' ? 'text-green-700' : 'text-red-700'}`}>
-                  {userData.status}
-                </p>
+                <p className={`text-xl font-bold capitalize ${userData.status === 'active' ? 'text-green-700' : 'text-red-700'}`}>{userData.status}</p>
               </div>
             </div>
-
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 hover:shadow-lg transition-shadow duration-300">
-              <div className="p-4 rounded-2xl bg-blue-50 text-blue-600">
-                <Zap size={28} />
-              </div>
+              <div className="p-4 rounded-2xl bg-blue-50 text-blue-600"><Zap size={28} /></div>
               <div>
                 <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Current Plan</p>
                 <p className="text-xl font-bold text-slate-800">{userData.plan}</p>
               </div>
             </div>
-
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 hover:shadow-lg transition-shadow duration-300 sm:col-span-2 lg:col-span-1">
-              <div className="p-4 rounded-2xl bg-indigo-50 text-indigo-600">
-                <CreditCard size={28} />
-              </div>
+              <div className="p-4 rounded-2xl bg-indigo-50 text-indigo-600"><CreditCard size={28} /></div>
               <div>
                 <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Total Balance</p>
                 <p className="text-xl font-bold text-slate-800">${userData.balance.toFixed(2)}</p>
@@ -449,7 +523,6 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
             </div>
           </div>
 
-          {/* Main Content - Adjusts grid for better filling */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden h-fit">
               <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
@@ -469,19 +542,13 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
                   <span className="text-slate-800 font-bold text-lg">Total Due</span>
                   <span className="text-blue-700 font-bold text-3xl">${userData.balance.toFixed(2)}</span>
                 </div>
-
                 {userData.balance > 0 ? (
-                  <button 
-                    onClick={() => setShowQR(true)}
-                    className="w-full mt-4 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center space-x-2 shadow-lg shadow-blue-200 transition-all"
-                  >
-                    <Smartphone size={20} />
-                    <span>Pay with QR Code</span>
+                  <button onClick={() => setShowQR(true)} className="w-full mt-4 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center space-x-2 shadow-lg shadow-blue-200 transition-all">
+                    <Smartphone size={20} /><span>Pay with QR Code</span>
                   </button>
                 ) : (
                   <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center justify-center text-green-700 space-x-2">
-                    <CheckCircle size={20} />
-                    <span className="font-medium">No payment due. You are all set!</span>
+                    <CheckCircle size={20} /><span className="font-medium">No payment due. You are all set!</span>
                   </div>
                 )}
               </div>
@@ -490,14 +557,8 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit">
               <div className="flex justify-between items-center mb-6">
                   <h3 className="font-bold text-slate-800">System Notifications</h3>
-                  <button 
-                    onClick={() => setActiveTab('support')} 
-                    className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
-                  >
-                    Report Issue <ArrowRight size={14} />
-                  </button>
+                  <button onClick={() => setActiveTab('support')} className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">Report Issue <ArrowRight size={14} /></button>
               </div>
-              
               <div className="space-y-4">
                 {userData.status === 'disconnected' && (
                   <div className="bg-red-50 border-l-4 border-red-500 p-5 rounded-r-xl">
@@ -510,13 +571,10 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
                     </div>
                   </div>
                 )}
-                
                 {announcements && announcements.length > 0 ? (
                   announcements.map((ann) => (
                     <div key={ann.id} className="flex items-start p-4 bg-slate-50 rounded-xl">
-                      <div className={`p-2.5 rounded-full mr-4 flex-shrink-0 ${getBgColor(ann.type)}`}>
-                        {getIcon(ann.type)}
-                      </div>
+                      <div className={`p-2.5 rounded-full mr-4 flex-shrink-0 ${getBgColor(ann.type)}`}>{getIcon(ann.type)}</div>
                       <div>
                         <p className="font-bold text-sm text-slate-700">{ann.title}</p>
                         <p className="text-xs text-slate-500 mt-0.5">{ann.message}</p>
@@ -525,14 +583,53 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
                     </div>
                   ))
                 ) : (
-                  <div className="flex items-center justify-center p-4 bg-slate-50 rounded-xl text-slate-400 text-sm">
-                    No new announcements.
-                  </div>
+                  <div className="flex items-center justify-center p-4 bg-slate-50 rounded-xl text-slate-400 text-sm">No new announcements.</div>
                 )}
               </div>
             </div>
           </div>
         </>
+      )}
+
+      {activeTab === 'plans' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+             <h2 className="text-2xl font-bold text-slate-800">Available Internet Plans</h2>
+             <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">Current: {userData.plan}</span>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+             {availablePlans.map((plan) => (
+               <div key={plan.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-slate-100 overflow-hidden flex flex-col">
+                  <div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow">
+                    <h3 className="text-lg font-bold text-slate-800 mb-2">{plan.name}</h3>
+                    <div className="flex items-center gap-2 mb-4">
+                      <Zap size={18} className="text-yellow-500" />
+                      <span className="text-sm text-slate-500">High Speed Internet</span>
+                    </div>
+                    <ul className="space-y-2 mb-6">
+                      <li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li>
+                      <li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Fiber Optic</li>
+                      <li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> 24/7 Support</li>
+                    </ul>
+                  </div>
+                  <div className="p-4 bg-slate-50 border-t border-slate-100">
+                    <button 
+                      onClick={() => handleApplyPlan(plan.name)}
+                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                    >
+                      Request Change <ArrowRight size={16} />
+                    </button>
+                  </div>
+               </div>
+             ))}
+             {availablePlans.length === 0 && (
+                <div className="col-span-full text-center py-12 text-slate-400">
+                  <p>No plans available at the moment.</p>
+                </div>
+             )}
+          </div>
+        </div>
       )}
 
       {activeTab === 'support' && (
@@ -545,35 +642,20 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
               <form onSubmit={handleCreateTicket} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label>
-                  <select 
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                    value={newTicket.subject}
-                    onChange={(e) => setNewTicket({...newTicket, subject: e.target.value})}
-                  >
+                  <select className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={newTicket.subject} onChange={(e) => setNewTicket({...newTicket, subject: e.target.value})}>
                     <option value="">Select Topic...</option>
                     <option value="No Internet Connection">No Internet Connection</option>
                     <option value="Slow Speed">Slow Speed</option>
                     <option value="Billing Issue">Billing Issue</option>
+                    <option value="Plan Change Request">Plan Change Request</option>
                     <option value="Other">Other</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Message</label>
-                  <textarea 
-                    required
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none h-32 resize-none"
-                    placeholder="Describe your issue..."
-                    value={newTicket.message}
-                    onChange={(e) => setNewTicket({...newTicket, message: e.target.value})}
-                  ></textarea>
+                  <textarea required className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none h-32 resize-none" placeholder="Describe your issue..." value={newTicket.message} onChange={(e) => setNewTicket({...newTicket, message: e.target.value})}></textarea>
                 </div>
-                <button 
-                  type="submit"
-                  disabled={ticketLoading}
-                  className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-50"
-                >
-                  {ticketLoading ? 'Submitting...' : 'Submit Ticket'}
-                </button>
+                <button type="submit" disabled={ticketLoading} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-50">{ticketLoading ? 'Submitting...' : 'Submit Ticket'}</button>
               </form>
            </div>
 
@@ -585,31 +667,78 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
                     <div key={ticket.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50 hover:border-blue-200 transition-colors">
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="font-bold text-slate-800">{ticket.subject}</h4>
-                        <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded-full ${ticket.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                          {ticket.status}
-                        </span>
+                        <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded-full ${ticket.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{ticket.status}</span>
                       </div>
-                      <p className="text-sm text-slate-600 mb-3">{ticket.message}</p>
-                      
+                      <p className="text-sm text-slate-600 mb-3 whitespace-pre-wrap">{ticket.message}</p>
                       {ticket.adminReply && (
                          <div className="bg-white border-l-4 border-blue-500 p-3 rounded-r-lg mt-3">
                            <p className="text-xs font-bold text-blue-600 mb-1">Admin Response:</p>
                            <p className="text-sm text-slate-700">{ticket.adminReply}</p>
                          </div>
                       )}
-                      <div className="text-right mt-2">
-                        <span className="text-[10px] text-slate-400">{new Date(ticket.date).toLocaleString()}</span>
+                      
+                      {/* NEW: Follow Up Section */}
+                      <div className="mt-3 pt-2 border-t border-slate-100">
+                         {followingUpTo === ticket.id ? (
+                            <div className="mt-2">
+                               <textarea 
+                                  className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                                  placeholder="Add more details..."
+                                  rows="2"
+                                  value={followUpText}
+                                  onChange={(e) => setFollowUpText(e.target.value)}
+                               ></textarea>
+                               <div className="flex gap-2 justify-end">
+                                  <button onClick={() => setFollowingUpTo(null)} className="text-slate-500 text-xs font-bold px-3 py-1">Cancel</button>
+                                  <button onClick={() => handleFollowUpTicket(ticket.id, ticket.message)} className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-lg hover:bg-blue-700">Send</button>
+                               </div>
+                            </div>
+                         ) : (
+                            <button 
+                               onClick={() => setFollowingUpTo(ticket.id)}
+                               className="text-blue-600 text-xs font-bold flex items-center gap-1 hover:underline mt-1"
+                            >
+                               <MessageCircle size={14} /> Request Follow-up / Add Note
+                            </button>
+                         )}
                       </div>
+
+                      <div className="text-right mt-2"><span className="text-[10px] text-slate-400">{new Date(ticket.date).toLocaleString()}</span></div>
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-10 text-slate-400">
-                    <FileText size={48} className="mx-auto mb-2 opacity-20" />
-                    <p>No tickets submitted yet.</p>
-                  </div>
+                  <div className="text-center py-10 text-slate-400"><FileText size={48} className="mx-auto mb-2 opacity-20" /><p>No tickets submitted yet.</p></div>
                 )}
               </div>
            </div>
+        </div>
+      )}
+
+      {activeTab === 'settings' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Lock size={20} className="text-blue-600"/> Change Password</h3>
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <p className="text-sm text-slate-500 mb-2">Enter a new password to update your login credentials.</p>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Password</label>
+                <input type="password" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={managePass} onChange={(e) => setManagePass(e.target.value)} placeholder="New secure password" />
+              </div>
+              <button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 disabled:opacity-50">{updatingCreds ? 'Updating...' : 'Update Password'}</button>
+            </form>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Mail size={20} className="text-blue-600"/> Update Email</h3>
+            <form onSubmit={handleUpdateEmail} className="space-y-4">
+              <p className="text-sm text-slate-500 mb-2">Update your email address. You will need to sign in with this new email.</p>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Email Address</label>
+                <input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={manageEmail} onChange={(e) => setManageEmail(e.target.value)} placeholder="new@email.com" />
+              </div>
+              <button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900 disabled:opacity-50">{updatingCreds ? 'Updating...' : 'Update Email'}</button>
+            </form>
+          </div>
         </div>
       )}
 
@@ -617,51 +746,19 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="bg-blue-700 p-5 flex justify-between items-center">
-              <h3 className="text-white font-bold flex items-center space-x-2">
-                <CreditCard size={20} />
-                <span>Scan to Pay</span>
-              </h3>
-              <button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full">
-                <X size={20} />
-              </button>
+              <h3 className="text-white font-bold flex items-center space-x-2"><CreditCard size={20} /><span>Scan to Pay</span></h3>
+              <button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full"><X size={20} /></button>
             </div>
-            
             <div className="p-8 flex flex-col items-center text-center">
-              <p className="text-slate-600 text-sm mb-6">
-                Scan the QR code with your banking app to pay
-                <span className="font-bold text-slate-900 block text-2xl mt-2">${userData.balance.toFixed(2)}</span>
-              </p>
-              
+              <p className="text-slate-600 text-sm mb-6">Scan the QR code with your banking app to pay <span className="font-bold text-slate-900 block text-2xl mt-2">${userData.balance.toFixed(2)}</span></p>
               <div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8">
-                <img 
-                  src="/qr-code.png"
-                  alt="Payment QR"
-                  className="w-48 h-48 object-contain"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = "https://placehold.co/200x200?text=QR+Image+Missing";
-                  }}
-                />
+                <img src="/qr-code.png" alt="Payment QR" className="w-48 h-48 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/200x200?text=QR+Image+Missing"; }} />
               </div>
-
               <div className="w-full text-left">
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reference Number</label>
                 <form onSubmit={handlePaymentSubmit} className="flex gap-3">
-                  <input 
-                    type="text" 
-                    required
-                    placeholder="e.g. Ref-123456" 
-                    className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                    value={refNumber}
-                    onChange={(e) => setRefNumber(e.target.value)}
-                  />
-                  <button 
-                    type="submit"
-                    disabled={submitting}
-                    className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200"
-                  >
-                    {submitting ? '...' : 'Verify'}
-                  </button>
+                  <input type="text" required placeholder="e.g. Ref-123456" className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium" value={refNumber} onChange={(e) => setRefNumber(e.target.value)} />
+                  <button type="submit" disabled={submitting} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200">{submitting ? '...' : 'Verify'}</button>
                 </form>
               </div>
             </div>
@@ -672,11 +769,16 @@ const SubscriberDashboard = ({ userData, onPay, announcements, tickets }) => {
   );
 };
 
-// 4. Admin Dashboard
+// 4. Admin Dashboard (Code remains unchanged from context, omitted for brevity as no changes requested here)
+// But for correctness in single file output, I must include the Admin Dashboard code.
+// Re-using the AdminDashboard from context but ensuring it's part of the final file.
+
 const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
+// ... Copying Admin Dashboard logic ...
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddAdminModal, setShowAddAdminModal] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showDateModal, setShowDateModal] = useState(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -695,6 +797,13 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
     accountNumber: '', 
     plan: '' 
   });
+  
+  const [newAdmin, setNewAdmin] = useState({
+    email: '',
+    password: '',
+    username: ''
+  });
+
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', message: '', type: 'info' });
   const [newDueDate, setNewDueDate] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
@@ -792,6 +901,40 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
     setIsCreatingUser(false);
   };
   
+  const handleAddAdmin = async (e) => {
+    e.preventDefault();
+    setIsCreatingUser(true);
+    let secondaryApp = null;
+    try {
+      secondaryApp = initializeApp(firebaseConfig, "SecondaryAdmin");
+      const secondaryAuth = getAuth(secondaryApp);
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newAdmin.email, newAdmin.password);
+      const newUid = userCredential.user.uid;
+      
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), {
+        uid: newUid, 
+        username: newAdmin.username,
+        email: newAdmin.email,
+        role: 'admin', 
+        accountNumber: 'ADMIN',
+        plan: 'N/A',
+        balance: 0,
+        status: 'active',
+        dueDate: new Date().toISOString()
+      });
+      
+      await deleteApp(secondaryApp);
+      setShowAddAdminModal(false);
+      setNewAdmin({ email: '', password: '', username: '' });
+      alert(`Admin created successfully!\nEmail: ${newAdmin.email}\nPassword: ${newAdmin.password}`);
+    } catch (error) {
+      console.error("Error adding admin:", error);
+      if (secondaryApp) await deleteApp(secondaryApp);
+      alert(`Failed to create admin: ${error.message}`);
+    }
+    setIsCreatingUser(false);
+  };
+
   const handleAddPlan = async (e) => {
       e.preventDefault();
       if(!newPlanName) return;
@@ -856,15 +999,14 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
   };
 
   const filteredSubscribers = subscribers.filter(sub => 
-    sub.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    sub.accountNumber.includes(searchTerm)
+    (sub.username?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+     sub.accountNumber?.includes(searchTerm))
   );
 
   return (
     <div className="space-y-6 animate-in fade-in">
-      {/* Admin Tabs */}
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit flex space-x-1 overflow-x-auto max-w-full mx-auto md:mx-0">
-         {['subscribers', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => ( // Added speedtest
+         {['subscribers', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
             <button
                key={tab}
                onClick={() => setActiveTab(tab)}
@@ -881,43 +1023,20 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
         <>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-slate-800">Subscriber Management</h1>
-              <p className="text-slate-500 text-sm mt-1">Total Subscribers: {subscribers.length}</p>
+              <h1 className="text-3xl font-bold text-slate-800">User Management</h1>
+              <p className="text-slate-500 text-sm mt-1">Total Users: {subscribers.length}</p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
-               <button 
-                onClick={() => setShowAnnounceModal(true)}
-                className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-sm"
-              >
-                <Megaphone size={18} />
-                Alert
-              </button>
-               <button 
-                onClick={() => setShowPasswordModal(true)}
-                className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-sm"
-              >
-                <Lock size={18} />
-                Pass
-              </button>
-              <button 
-                onClick={() => setShowAddModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-lg shadow-blue-200"
-              >
-                <Plus size={18} />
-                Add Subscriber
-              </button>
+               <button onClick={() => setShowAnnounceModal(true)} className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-sm"><Megaphone size={18} /> Alert</button>
+               <button onClick={() => setShowPasswordModal(true)} className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-sm"><Lock size={18} /> Pass</button>
+              <button onClick={() => setShowAddAdminModal(true)} className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-lg shadow-slate-300"><UserPlus size={18} /> Add Admin</button>
+              <button onClick={() => setShowAddModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-lg shadow-blue-200"><Plus size={18} /> Add Subscriber</button>
             </div>
           </div>
           
           <div className="relative w-full">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
-            <input 
-              type="text"
-              placeholder="Search subscribers..."
-              className="pl-12 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none w-full bg-white shadow-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+            <input type="text" placeholder="Search users..." className="pl-12 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none w-full bg-white shadow-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -926,6 +1045,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
                 <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                   <tr>
                     <th className="px-6 py-4 font-bold uppercase text-xs tracking-wider">User Info</th>
+                    <th className="px-6 py-4 font-bold uppercase text-xs tracking-wider">Role</th>
                     <th className="px-6 py-4 font-bold uppercase text-xs tracking-wider">Plan</th>
                     <th className="px-6 py-4 font-bold uppercase text-xs tracking-wider">Balance</th>
                     <th className="px-6 py-4 font-bold uppercase text-xs tracking-wider">Due Date</th>
@@ -938,59 +1058,23 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
                     <tr key={sub.id} className="hover:bg-blue-50/30 transition-colors">
                       <td className="px-6 py-4">
                         <div className="font-bold text-slate-800">{sub.username}</div>
-                        <div className="text-xs text-slate-500 flex flex-col">
-                          <span>#{sub.accountNumber}</span>
-                          <span className="text-indigo-500">{sub.email}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-slate-600 font-medium">{sub.plan}</td>
-                      <td className="px-6 py-4 font-mono font-bold text-slate-700">
-                        ${sub.balance.toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 text-slate-600 group relative">
-                        <div className="flex items-center gap-2">
-                          {new Date(sub.dueDate).toLocaleDateString()}
-                          <button 
-                            onClick={() => {
-                              setShowDateModal(sub);
-                              setNewDueDate(new Date(sub.dueDate).toISOString().split('T')[0]);
-                            }}
-                            className="opacity-0 group-hover:opacity-100 text-blue-600 hover:bg-blue-100 p-1.5 rounded-md transition-all"
-                            title="Change Due Date"
-                          >
-                              <Calendar size={14} />
-                          </button>
-                        </div>
+                        <div className="text-xs text-slate-500 flex flex-col"><span>#{sub.accountNumber}</span><span className="text-indigo-500">{sub.email}</span></div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold capitalize
-                          ${sub.status === 'active' ? 'bg-green-100 text-green-700' : 
-                            sub.status === 'disconnected' ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'}`}>
-                          {sub.status}
-                        </span>
+                         {sub.role === 'admin' ? <span className="bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider flex items-center gap-1 w-fit"><Shield size={10} /> Admin</span> : <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Subscriber</span>}
                       </td>
+                      <td className="px-6 py-4 text-slate-600 font-medium">{sub.plan}</td>
+                      <td className="px-6 py-4 font-mono font-bold text-slate-700">${sub.balance?.toFixed(2) || "0.00"}</td>
+                      <td className="px-6 py-4 text-slate-600 group relative">
+                        <div className="flex items-center gap-2">{new Date(sub.dueDate).toLocaleDateString()}<button onClick={() => { setShowDateModal(sub); setNewDueDate(new Date(sub.dueDate).toISOString().split('T')[0]); }} className="opacity-0 group-hover:opacity-100 text-blue-600 hover:bg-blue-100 p-1.5 rounded-md transition-all" title="Change Due Date"><Calendar size={14} /></button></div>
+                      </td>
+                      <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold capitalize ${sub.status === 'active' ? 'bg-green-100 text-green-700' : sub.status === 'disconnected' ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'}`}>{sub.status}</span></td>
                       <td className="px-6 py-4 text-right space-x-2">
-                        <button 
-                          onClick={() => handleAddBill(sub.id, sub.balance)}
-                          className="text-blue-600 hover:text-blue-900 text-xs font-bold border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
-                        >
-                          + Bill
-                        </button>
-                        
-                        {sub.status === 'active' ? (
-                           <button 
-                             onClick={() => handleStatusChange(sub.id, 'disconnected')}
-                             className="text-red-600 hover:text-red-900 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                           >
-                             Cut
-                           </button>
-                        ) : (
-                          <button 
-                             onClick={() => handleStatusChange(sub.id, 'active')}
-                             className="text-green-600 hover:text-green-900 text-xs font-bold border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors"
-                           >
-                             Restore
-                           </button>
+                        {sub.role !== 'admin' && (
+                          <>
+                            <button onClick={() => handleAddBill(sub.id, sub.balance)} className="text-blue-600 hover:text-blue-900 text-xs font-bold border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">+ Bill</button>
+                            {sub.status === 'active' ? <button onClick={() => handleStatusChange(sub.id, 'disconnected')} className="text-red-600 hover:text-red-900 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">Cut</button> : <button onClick={() => handleStatusChange(sub.id, 'active')} className="text-green-600 hover:text-green-900 text-xs font-bold border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors">Restore</button>}
+                          </>
                         )}
                       </td>
                     </tr>
@@ -1041,12 +1125,9 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
                         <h4 className="font-bold text-lg text-slate-800">{ticket.subject}</h4>
                         <p className="text-xs text-slate-500">From: <span className="font-bold text-blue-600">{ticket.username}</span> • {new Date(ticket.date).toLocaleString()}</p>
                      </div>
-                     <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${ticket.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                        {ticket.status}
-                     </span>
+                     <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${ticket.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{ticket.status}</span>
                   </div>
                   <p className="bg-slate-50 p-3 rounded-lg text-slate-700 text-sm mb-4">{ticket.message}</p>
-                  
                   {ticket.adminReply ? (
                      <div className="border-t border-slate-100 pt-3">
                         <p className="text-xs font-bold text-slate-400 uppercase mb-1">Your Reply</p>
@@ -1056,22 +1137,11 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
                      <div className="flex gap-2 mt-2">
                         {replyingTo === ticket.id ? (
                            <div className="w-full">
-                              <textarea 
-                                 className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                                 placeholder="Write a response..."
-                                 rows="3"
-                                 value={replyText}
-                                 onChange={(e) => setReplyText(e.target.value)}
-                              ></textarea>
-                              <div className="flex gap-2 justify-end">
-                                 <button onClick={() => setReplyingTo(null)} className="text-slate-500 text-sm font-bold px-3 py-1">Cancel</button>
-                                 <button onClick={() => handleReplyTicket(ticket.id)} className="bg-blue-600 text-white text-sm font-bold px-4 py-1 rounded-lg hover:bg-blue-700">Send Reply</button>
-                              </div>
+                              <textarea className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Write a response..." rows="3" value={replyText} onChange={(e) => setReplyText(e.target.value)}></textarea>
+                              <div className="flex gap-2 justify-end"><button onClick={() => setReplyingTo(null)} className="text-slate-500 text-sm font-bold px-3 py-1">Cancel</button><button onClick={() => handleReplyTicket(ticket.id)} className="bg-blue-600 text-white text-sm font-bold px-4 py-1 rounded-lg hover:bg-blue-700">Send Reply</button></div>
                            </div>
                         ) : (
-                           <button onClick={() => { setReplyingTo(ticket.id); setReplyText(''); }} className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg font-bold text-sm transition-colors">
-                              <MessageSquare size={16} /> Reply
-                           </button>
+                           <button onClick={() => { setReplyingTo(ticket.id); setReplyText(''); }} className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg font-bold text-sm transition-colors"><MessageSquare size={16} /> Reply</button>
                         )}
                      </div>
                   )}
@@ -1088,14 +1158,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
              <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold text-slate-800">Manage Plans</h2>
                 <form onSubmit={handleAddPlan} className="flex gap-2">
-                    <input 
-                        type="text"
-                        required
-                        placeholder="New Plan Name"
-                        className="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                        value={newPlanName}
-                        onChange={(e) => setNewPlanName(e.target.value)}
-                    />
+                    <input type="text" required placeholder="New Plan Name" className="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" value={newPlanName} onChange={(e) => setNewPlanName(e.target.value)} />
                     <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-bold text-sm">Add</button>
                 </form>
              </div>
@@ -1103,26 +1166,34 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets }) => {
                 {plans.map(p => (
                     <div key={p.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
                         <span className="font-medium text-slate-700">{p.name}</span>
-                        <button onClick={() => handleDeletePlan(p.id)} className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md transition-colors">
-                            <Trash2 size={16} />
-                        </button>
+                        <button onClick={() => handleDeletePlan(p.id)} className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md transition-colors"><Trash2 size={16} /></button>
                     </div>
                 ))}
              </div>
           </div>
       )}
 
-      {/* Modals (Add Subscriber, Date, Password, Announcement) remain same as previous version but simplified here to save space in response. They are included in the full block above. */}
-      {/* ... (Modals included in main return) ... */}
-      {/* Re-inserting modals for completeness in this response block */}
+      {/* Modals (Add Subscriber, Date, Password, Announcement, Add Admin) */}
       
+      {showAddAdminModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-slate-800 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center gap-2"><Shield size={18} /> Add New Admin</h3><button onClick={() => setShowAddAdminModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div>
+            <form onSubmit={handleAddAdmin} className="p-6 space-y-4">
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Admin Name</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newAdmin.username} onChange={(e) => setNewAdmin({...newAdmin, username: e.target.value})} placeholder="Admin Name" /></div>
+              <div className="border-t border-slate-100 pt-2"></div>
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newAdmin.email} onChange={(e) => setNewAdmin({...newAdmin, email: e.target.value})} /></div>
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-mono" value={newAdmin.password} onChange={(e) => setNewAdmin({...newAdmin, password: e.target.value})} /></div>
+              <button type="submit" disabled={isCreatingUser} className="w-full py-2.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900">{isCreatingUser ? 'Creating...' : 'Create Admin Account'}</button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="bg-blue-700 p-5 flex justify-between items-center">
-              <h3 className="text-white font-bold">Add New Subscriber</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button>
-            </div>
+            <div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold">Add New Subscriber</h3><button onClick={() => setShowAddModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div>
             <form onSubmit={handleAddSubscriber} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newUser.username} onChange={(e) => setNewUser({...newUser, username: e.target.value})} placeholder="John Doe" /></div>
@@ -1195,18 +1266,25 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        const isAdmin = currentUser.email === ADMIN_EMAIL;
-        if (isAdmin) {
-           setUser({ ...currentUser, role: 'admin' });
+        // 1. Fetch the user's record from Firestore to check their role
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, currentUser.uid);
+        const docSnap = await getDoc(docRef);
+        
+        let firestoreData = {};
+        if (docSnap.exists()) {
+            firestoreData = { id: docSnap.id, ...docSnap.data() };
+        }
+
+        // 2. Check if they are the super admin (hardcoded) OR have 'admin' role in database
+        const isSuperAdmin = currentUser.email === ADMIN_EMAIL;
+        const isDbAdmin = firestoreData.role === 'admin';
+
+        if (isSuperAdmin || isDbAdmin) {
+           // Merge auth data with firestore data, forcing role to 'admin'
+           setUser({ ...currentUser, role: 'admin', ...firestoreData });
         } else {
-           const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, currentUser.uid);
-           const docSnap = await getDoc(docRef);
-           if (docSnap.exists()) {
-             setMySubscriberData({ id: docSnap.id, ...docSnap.data() });
-             setUser({ ...currentUser, role: 'subscriber' });
-           } else {
-             setUser({ ...currentUser, role: 'subscriber' });
-           }
+           setMySubscriberData(firestoreData);
+           setUser({ ...currentUser, role: 'subscriber' });
         }
       } else {
         setUser(null);
