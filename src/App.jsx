@@ -36,13 +36,11 @@ import {
   Plus,
   Calendar,
   Settings,
-  Trash2
+  Trash2,
+  RefreshCw
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
-// I have pasted your specific keys below. 
-// The check for '__firebase_config' ensures it still works in this preview window,
-// but uses YOUR keys when deployed to Vercel.
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
   apiKey: "AIzaSyDMPhjrmo-TnAoVoIBedOimkaUswrLZNp8",
   authDomain: "swiftnet-isp.firebaseapp.com",
@@ -55,7 +53,7 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-// Initialize Analytics (conditionally, to prevent errors in some environments)
+// Initialize Analytics
 let analytics;
 if (typeof window !== 'undefined') {
   analytics = getAnalytics(app);
@@ -64,8 +62,6 @@ if (typeof window !== 'undefined') {
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// This ID is used to separate data in the database. 
-// In production (Vercel), it defaults to 'swiftnet-production'.
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'swiftnet-production';
 
 // --- Constants ---
@@ -818,18 +814,25 @@ const AdminDashboard = ({ subscribers }) => {
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
   const [subscribers, setSubscribers] = useState([]);
   const [mySubscriberData, setMySubscriberData] = useState(null);
 
   // Auth Initialization
   useEffect(() => {
     const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (error) {
+        console.error("Failed to authenticate:", error);
+        setAuthError(error.message);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     initAuth();
   }, []);
@@ -930,6 +933,44 @@ export default function App() {
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-blue-600">Connecting to SwiftNet...</div>;
+
+  if (authError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-red-50 p-6">
+        <div className="bg-white p-8 rounded-xl shadow-xl max-w-lg w-full border border-red-100">
+          <div className="flex items-center gap-3 text-red-600 mb-4">
+            <AlertCircle size={32} />
+            <h2 className="text-xl font-bold">Connection Error</h2>
+          </div>
+          <p className="text-slate-600 mb-4">
+            We couldn't connect to the SwiftNet system. This is usually because the authentication service hasn't been enabled yet.
+          </p>
+          <div className="bg-slate-100 p-4 rounded-lg font-mono text-xs text-slate-700 mb-6 overflow-x-auto">
+             {authError}
+          </div>
+          
+          {authError.includes("configuration-not-found") && (
+             <div className="mb-6 text-sm text-blue-800 bg-blue-50 p-4 rounded border border-blue-100">
+               <strong>How to fix:</strong>
+               <ol className="list-decimal ml-5 mt-2 space-y-1">
+                 <li>Go to Firebase Console {'>'} Build {'>'} Authentication.</li>
+                 <li>Click "Get Started".</li>
+                 <li>Enable <strong>Anonymous</strong> sign-in provider.</li>
+               </ol>
+             </div>
+          )}
+          
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full bg-red-600 text-white py-2 rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <RefreshCw size={18} />
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return <Login onLogin={handleLogin} />;
