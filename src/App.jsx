@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
+import { getAnalytics } from "firebase/analytics";
 import { 
   getAuth, 
   signInAnonymously, 
@@ -39,15 +40,10 @@ import {
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
+// I have pasted your specific keys below. 
+// The check for '__firebase_config' ensures it still works in this preview window,
+// but uses YOUR keys when deployed to Vercel.
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
   apiKey: "AIzaSyDMPhjrmo-TnAoVoIBedOimkaUswrLZNp8",
   authDomain: "swiftnet-isp.firebaseapp.com",
   projectId: "swiftnet-isp",
@@ -59,7 +55,18 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+// Initialize Analytics (conditionally, to prevent errors in some environments)
+let analytics;
+if (typeof window !== 'undefined') {
+  analytics = getAnalytics(app);
+}
+
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// This ID is used to separate data in the database. 
+// In production (Vercel), it defaults to 'swiftnet-production'.
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'swiftnet-production';
 
 // --- Constants ---
 const COLLECTION_NAME = 'isp_users_v1'; 
