@@ -72,7 +72,8 @@ import {
   Hourglass,
   HelpCircle,
   Bell,
-  Hash 
+  Hash,
+  UserX // Added UserX for Delete User
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -116,8 +117,6 @@ const ODOO_CONFIG = {
 };
 
 // --- Helper Functions ---
-
-// Sends an email using Odoo's JSON-RPC API (mail.mail model)
 const sendSystemEmail = async (to, subject, htmlContent) => {
   console.log("Attempting to send email via Odoo...");
 
@@ -138,13 +137,11 @@ const sendSystemEmail = async (to, subject, htmlContent) => {
         return await response.json();
     } catch (error) {
         console.warn("CORS or Network Error interacting with Odoo directly from browser.", error);
-        // Fallback for when direct fetch fails due to CORS
         return { error: { data: { message: "Network/CORS Error" } } };
     }
   };
 
   try {
-    // Step 1: Authenticate to get UID
     const authResult = await jsonRpc(ODOO_CONFIG.url, "call", {
       service: "common",
       method: "authenticate",
@@ -152,7 +149,6 @@ const sendSystemEmail = async (to, subject, htmlContent) => {
     });
 
     if (authResult.error) {
-      // If auth fails (likely CORS in this environment), just log it and pretend it sent so app doesn't break
       console.warn(`Odoo Auth Skipped/Failed: ${authResult.error.data ? authResult.error.data.message : 'Unknown Error'}`);
       console.log(`%c[SIMULATED EMAIL] To: ${to}\nSubject: ${subject}`, 'color: blue');
       return false; 
@@ -160,7 +156,6 @@ const sendSystemEmail = async (to, subject, htmlContent) => {
 
     const uid = authResult.result;
     
-    // Step 2: Create Email Record in 'mail.mail'
     if (uid) {
         await jsonRpc(ODOO_CONFIG.url, "call", {
         service: "object",
@@ -334,19 +329,14 @@ const Login = ({ onLogin }) => {
         const querySnapshot = await getDocs(q);
         if (querySnapshot.empty) { alert("This email is not registered in our system."); setRecoveryLoading(false); return; }
         const userData = querySnapshot.docs[0].data();
-        
-        const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
-        
-        // Use anonymous auth to create a ticket if not logged in
         const secondaryApp = initializeApp(firebaseConfig, "Recovery");
         const secondaryAuth = getAuth(secondaryApp);
         const secondaryDb = getFirestore(secondaryApp);
         await signInAnonymously(secondaryAuth);
-        
         await addDoc(collection(secondaryDb, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
            userId: userData.uid || 'unknown',
            username: userData.username || 'User',
-           ticketId: ticketId,
+           ticketId: Math.floor(10000000 + Math.random() * 90000000).toString(), 
            subject: 'Password Reset Requested',
            message: `User with email ${recoveryEmail} requested a password reset via the login screen.`,
            status: 'open',
@@ -437,7 +427,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
                 userId: userData.uid, 
                 username: userData.username, 
                 subject: 'New Subscription Application', 
-                message: `Applicant ${userData.username} (${userData.email}) has applied for the ${plan.name} plan.`, 
+                message: `Applicant ${userData.username} (${userData.email}) has applied for the ${plan.name} plan. Please approve and assign an account number.`, 
                 status: 'open', 
                 adminReply: '', 
                 isApplication: true, 
@@ -464,16 +454,12 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
 
   // ... (Dashboard handlers) ...
   const handlePaymentSubmit = async (e) => { e.preventDefault(); setSubmitting(true); await onPay(userData.id, refNumber, userData.username); setSubmitting(false); setShowQR(false); setRefNumber(''); };
-  
   const handleCreateTicket = async (e) => { 
       if(e) e.preventDefault(); 
       if (!newTicket.subject || !newTicket.message) return; 
       setTicketLoading(true); 
       try { 
           const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
-          
-          await sendSystemEmail(userData.email, `Support Ticket #${ticketId}`, `Ticket Created: ${newTicket.subject}`);
-
           await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { 
               ticketId,
               userId: userData.uid, 
@@ -487,13 +473,9 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           setNewTicket({ subject: '', message: '' }); 
           alert(`Ticket #${ticketId} submitted successfully!`); 
           setActiveTab('support'); 
-      } catch (error) { 
-          console.error("Error creating ticket", error); 
-          alert("Failed to submit request."); 
-      } 
+      } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } 
       setTicketLoading(false); 
   };
-
   const handleFollowUpTicket = async (ticketId, originalMessage) => { if(!followUpText) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId); const timestamp = new Date().toLocaleString(); const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`; await updateDoc(docRef, { message: newMessage, status: 'open', date: new Date().toISOString() }); setFollowingUpTo(null); setFollowUpText(''); alert("Follow-up sent successfully!"); } catch(e) { console.error(e); alert("Failed to send follow-up"); } };
   const handleRequestRepair = async (e) => { e.preventDefault(); if(!repairNote) return; try { const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0'); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: randomId, userId: userData.uid, username: userData.username, type: 'Service Repair - Internet', notes: repairNote, status: 'Submission', stepIndex: 0, technicianNote: 'Waiting for initial evaluation.', dateFiled: new Date().toISOString() }); setRepairNote(''); setShowRepairModal(false); alert("Repair request filed successfully!"); } catch(e) { console.error(e); alert("Failed to request repair."); } };
   const handleApplyPlan = (planName) => { if(confirm(`Apply for ${planName}?`)) { const msg = `Requesting plan change.\n\nCurrent: ${userData.plan}\nNew: ${planName}`; const submitPlanTicket = async () => { setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'Plan Change Request', message: msg, status: 'open', adminReply: '', date: new Date().toISOString() }); alert(`Application submitted! Ticket #${ticketId}.`); setActiveTab('support'); } catch(e) { alert("Failed."); } setTicketLoading(false); }; submitPlanTicket(); } };
@@ -663,6 +645,19 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       }
   };
 
+  // NEW: DELETE SUBSCRIBER LOGIC
+  const handleDeleteSubscriber = async (id) => {
+    if (confirm("Are you sure you want to delete this subscriber? They will lose access immediately and have to re-apply.")) {
+      try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id));
+        alert("Subscriber deleted.");
+      } catch (e) {
+        console.error(e);
+        alert("Failed to delete.");
+      }
+    }
+  };
+
   const filteredSubscribers = subscribers.filter(sub => (sub.username?.toLowerCase().includes(searchTerm.toLowerCase()) || sub.accountNumber?.includes(searchTerm)));
 
   return (
@@ -704,12 +699,19 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                       <td className="px-6 py-4 text-right space-x-2 flex justify-end items-center">
                         {sub.role !== 'admin' && (
                           <>
-                            {/* NOTIFY BUTTON */}
                             <button onClick={() => handleOpenNotify(sub)} className="text-slate-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md transition-colors" title="Send Notification">
                                <Bell size={16} />
                             </button>
                             <button onClick={() => handleAddBill(sub.id, sub.balance)} className="text-blue-600 hover:text-blue-900 text-xs font-bold border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">+ Bill</button>
-                            {sub.status === 'active' ? <button onClick={() => handleStatusChange(sub.id, 'disconnected')} className="text-red-600 hover:text-red-900 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">Cut</button> : <button onClick={() => handleStatusChange(sub.id, 'active')} className="text-green-600 hover:text-green-900 text-xs font-bold border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors">Restore</button>}
+                            {sub.status === 'active' ? (
+                               <button onClick={() => handleStatusChange(sub.id, 'disconnected')} className="text-red-600 hover:text-red-900 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">Cut</button> 
+                            ) : (
+                               <button onClick={() => handleStatusChange(sub.id, 'active')} className="text-green-600 hover:text-green-900 text-xs font-bold border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors">Restore</button>
+                            )}
+                            {/* NEW DELETE BUTTON */}
+                            <button onClick={() => handleDeleteSubscriber(sub.id)} className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md transition-colors ml-2" title="Delete User">
+                               <UserX size={16} />
+                            </button>
                           </>
                         )}
                       </td>
@@ -794,7 +796,30 @@ export default function App() {
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, currentUser.uid);
         const docSnap = await getDoc(docRef);
         let firestoreData = {};
-        if (docSnap.exists()) firestoreData = { id: docSnap.id, ...docSnap.data() };
+        
+        if (docSnap.exists()) {
+          firestoreData = { id: docSnap.id, ...docSnap.data() };
+        } else {
+          // AUTO RE-CREATE FOR DELETED USERS
+          // If user exists in Auth but NOT in Firestore, reset them to Applicant
+          if (currentUser.email !== ADMIN_EMAIL) {
+             console.log("User profile missing. Re-initializing as applicant.");
+             firestoreData = {
+                uid: currentUser.uid,
+                username: currentUser.displayName || currentUser.email.split('@')[0],
+                email: currentUser.email,
+                role: 'subscriber',
+                status: 'applicant', // RESET STATUS
+                accountNumber: 'PENDING', // RESET ACCOUNT
+                plan: null,
+                balance: 0,
+                dueDate: new Date().toISOString()
+             };
+             // Write the new blank slate to Firestore
+             await setDoc(docRef, firestoreData);
+          }
+        }
+
         const isAdmin = currentUser.email === ADMIN_EMAIL || firestoreData.role === 'admin';
 
         if (isAdmin) setUser({ ...currentUser, role: 'admin', ...firestoreData });
