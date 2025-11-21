@@ -187,8 +187,7 @@ const sendSystemEmail = async (to, subject, htmlContent) => {
 
 // --- Helper Components ---
 
-// Updated Repair Status Card with User Confirmation
-const RepairStatusCard = ({ repair, isSubscriber, onConfirm }) => {
+const RepairStatusCard = ({ repair }) => {
   const steps = [
     { label: 'Submission', icon: <Check size={16} /> },
     { label: 'Evaluation', icon: <ClipboardList size={16} /> },
@@ -214,77 +213,26 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm }) => {
                </div>
             </div>
          </div>
-         {/* Add Request Details Link/Info maybe here later */}
       </div>
-
-      <p className="text-sm text-slate-600 mb-4 border-b border-slate-100 pb-4">
-         Repairs are usually completed within 24 hours, but may vary depending on your location and the nature of the issue.
-      </p>
-
-      <div className="flex flex-wrap gap-4 text-xs text-slate-500 mb-8">
-         <div className="flex items-center gap-1">
-            <Calendar size={14} /> Filed on {new Date(repair.dateFiled).toLocaleDateString()} at {new Date(repair.dateFiled).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-         </div>
-         <div className="flex items-center gap-1">
-            <Smartphone size={14} /> Request via Portal
-         </div>
-      </div>
-
-      {/* Stepper UI */}
-      <div className="relative flex justify-between items-center mb-8 px-2 overflow-x-auto pb-4 min-w-[600px] md:min-w-0">
-         {/* Progress Bar Background Line */}
-         <div className="absolute top-4 left-0 w-full h-1 bg-slate-100 -z-10 rounded-full"></div>
-         {/* Active Progress Line */}
-         <div 
-            className="absolute top-4 left-0 h-1 bg-red-600 -z-0 rounded-full transition-all duration-500"
-            style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}
-         ></div>
-
-         {steps.map((step, index) => {
-            const isCompleted = index <= currentStepIndex;
-
-            return (
-               <div key={index} className="flex flex-col items-center gap-2 relative group min-w-[80px]">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
-                     isCompleted 
-                        ? 'bg-red-600 border-red-600 text-white' 
-                        : 'bg-white border-slate-200 text-slate-300'
-                  }`}>
-                     {isCompleted ? <Check size={16} /> : step.icon} 
-                  </div>
-                  <span className={`text-[10px] font-bold text-center w-24 absolute -bottom-8 transition-colors ${
-                     isCompleted ? 'text-slate-800' : 'text-slate-400'
-                  }`}>
-                     {step.label}
-                  </span>
-               </div>
-            )
-         })}
-      </div>
-
-      <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col gap-3 mt-10">
-         <div className="flex gap-3">
-            <div className="text-slate-400 mt-0.5"><Megaphone size={18} /></div>
-            <div className="text-sm text-slate-600">
-               <p className="font-bold text-slate-700 mb-1">Technician Update</p>
-               {repair.technicianNote || "Our team is reviewing your request. We will reach out to arrange a convenient time for a visit if needed."}
-            </div>
-         </div>
-         
-         {/* Customer Confirmation Button */}
-         {isSubscriber && currentStepIndex === 3 && (
-             <div className="mt-2 flex justify-end border-t border-slate-200 pt-3">
-                 <div className="flex flex-col items-end gap-2">
-                    <p className="text-xs text-slate-500">Technician marked this as resolved. Please confirm.</p>
-                    <button 
-                        onClick={() => onConfirm(repair.id)}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"
-                    >
-                        <CheckCircle2 size={16} /> Confirm Resolution
-                    </button>
+      <p className="text-sm text-slate-600 mb-4 border-b border-slate-100 pb-4">Repairs are usually completed within 24 hours.</p>
+      
+      <div className="w-full overflow-x-auto pb-4">
+        <div className="relative flex justify-between items-center min-w-[600px] px-2"> 
+           <div className="absolute top-4 left-0 w-full h-1 bg-slate-100 -z-10 rounded-full"></div>
+           <div className="absolute top-4 left-0 h-1 bg-red-600 -z-0 rounded-full transition-all duration-500" style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}></div>
+           {steps.map((step, index) => {
+              const isCompleted = index <= currentStepIndex;
+              return (
+                 <div key={index} className="flex flex-col items-center gap-2 relative group">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted ? 'bg-red-600 border-red-600 text-white' : 'bg-white border-slate-200 text-slate-300'}`}>{isCompleted ? <Check size={16} /> : step.icon}</div>
+                    <span className={`text-[10px] font-bold text-center w-20 absolute -bottom-8 transition-colors ${isCompleted ? 'text-slate-800' : 'text-slate-400'}`}>{step.label}</span>
                  </div>
-             </div>
-         )}
+              )
+           })}
+        </div>
+      </div>
+      <div className="mt-6 p-3 bg-slate-50 rounded-lg text-xs text-slate-500">
+         <span className="font-bold text-slate-700">Technician Note:</span> {repair.technicianNote}
       </div>
     </div>
   );
@@ -457,7 +405,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
 
   if (!userData) return <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500"><div className="animate-spin mb-4"><RefreshCw /></div><p>Loading your account details...</p></div>;
 
-  // Define isOverdue so we don't crash
+  // FIX: Restored missing isOverdue definition
   const isOverdue = userData.status === 'overdue' || userData.status === 'disconnected';
 
   const allAlerts = [
@@ -531,8 +479,6 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   };
   const handleFollowUpTicket = async (ticketId, originalMessage) => { if(!followUpText) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId); const timestamp = new Date().toLocaleString(); const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`; await updateDoc(docRef, { message: newMessage, status: 'open', date: new Date().toISOString() }); setFollowingUpTo(null); setFollowUpText(''); alert("Follow-up sent successfully!"); } catch(e) { console.error(e); alert("Failed to send follow-up"); } };
   
-  const handleRequestRepair = async (e) => { e.preventDefault(); if(!repairNote) return; try { const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0'); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: randomId, userId: userData.uid, username: userData.username, type: 'Service Repair - Internet', notes: repairNote, status: 'Submission', stepIndex: 0, technicianNote: 'Waiting for initial evaluation.', dateFiled: new Date().toISOString() }); setRepairNote(''); setShowRepairModal(false); alert("Repair request filed successfully!"); } catch(e) { console.error(e); alert("Failed to request repair."); } };
-  
   // New: Confirm Repair Completion
   const handleConfirmRepair = async (repairId) => {
       try {
@@ -548,6 +494,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       }
   };
 
+  const handleRequestRepair = async (e) => { e.preventDefault(); if(!repairNote) return; try { const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0'); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: randomId, userId: userData.uid, username: userData.username, type: 'Service Repair - Internet', notes: repairNote, status: 'Submission', stepIndex: 0, technicianNote: 'Waiting for initial evaluation.', dateFiled: new Date().toISOString() }); setRepairNote(''); setShowRepairModal(false); alert("Repair request filed successfully!"); } catch(e) { console.error(e); alert("Failed to request repair."); } };
   const handleApplyPlan = (planName) => { if(confirm(`Apply for ${planName}?`)) { const msg = `Requesting plan change.\n\nCurrent: ${userData.plan}\nNew: ${planName}`; const submitPlanTicket = async () => { setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'Plan Change Request', message: msg, status: 'open', adminReply: '', date: new Date().toISOString() }); alert(`Application submitted! Ticket #${ticketId}.`); setActiveTab('support'); } catch(e) { alert("Failed."); } setTicketLoading(false); }; submitPlanTicket(); } };
   const handleUpdatePassword = async (e) => { e.preventDefault(); if (managePass.length < 6) return alert("Min 6 chars."); setUpdatingCreds(true); try { await updatePassword(auth.currentUser, managePass); setManagePass(''); alert("Password updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
   const handleUpdateEmail = async (e) => { e.preventDefault(); if (!manageEmail) return; setUpdatingCreds(true); try { await updateEmail(auth.currentUser, manageEmail); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { email: manageEmail }); setManageEmail(''); alert("Email updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
@@ -594,11 +541,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
                 <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Due Date</span><span className={`font-medium ${isOverdue ? 'text-red-600' : 'text-slate-700'}`}>{new Date(userData.dueDate).toLocaleDateString()}</span></div>
                 <div className="flex justify-between items-center pt-2"><span className="text-slate-800 font-bold text-lg">Total Due</span><span className="text-blue-700 font-bold text-3xl">₱{userData.balance?.toFixed(2)}</span></div>
                 {userData.balance > 0 ? (
-                  <>
-                    <button onClick={() => setShowQR(true)} className="w-full mt-4 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center space-x-2 shadow-lg shadow-blue-200 transition-all">
-                        <Smartphone size={20} /><span>Pay with QR Code</span>
-                    </button>
-                  </>
+                  <button onClick={() => setShowQR(true)} className="w-full mt-4 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center space-x-2 shadow-lg shadow-blue-200 transition-all"><Smartphone size={20} /><span>Pay with QR Code</span></button>
                 ) : <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center justify-center text-green-700 space-x-2"><CheckCircle size={20} /><span className="font-medium">No payment due. You are all set!</span></div>}
               </div>
             </div>
@@ -628,10 +571,12 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
 
       {activeTab === 'repairs' && <div className="space-y-6"><div className="flex justify-between items-center"><div><h2 className="text-2xl font-bold text-slate-800">Repair Requests</h2><p className="text-sm text-slate-500">Track status.</p></div><button onClick={() => setShowRepairModal(true)} className="bg-red-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-red-700 shadow-lg flex items-center gap-2"><Hammer size={18} /> Request Repair</button></div><div className="space-y-4">{repairs && repairs.length > 0 ? repairs.map(repair => <RepairStatusCard key={repair.id} repair={repair} isSubscriber={true} onConfirm={handleConfirmRepair} />) : <div className="text-center py-16 bg-white rounded-2xl border border-slate-200"><Wrench size={48} className="mx-auto text-slate-300 mb-3" /><p className="text-slate-500">No active repair requests.</p></div>}</div></div>}
       {/* Other tabs (plans, support, settings) remain same */}
-      {showQR && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"><div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center space-x-2"><CreditCard size={20} /><span>Scan to Pay</span></h3><button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full"><X size={20} /></button></div><div className="p-8 flex flex-col items-center text-center"><p className="text-slate-600 text-sm mb-6">Scan the QR code with your banking app to pay <span className="font-bold text-slate-900 block text-2xl mt-2">₱{userData.balance.toFixed(2)}</span></p><div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8"><img src="/qr-code.png" alt="Payment QR" className="w-48 h-48 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = "[https://placehold.co/200x200?text=QR+Image+Missing](https://placehold.co/200x200?text=QR+Image+Missing)"; }} /></div>
-      <div className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 mb-4">
-          Payment posting will reflect once the admin verifies your payment. Your reference number provided should match on the payment they received.
-      </div>
+      {activeTab === 'plans' && (<div className="space-y-6"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-slate-800">Available Internet Plans</h2><span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">Current: {userData.plan}</span></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map((plan) => (<div key={plan.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-lg font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => handleApplyPlan(plan.name)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Request Change <ArrowRight size={16} /></button></div></div>))}</div></div>)}
+      {activeTab === 'support' && (<div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-1 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><MessageSquare size={20} className="text-blue-600"/> Create New Ticket</h3><form onSubmit={handleCreateTicket} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-white" value={newTicket.subject} onChange={(e) => setNewTicket({...newTicket, subject: e.target.value})}><option value="">Select...</option><option value="No Internet">No Internet</option><option value="Billing">Billing</option><option value="Other">Other</option></select></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Message</label><textarea required className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none h-32 resize-none" value={newTicket.message} onChange={(e) => setNewTicket({...newTicket, message: e.target.value})}></textarea></div><button type="submit" disabled={ticketLoading} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">{ticketLoading ? 'Submitting...' : 'Submit Ticket'}</button></form></div><div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-2 h-fit"><h3 className="font-bold text-slate-800 mb-4">My Ticket History</h3><div className="space-y-4 max-h-[600px] overflow-y-auto">{tickets && tickets.length > 0 ? tickets.map(ticket => (<div key={ticket.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50"><div className="flex justify-between items-start mb-2"><h4 className="font-bold text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject}</h4><span className="text-[10px] font-bold uppercase bg-yellow-100 text-yellow-700 px-2 py-1 rounded">{ticket.status}</span></div><p className="text-sm text-slate-600 mb-3">{ticket.message}</p>{ticket.adminReply && <div className="bg-white border-l-4 border-blue-500 p-3 rounded-r-lg mt-3"><p className="text-xs font-bold text-blue-600 mb-1">Admin Response:</p><p className="text-sm text-slate-700">{ticket.adminReply}</p></div>}<div className="mt-3 pt-2 border-t border-slate-100">{followingUpTo === ticket.id ? (<div className="mt-2"><textarea className="w-full border p-2 text-sm" rows="2" value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setFollowingUpTo(null)} className="text-xs font-bold px-3">Cancel</button><button onClick={() => handleFollowUpTicket(ticket.id, ticket.message)} className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded">Send</button></div></div>) : (<button onClick={() => setFollowingUpTo(ticket.id)} className="text-blue-600 text-xs font-bold flex items-center gap-1 mt-1"><MessageCircle size={14} /> Add Note</button>)}</div></div>)) : <p className="text-center text-slate-400">No tickets found.</p>}</div></div></div>)}
+      {activeTab === 'settings' && (<div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Lock size={20} className="text-blue-600"/> Change Password</h3><form onSubmit={handleUpdatePassword} className="space-y-4"><input type="password" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={managePass} onChange={(e) => setManagePass(e.target.value)} placeholder="New password" /><button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">{updatingCreds ? 'Updating...' : 'Update'}</button></form></div><div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Mail size={20} className="text-blue-600"/> Update Email</h3><form onSubmit={handleUpdateEmail} className="space-y-4"><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={manageEmail} onChange={(e) => setManageEmail(e.target.value)} placeholder="new@email.com" /><button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900">{updatingCreds ? 'Updating...' : 'Update'}</button></form></div></div>)}
+
+      {showQR && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"><div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center space-x-2"><CreditCard size={20} /><span>Scan to Pay</span></h3><button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full"><X size={20} /></button></div><div className="p-8 flex flex-col items-center text-center"><p className="text-slate-600 text-sm mb-6">Scan the QR code with your banking app to pay <span className="font-bold text-slate-900 block text-2xl mt-2">₱{userData.balance.toFixed(2)}</span></p><div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8"><img src="/qr-code.png" alt="Payment QR" className="w-48 h-48 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/200x200?text=QR+Image+Missing"; }} /></div>
+      <div className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 mb-4">Payment posting will reflect once the admin verifies your payment. Your reference number provided should match on the payment they received.</div>
       <div className="w-full text-left"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reference Number</label><form onSubmit={handlePaymentSubmit} className="flex gap-3"><input type="text" required placeholder="e.g. Ref-123456" className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium" value={refNumber} onChange={(e) => setRefNumber(e.target.value)} /><button type="submit" disabled={submitting} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200">{submitting ? '...' : 'Verify'}</button></form></div></div></div></div>)}
       {showRepairModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-red-600 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center gap-2"><Hammer size={20} /> Request Service Repair</h3><button onClick={() => setShowRepairModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><div className="p-6"><p className="text-slate-600 text-sm mb-4">Please describe the issue.</p><textarea className="w-full border border-slate-300 rounded-lg p-3 h-32" value={repairNote} onChange={(e) => setRepairNote(e.target.value)}></textarea><div className="mt-4 flex justify-end gap-2"><button onClick={() => setShowRepairModal(false)} className="px-4 py-2 text-slate-500 font-bold">Cancel</button><button onClick={handleRequestRepair} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700">Submit</button></div></div></div></div>)}
     </div>
@@ -677,6 +622,30 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
     });
     return () => unsubscribe();
   }, []);
+
+  const handleVerifyPayment = async (paymentId, userId) => {
+    if (!confirm("Verify this payment? This will zero out the user's balance and restore service.")) return;
+    
+    try {
+      // 1. Mark payment as verified
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION, paymentId), {
+         status: 'verified',
+         verifiedAt: new Date().toISOString()
+      });
+
+      // 2. Update User Balance & Status
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), {
+         balance: 0,
+         status: 'active',
+         lastPaymentDate: new Date().toISOString()
+      });
+      
+      alert("Payment verified and user account updated!");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to verify payment.");
+    }
+  };
 
   const handleStatusChange = async (userId, newStatus) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { status: newStatus }); } catch (e) { console.error(e); } };
   const handleAddBill = async (userId, currentBalance) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { balance: currentBalance + 50, status: (currentBalance + 50) > 0 ? 'overdue' : 'active', dueDate: new Date().toISOString() }); } catch (e) { console.error(e); } };
@@ -848,75 +817,56 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
 
       {/* ... (Other Tabs: tickets, repairs, plans, payments, speedtest - UNCHANGED) ... */}
        {activeTab === 'tickets' && (<div className="space-y-4"><h2 className="text-xl font-bold text-slate-800">Support Tickets & Applications</h2><div className="grid grid-cols-1 gap-4">{tickets && tickets.length > 0 ? tickets.map(ticket => (<div key={ticket.id} className={`p-5 rounded-xl shadow-sm border ${ticket.isApplication ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}><div className="flex justify-between items-start mb-3"><div><h4 className="font-bold text-lg text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject} {ticket.isApplication && <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">APPLICATION</span>}</h4><p className="text-xs text-slate-500">From: <span className="font-bold text-blue-600">{ticket.username}</span> • {new Date(ticket.date).toLocaleString()}</p></div><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${ticket.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{ticket.status}</span></div><p className="text-slate-700 text-sm mb-4">{ticket.message}</p>{ticket.isApplication && ticket.status === 'open' && (<button onClick={() => handleApproveApplication(ticket)} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors">Approve & Assign Account #</button>)}{ticket.adminReply ? <div className="border-t border-slate-200 pt-3"><p className="text-xs font-bold text-slate-400 uppercase mb-1">Your Reply</p><p className="text-sm text-blue-700 font-medium">{ticket.adminReply}</p></div> : (<div className="flex gap-2 mt-2">{replyingTo === ticket.id ? (<div className="w-full"><textarea className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2" rows="3" value={replyText} onChange={(e) => setReplyText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setReplyingTo(null)} className="text-slate-500 text-sm font-bold">Cancel</button><button onClick={() => handleReplyTicket(ticket.id)} className="bg-blue-600 text-white text-sm font-bold px-4 py-1 rounded-lg">Send Reply</button></div></div>) : <button onClick={() => { setReplyingTo(ticket.id); setReplyText(''); }} className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg font-bold text-sm transition-colors"><MessageSquare size={16} /> Reply</button>}</div>)}</div>)) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400">No tickets found.</div>}</div></div>)}
-       {activeTab === 'repairs' && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold text-slate-800">Service Repair Requests</h2>
-          {repairs && repairs.length > 0 ? repairs.map(repair => (
-            <RepairStatusCard 
-              key={repair.id} 
-              repair={repair} 
-              isSubscriber={false} // Admin cannot verify, only user can
-            >
-                {/* Admin Controls for Repair */}
-                <div className="mt-4 flex justify-end">
-                   {repair.stepIndex < 3 ? (
-                      <button 
-                         onClick={() => handleUpdateRepairStatus(repair.id, repair.stepIndex)}
-                         className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-xs"
-                      >
-                         Move to Next Step
-                      </button>
-                   ) : (
-                      <span className="text-xs text-slate-500 font-bold bg-slate-100 px-3 py-1 rounded-full">Waiting for Customer Confirmation</span>
-                   )}
-                </div>
-            </RepairStatusCard>
-          )) : <div className="text-center py-10 text-slate-400">No repairs.</div>}
-        </div>
-       )}
+       {activeTab === 'repairs' && <div className="space-y-4"><h2 className="text-xl font-bold text-slate-800">Service Repair Requests</h2>{repairs && repairs.length > 0 ? repairs.map(repair => (<div key={repair.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200"><div className="flex justify-between mb-4"><div><h4 className="font-bold">Request #{repair.requestId}</h4><p className="text-xs">{repair.username}</p></div><span className="bg-red-100 text-red-600 text-xs font-bold px-3 py-1 rounded-full">{repair.status}</span></div><p className="text-sm mb-4">{repair.notes}</p><button onClick={() => handleUpdateRepairStatus(repair.id, repair.stepIndex)} disabled={repair.stepIndex >= 4} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-xs">{repair.stepIndex >= 4 ? 'Completed' : 'Move Next'}</button></div>)) : <div className="text-center py-10 text-slate-400">No repairs.</div>}</div>}
        {activeTab === 'plans' && <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 className="font-bold mb-4">Manage Plans</h3><div className="space-y-2">{plans.map(p=><div key={p.id} className="flex justify-between items-center border-b pb-2"><span>{p.name}</span><button onClick={()=>handleDeletePlan(p.id)} className="text-red-500"><Trash2 size={14}/></button></div>)}</div><form className="mt-4 flex gap-2" onSubmit={handleAddPlan}><input className="border p-2 rounded text-sm" placeholder="New Plan" value={newPlanName} onChange={e=>setNewPlanName(e.target.value)}/><button className="bg-blue-600 text-white px-4 py-2 rounded text-sm">Add</button></form></div>}
-       {activeTab === 'payments' && <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 className="font-bold mb-4">Payments</h3><div className="space-y-2">{payments.map(p=><div key={p.id} className="flex justify-between border-b pb-2"><span>{p.username}</span><span className="font-mono text-blue-600">{p.refNumber}</span><span className="text-xs text-slate-400">{new Date(p.date).toLocaleDateString()}</span></div>)}</div></div>}
-       {activeTab === 'speedtest' && <SpeedTest />}
-
-       {/* Modals */}
-       {/* Notify Modal */}
-       {showNotifyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6">
-             <div className="flex justify-between items-center mb-4">
-               <h3 className="font-bold text-slate-800 flex items-center gap-2"><Bell size={18} /> Notify {notifyData.targetName}</h3>
-               <button onClick={() => setShowNotifyModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+       
+       {/* UPDATED PAYMENTS TAB WITH VERIFY BUTTON */}
+       {activeTab === 'payments' && (
+         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+             <h2 className="text-xl font-bold text-slate-800 mb-4">Recent Payment Attempts</h2>
+             <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                   <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                     <tr>
+                       <th className="px-4 py-3 font-bold">User</th>
+                       <th className="px-4 py-3 font-bold">Reference #</th>
+                       <th className="px-4 py-3 font-bold">Date</th>
+                       <th className="px-4 py-3 font-bold">Status</th>
+                       <th className="px-4 py-3 font-bold text-right">Action</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-slate-100">
+                      {payments && payments.length > 0 ? payments.map(pay => (
+                         <tr key={pay.id} className={pay.status === 'verified' ? 'bg-green-50' : ''}>
+                            <td className="px-4 py-3 font-medium">{pay.username || 'Unknown'}</td>
+                            <td className="px-4 py-3 font-mono text-blue-600 w-fit px-2 rounded">{pay.refNumber}</td>
+                            <td className="px-4 py-3 text-slate-500">{new Date(pay.date).toLocaleDateString()}</td>
+                             <td className="px-4 py-3">
+                               <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${pay.status === 'verified' ? 'bg-green-200 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                  {pay.status || 'pending'}
+                               </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                               {pay.status !== 'verified' && (
+                                  <button 
+                                     onClick={() => handleVerifyPayment(pay.id, pay.userId)}
+                                     className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-blue-700 transition-colors"
+                                  >
+                                     Verify
+                                  </button>
+                               )}
+                            </td>
+                         </tr>
+                      )) : (
+                         <tr><td colSpan={5} className="p-4 text-center text-slate-400">No payment records found.</td></tr>
+                      )}
+                   </tbody>
+                </table>
              </div>
-             <form onSubmit={handleSendNotification}>
-               <div className="space-y-3">
-                 <div>
-                   <label className="text-xs font-bold text-slate-500 uppercase">Title</label>
-                   <input 
-                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" 
-                     placeholder="e.g. Payment Received"
-                     value={notifyData.title}
-                     onChange={(e) => setNotifyData({...notifyData, title: e.target.value})}
-                     required
-                   />
-                 </div>
-                 <div>
-                   <label className="text-xs font-bold text-slate-500 uppercase">Message</label>
-                   <textarea 
-                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 h-24 resize-none"
-                     placeholder="Write your message here..."
-                     value={notifyData.message}
-                     onChange={(e) => setNotifyData({...notifyData, message: e.target.value})}
-                     required
-                   ></textarea>
-                 </div>
-                 <button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">Send Notification</button>
-               </div>
-             </form>
-          </div>
-        </div>
+         </div>
        )}
 
-       {/* Other Modals (Existing) */}
+      {/* ... (Modals remain same) ... */}
        {showAddAdminModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><h3 className="font-bold mb-4">Add Admin</h3><form onSubmit={handleAddAdmin} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Name" value={newAdmin.username} onChange={e=>setNewAdmin({...newAdmin, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newAdmin.email} onChange={e=>setNewAdmin({...newAdmin, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newAdmin.password} onChange={e=>setNewAdmin({...newAdmin, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddAdminModal(false)} className="text-slate-500">Cancel</button><button className="bg-slate-800 text-white px-4 py-2 rounded">Create</button></div></form></div></div>)}
        {showAddModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Add Subscriber</h3><form onSubmit={handleAddSubscriber} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Username" value={newUser.username} onChange={e=>setNewUser({...newUser, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Account #" value={newUser.accountNumber} onChange={e=>setNewUser({...newUser, accountNumber: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newUser.email} onChange={e=>setNewUser({...newUser, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newUser.password} onChange={e=>setNewUser({...newUser, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddModal(false)} className="text-slate-500">Cancel</button><button className="bg-blue-600 text-white px-4 py-2 rounded">Add</button></div></form></div></div>)}
        {showAnnounceModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Post Announcement</h3><input className="w-full border p-2 rounded mb-2" placeholder="Title" value={newAnnouncement.title} onChange={e=>setNewAnnouncement({...newAnnouncement, title: e.target.value})}/><textarea className="w-full border p-2 rounded mb-2" placeholder="Message" value={newAnnouncement.message} onChange={e=>setNewAnnouncement({...newAnnouncement, message: e.target.value})}></textarea><div className="flex justify-end gap-2"><button onClick={()=>setShowAnnounceModal(false)} className="text-slate-500">Cancel</button><button onClick={handlePostAnnouncement} className="bg-blue-600 text-white px-4 py-2 rounded">Post</button></div></div></div>)}
@@ -932,6 +882,16 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
           </div>
         </div>
       )}
+      
+       {/* Notify Modal */}
+       {showNotifyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6">
+             <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Bell size={18} /> Notify {notifyData.targetName}</h3><button onClick={() => setShowNotifyModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div>
+             <form onSubmit={handleSendNotification}><div className="space-y-3"><div><label className="text-xs font-bold text-slate-500 uppercase">Title</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" placeholder="e.g. Payment Received" value={notifyData.title} onChange={(e) => setNotifyData({...notifyData, title: e.target.value})} required /></div><div><label className="text-xs font-bold text-slate-500 uppercase">Message</label><textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 h-24 resize-none" placeholder="Write your message here..." value={notifyData.message} onChange={(e) => setNotifyData({...notifyData, message: e.target.value})} required ></textarea></div><button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">Send Notification</button></div></form>
+          </div>
+        </div>
+       )}
      </div>
    );
 };
@@ -995,25 +955,20 @@ export default function App() {
   // Data Subscriptions
   useEffect(() => {
     if (!user) return;
-    // Admin Subs
     if (user.role === 'admin') {
        onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), s => setSubscribers(s.docs.map(d => ({id: d.id, ...d.data()}))));
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), orderBy('date', 'desc')), s => setPayments(s.docs.map(d => ({id: d.id, ...d.data()}))));
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), orderBy('dateFiled', 'desc')), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()}))));
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), orderBy('date', 'desc')), s => setTickets(s.docs.map(d => ({id: d.id, ...d.data()}))));
     } 
-    // Subscriber Subs
     else {
        onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.uid), s => setMySubscriberData({id: s.id, ...s.data()}));
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), where('userId', '==', user.uid)), s => setTickets(s.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b)=>new Date(b.date)-new Date(a.date))));
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), where('userId', '==', user.uid)), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b)=>new Date(b.dateFiled)-new Date(a.dateFiled))));
-       
-       // NEW: Fetch Private Notifications for Subscriber
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', NOTIFICATIONS_COLLECTION), where('userId', '==', user.uid)), s => {
            setNotifications(s.docs.map(d => ({id: d.id, ...d.data()})));
        });
     }
-    // Common Subs
     onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), orderBy('date', 'desc')), s => setAnnouncements(s.docs.map(d => ({id: d.id, ...d.data()}))));
   }, [user]);
 
@@ -1023,8 +978,8 @@ export default function App() {
     if (!refNumber) return;
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), { userId: id, username: user.displayName || user.email, refNumber, date: new Date().toISOString(), status: 'submitted' });
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id), { balance: 0, status: 'active', lastPaymentRef: refNumber, lastPaymentDate: new Date().toISOString() });
-      alert(`Payment successful! Ref: ${refNumber}`);
+      // Removed automatic balance clearing
+      alert(`Payment Submitted for Verification! Ref: ${refNumber}`);
     } catch (e) { alert("Payment failed."); }
   };
 
