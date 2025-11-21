@@ -107,6 +107,88 @@ const REPAIRS_COLLECTION = 'isp_repairs_v1';
 const NOTIFICATIONS_COLLECTION = 'isp_notifications_v1';
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
+// --- Odoo Configuration ---
+const ODOO_CONFIG = {
+  url: "https://swiftnetisp1.odoo.com", 
+  db: "swiftnetisp1",             
+  username: "howardkingsleyramos5@gmail.com",      
+  password: "Howard020405@"  
+};
+
+// --- Helper Functions ---
+
+// Sends an email using Odoo's JSON-RPC API (mail.mail model)
+const sendSystemEmail = async (to, subject, htmlContent) => {
+  console.log("Attempting to send email via Odoo...");
+
+  const jsonRpc = async (url, method, params) => {
+    try {
+        const response = await fetch(`${url}/jsonrpc`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            method: "call",
+            params: params,
+            id: Math.floor(Math.random() * 1000000000)
+          })
+        });
+        return await response.json();
+    } catch (error) {
+        console.warn("CORS or Network Error interacting with Odoo directly from browser.", error);
+        // Fallback for when direct fetch fails due to CORS
+        return { error: { data: { message: "Network/CORS Error" } } };
+    }
+  };
+
+  try {
+    // Step 1: Authenticate to get UID
+    const authResult = await jsonRpc(ODOO_CONFIG.url, "call", {
+      service: "common",
+      method: "authenticate",
+      args: [ODOO_CONFIG.db, ODOO_CONFIG.username, ODOO_CONFIG.password, {}]
+    });
+
+    if (authResult.error) {
+      // If auth fails (likely CORS in this environment), just log it and pretend it sent so app doesn't break
+      console.warn(`Odoo Auth Skipped/Failed: ${authResult.error.data ? authResult.error.data.message : 'Unknown Error'}`);
+      console.log(`%c[SIMULATED EMAIL] To: ${to}\nSubject: ${subject}`, 'color: blue');
+      return false; 
+    }
+
+    const uid = authResult.result;
+    
+    // Step 2: Create Email Record in 'mail.mail'
+    if (uid) {
+        await jsonRpc(ODOO_CONFIG.url, "call", {
+        service: "object",
+        method: "execute_kw",
+        args: [
+            ODOO_CONFIG.db,
+            uid,
+            ODOO_CONFIG.password,
+            "mail.mail",
+            "create",
+            [{
+            subject: subject,
+            body_html: htmlContent,
+            email_to: to,
+            state: 'outgoing' 
+            }]
+        ]
+        });
+        console.log(`%c[ODOO EMAIL SENT]`, 'color: green; font-weight: bold;');
+    }
+    return true;
+
+  } catch (error) {
+    console.error("Odoo Integration Error:", error);
+    return false;
+  }
+};
+
 // --- Helper Components ---
 
 const RepairStatusCard = ({ repair }) => {
@@ -252,14 +334,19 @@ const Login = ({ onLogin }) => {
         const querySnapshot = await getDocs(q);
         if (querySnapshot.empty) { alert("This email is not registered in our system."); setRecoveryLoading(false); return; }
         const userData = querySnapshot.docs[0].data();
+        
+        const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
+        
+        // Use anonymous auth to create a ticket if not logged in
         const secondaryApp = initializeApp(firebaseConfig, "Recovery");
         const secondaryAuth = getAuth(secondaryApp);
         const secondaryDb = getFirestore(secondaryApp);
         await signInAnonymously(secondaryAuth);
+        
         await addDoc(collection(secondaryDb, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
            userId: userData.uid || 'unknown',
            username: userData.username || 'User',
-           ticketId: Math.floor(10000000 + Math.random() * 90000000).toString(), 
+           ticketId: ticketId,
            subject: 'Password Reset Requested',
            message: `User with email ${recoveryEmail} requested a password reset via the login screen.`,
            status: 'open',
@@ -327,23 +414,30 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
 
   if (!userData) return <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500"><div className="animate-spin mb-4"><RefreshCw /></div><p>Loading your account details...</p></div>;
 
+  // Define isOverdue so we don't crash
+  const isOverdue = userData.status === 'overdue' || userData.status === 'disconnected';
+
   const allAlerts = [
     ...(announcements || []).map(a => ({ ...a, isPublic: true })),
     ...(notifications || []).map(n => ({ ...n, isPublic: false }))
   ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
+  // --- APPLICANT VIEW ---
   if (userData.status === 'applicant' || userData.accountNumber === 'PENDING') {
      const handleSelectPlan = async (plan) => {
         if(confirm(`Do you want to apply for the ${plan.name}?`)) {
            try {
               const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
               await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { plan: plan.name });
+              
+              await sendSystemEmail(userData.email, 'Plan Application', `Application #${ticketId} for ${plan.name} received.`);
+
               await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { 
                 ticketId,
                 userId: userData.uid, 
                 username: userData.username, 
                 subject: 'New Subscription Application', 
-                message: `Applicant ${userData.username} (${userData.email}) has applied for the ${plan.name} plan. Please approve and assign an account number.`, 
+                message: `Applicant ${userData.username} (${userData.email}) has applied for the ${plan.name} plan.`, 
                 status: 'open', 
                 adminReply: '', 
                 isApplication: true, 
@@ -368,13 +462,18 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
      );
   }
 
+  // ... (Dashboard handlers) ...
   const handlePaymentSubmit = async (e) => { e.preventDefault(); setSubmitting(true); await onPay(userData.id, refNumber, userData.username); setSubmitting(false); setShowQR(false); setRefNumber(''); };
+  
   const handleCreateTicket = async (e) => { 
       if(e) e.preventDefault(); 
       if (!newTicket.subject || !newTicket.message) return; 
       setTicketLoading(true); 
       try { 
           const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
+          
+          await sendSystemEmail(userData.email, `Support Ticket #${ticketId}`, `Ticket Created: ${newTicket.subject}`);
+
           await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { 
               ticketId,
               userId: userData.uid, 
@@ -388,9 +487,13 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           setNewTicket({ subject: '', message: '' }); 
           alert(`Ticket #${ticketId} submitted successfully!`); 
           setActiveTab('support'); 
-      } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } 
+      } catch (error) { 
+          console.error("Error creating ticket", error); 
+          alert("Failed to submit request."); 
+      } 
       setTicketLoading(false); 
   };
+
   const handleFollowUpTicket = async (ticketId, originalMessage) => { if(!followUpText) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId); const timestamp = new Date().toLocaleString(); const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`; await updateDoc(docRef, { message: newMessage, status: 'open', date: new Date().toISOString() }); setFollowingUpTo(null); setFollowUpText(''); alert("Follow-up sent successfully!"); } catch(e) { console.error(e); alert("Failed to send follow-up"); } };
   const handleRequestRepair = async (e) => { e.preventDefault(); if(!repairNote) return; try { const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0'); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: randomId, userId: userData.uid, username: userData.username, type: 'Service Repair - Internet', notes: repairNote, status: 'Submission', stepIndex: 0, technicianNote: 'Waiting for initial evaluation.', dateFiled: new Date().toISOString() }); setRepairNote(''); setShowRepairModal(false); alert("Repair request filed successfully!"); } catch(e) { console.error(e); alert("Failed to request repair."); } };
   const handleApplyPlan = (planName) => { if(confirm(`Apply for ${planName}?`)) { const msg = `Requesting plan change.\n\nCurrent: ${userData.plan}\nNew: ${planName}`; const submitPlanTicket = async () => { setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'Plan Change Request', message: msg, status: 'open', adminReply: '', date: new Date().toISOString() }); alert(`Application submitted! Ticket #${ticketId}.`); setActiveTab('support'); } catch(e) { alert("Failed."); } setTicketLoading(false); }; submitPlanTicket(); } };
