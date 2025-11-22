@@ -80,7 +80,8 @@ import {
   PlayCircle,
   History,
   MapPin,
-  CheckSquare 
+  CheckSquare,
+  Briefcase
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -115,83 +116,231 @@ const REPAIRS_COLLECTION = 'isp_repairs_v1';
 const NOTIFICATIONS_COLLECTION = 'isp_notifications_v1';
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
-// --- Odoo Configuration ---
-const ODOO_CONFIG = {
-  url: "https://swiftnetisp1.odoo.com", 
-  db: "swiftnetisp1",             
-  username: "howardkingsleyramos5@gmail.com",      
-  password: "Howard020405@"  
-};
-
 // --- Helper Functions ---
 const sendSystemEmail = async (to, subject, htmlContent) => {
-  console.log("Attempting to send email via Odoo...");
-
-  const jsonRpc = async (url, method, params) => {
-    try {
-        const response = await fetch(`${url}/jsonrpc`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            jsonrpc: "2.0",
-            method: "call",
-            params: params,
-            id: Math.floor(Math.random() * 1000000000)
-          })
-        });
-        return await response.json();
-    } catch (error) {
-        console.warn("CORS or Network Error interacting with Odoo directly from browser.", error);
-        return { error: { data: { message: "Network/CORS Error" } } };
-    }
-  };
-
-  try {
-    const authResult = await jsonRpc(ODOO_CONFIG.url, "call", {
-      service: "common",
-      method: "authenticate",
-      args: [ODOO_CONFIG.db, ODOO_CONFIG.username, ODOO_CONFIG.password, {}]
-    });
-
-    if (authResult.error) {
-      console.warn(`Odoo Auth Skipped/Failed: ${authResult.error.data ? authResult.error.data.message : 'Unknown Error'}`);
-      console.log(`%c[SIMULATED EMAIL] To: ${to}\nSubject: ${subject}`, 'color: blue');
-      return false; 
-    }
-
-    const uid = authResult.result;
-    
-    if (uid) {
-        await jsonRpc(ODOO_CONFIG.url, "call", {
-        service: "object",
-        method: "execute_kw",
-        args: [
-            ODOO_CONFIG.db,
-            uid,
-            ODOO_CONFIG.password,
-            "mail.mail",
-            "create",
-            [{
-            subject: subject,
-            body_html: htmlContent,
-            email_to: to,
-            state: 'outgoing' 
-            }]
-        ]
-        });
-        console.log(`%c[ODOO EMAIL SENT]`, 'color: green; font-weight: bold;');
-    }
-    return true;
-
-  } catch (error) {
-    console.error("Odoo Integration Error:", error);
-    return false;
-  }
+  // Simulated email sending
+  console.log(`%c[SYSTEM EMAIL] To: ${to}\nSubject: ${subject}\nContent: ${htmlContent}`, 'color: blue; font-weight: bold;');
+  return true;
 };
 
 // --- Helper Components ---
+
+const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
+  const [step, setStep] = useState(1);
+  const [addressType, setAddressType] = useState('house'); // house | condo
+  const [searchQuery, setSearchQuery] = useState('');
+  const [formData, setFormData] = useState({
+    province: 'CAGAYAN',
+    city: 'STA ANA',
+    barangay: 'BGY MAREDE',
+    subdivision: '',
+    street: '',
+    building: '',
+    houseNo: '',
+    block: '',
+    lot: '',
+    landmark: ''
+  });
+
+  const handleNext = () => setStep(step + 1);
+  const handleBack = () => setStep(step - 1);
+
+  const steps = [
+    { id: 1, title: "Check Address" },
+    { id: 2, title: "Pin Location" },
+    { id: 3, title: "Review" },
+    { id: 4, title: "Details" }
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4 animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+        
+        {/* Header */}
+        <div className="bg-red-600 p-6 text-white relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10"></div>
+            <h2 className="text-2xl font-bold mb-1">Guiding you in every step</h2>
+            <p className="text-red-100 text-sm">New Application - {plan.name}</p>
+            <button onClick={onClose} className="absolute top-4 right-4 text-white/80 hover:text-white"><X size={24}/></button>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="px-8 pt-6 pb-2">
+           <div className="flex items-center justify-between mb-2">
+              {steps.map((s) => (
+                 <div key={s.id} className={`w-full h-2 rounded-full mr-2 ${step >= s.id ? 'bg-red-500' : 'bg-slate-200'}`}></div>
+              ))}
+           </div>
+           <p className="text-xs text-slate-400 text-right">Step {step} of 4</p>
+        </div>
+
+        {/* Content Area */}
+        <div className="p-8 overflow-y-auto flex-grow">
+           
+           {/* STEP 1: Address Search */}
+           {step === 1 && (
+             <div className="text-center space-y-6">
+                <h3 className="text-2xl font-bold text-red-600">Let's check your Address</h3>
+                <p className="text-slate-600">Type in your address and make sure to drop the pin to the closest location of your residence</p>
+                
+                <div className="flex justify-center mb-6">
+                   <div className="bg-slate-100 p-1 rounded-full inline-flex">
+                      <button 
+                        onClick={() => setAddressType('house')}
+                        className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${addressType === 'house' ? 'bg-red-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                      >HOUSE/APARTMENT</button>
+                      <button 
+                        onClick={() => setAddressType('condo')}
+                        className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${addressType === 'condo' ? 'bg-red-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                      >CONDOMINIUM</button>
+                   </div>
+                </div>
+
+                <div className="relative">
+                   <Search className="absolute left-4 top-3.5 text-slate-400" size={20} />
+                   <input 
+                      type="text" 
+                      placeholder="Type in address..." 
+                      className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-full focus:ring-2 focus:ring-red-500 outline-none shadow-sm"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                   />
+                </div>
+             </div>
+           )}
+
+           {/* STEP 2: Map Pin */}
+           {step === 2 && (
+             <div className="text-center space-y-4">
+                <h3 className="text-xl font-bold text-red-600">Pin Location</h3>
+                <div className="bg-slate-100 rounded-full px-4 py-2 text-sm text-slate-700 font-medium inline-flex items-center gap-2">
+                   <Search size={14} /> {searchQuery || "Marede, Santa Ana, Cagayan"}
+                </div>
+                <p className="text-xs text-red-500 font-bold">Move the pin below to mark your exact location on the map.</p>
+                
+                <div className="aspect-video bg-blue-50 rounded-xl border-2 border-slate-200 relative overflow-hidden group cursor-crosshair">
+                   {/* Mock Map Background */}
+                   <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"></div>
+                   <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                      <MapPin size={48} className="text-red-600 drop-shadow-2xl animate-bounce" fill="currentColor" />
+                   </div>
+                </div>
+             </div>
+           )}
+
+           {/* STEP 3: Review */}
+           {step === 3 && (
+             <div className="text-center space-y-6">
+                <h3 className="text-2xl font-bold text-red-600">Good News! SwiftNet is available in your area!</h3>
+                <p className="text-slate-600">Please review the address below to ensure all details are correct.</p>
+                
+                <div className="bg-slate-50 p-6 rounded-xl text-left grid grid-cols-2 gap-4 text-sm border border-slate-100">
+                   <div>
+                      <span className="block text-xs font-bold text-slate-400 uppercase">Province</span>
+                      <span className="font-bold text-slate-800">{formData.province}</span>
+                   </div>
+                   <div>
+                      <span className="block text-xs font-bold text-slate-400 uppercase">City</span>
+                      <span className="font-bold text-slate-800">{formData.city}</span>
+                   </div>
+                   <div>
+                      <span className="block text-xs font-bold text-slate-400 uppercase">Barangay</span>
+                      <span className="font-bold text-slate-800">{formData.barangay}</span>
+                   </div>
+                   <div>
+                      <span className="block text-xs font-bold text-slate-400 uppercase">Plan</span>
+                      <span className="font-bold text-blue-600">{plan.name}</span>
+                   </div>
+                </div>
+                
+                <div className="flex gap-3 justify-center">
+                   <button onClick={() => setStep(4)} className="px-6 py-2 border-2 border-red-600 text-red-600 font-bold rounded-full hover:bg-red-50">EDIT ADDRESS</button>
+                </div>
+             </div>
+           )}
+
+           {/* STEP 4: Detailed Form */}
+           {step === 4 && (
+             <div className="space-y-6">
+                <div className="text-center mb-6">
+                   <h3 className="text-xl font-bold text-red-600">Finalize Address Details</h3>
+                   <p className="text-sm text-slate-500">Click any of the fields below to make changes.</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                   <div>
+                      <label className="text-xs font-bold text-red-600">* Province</label>
+                      <input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.province} readOnly />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-red-600">* City</label>
+                      <input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.city} readOnly />
+                   </div>
+                   <div className="col-span-2">
+                      <label className="text-xs font-bold text-red-600">* Barangay</label>
+                      <input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.barangay} readOnly />
+                   </div>
+                   
+                   <div>
+                      <label className="text-xs font-bold text-slate-500">Subdivision</label>
+                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Search..." value={formData.subdivision} onChange={e => setFormData({...formData, subdivision: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-red-600">* Street</label>
+                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Search..." value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} />
+                   </div>
+                   
+                   <div className="col-span-2">
+                      <label className="text-xs font-bold text-slate-500">Building</label>
+                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Type in your building" value={formData.building} onChange={e => setFormData({...formData, building: e.target.value})} />
+                   </div>
+
+                   <div>
+                      <label className="text-xs font-bold text-slate-500">House No.</label>
+                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 123" value={formData.houseNo} onChange={e => setFormData({...formData, houseNo: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-slate-500">Block</label>
+                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 5" value={formData.block} onChange={e => setFormData({...formData, block: e.target.value})} />
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-slate-500">Lot</label>
+                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 10" value={formData.lot} onChange={e => setFormData({...formData, lot: e.target.value})} />
+                   </div>
+                   
+                   <div className="col-span-2">
+                      <label className="text-xs font-bold text-slate-500">Landmark</label>
+                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. Near the Chapel" value={formData.landmark} onChange={e => setFormData({...formData, landmark: e.target.value})} />
+                   </div>
+                </div>
+             </div>
+           )}
+
+        </div>
+
+        {/* Footer Actions */}
+        <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-white">
+           {step > 1 && (
+              <button onClick={handleBack} className="px-8 py-3 border border-red-600 text-red-600 font-bold rounded-full hover:bg-red-50 transition-colors">
+                 BACK
+              </button>
+           )}
+           
+           {step < 4 ? (
+              <button onClick={handleNext} className="px-8 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200">
+                 {step === 3 ? 'CONTINUE' : step === 1 ? 'CHECK SERVICEABILITY' : 'NEXT'}
+              </button>
+           ) : (
+              <button onClick={() => onSubmit(formData)} className="px-8 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200">
+                 SUBMIT APPLICATION
+              </button>
+           )}
+        </div>
+
+      </div>
+    </div>
+  );
+};
 
 const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssign, isTechnician, onTechUpdate, isAdmin, onForceComplete }) => {
   const steps = [
@@ -223,10 +372,10 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
             </h4>
             <div className="flex items-center gap-3">
                <div className={`p-3 rounded-full ${isCompleted ? 'bg-green-100' : 'bg-slate-100'}`}>
-                  <Wifi className={`${isCompleted ? 'text-green-600' : 'text-slate-600'}`} size={24} />
+                  {repair.type === 'New Installation' ? <Briefcase className={`${isCompleted ? 'text-green-600' : 'text-slate-600'}`} size={24} /> : <Wifi className={`${isCompleted ? 'text-green-600' : 'text-slate-600'}`} size={24} />}
                </div>
                <div>
-                  <h3 className="text-lg font-bold text-slate-800">Service Repair - Internet</h3>
+                  <h3 className="text-lg font-bold text-slate-800">{repair.type || 'Service Repair'}</h3>
                   <p className="text-sm text-slate-500 font-mono">#{repair.requestId}</p>
                   {!isSubscriber && repair.assignedTechName && (
                       <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit mt-1">
@@ -261,7 +410,7 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
                  </div>
              </div>
              <div className="mt-3 pt-3 border-t border-slate-200">
-                 <p className="text-xs font-bold text-slate-400 uppercase">Reported Issue</p>
+                 <p className="text-xs font-bold text-slate-400 uppercase">Details</p>
                  <p className="text-sm text-slate-700 italic">"{repair.notes}"</p>
              </div>
          </div>
@@ -271,7 +420,7 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
         <>
           {isSubscriber && (
              <p className="text-sm text-slate-600 mb-4 border-b border-slate-100 pb-4">
-                 Repairs are usually completed within 24 hours.
+                 Requests are usually processed within 24 hours.
              </p>
           )}
 
@@ -331,6 +480,7 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
                 </div>
              </div>
 
+             {/* TECHNICIAN & ADMIN ACTION */}
              {(isTechnician || isAdmin) && currentStepIndex < 3 && ( 
                  <div className="mt-2 flex justify-end border-t border-slate-200 pt-3 gap-2">
                     {isAdmin && (
@@ -350,6 +500,7 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
                  </div>
              )}
              
+             {/* ADMIN WAITING MESSAGE */}
              {isAdmin && currentStepIndex === 3 && (
                  <div className="mt-2 flex justify-end border-t border-slate-200 pt-3">
                       <span className="text-xs text-slate-500 font-bold bg-slate-100 px-3 py-1 rounded-full">Waiting for Customer Confirmation</span>
@@ -362,6 +513,7 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
                  </div>
              )}
 
+             {/* CUSTOMER CONFIRMATION */}
              {isSubscriber && currentStepIndex === 3 && (
                  <div className="mt-2 flex justify-end border-t border-slate-200 pt-3">
                      <div className="flex flex-col items-end gap-2">
@@ -382,7 +534,7 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
       {isCompleted && (
           <div className="mt-4 p-3 bg-white rounded-lg border border-green-100 flex items-center gap-3">
               <CheckCircle2 className="text-green-600" size={20} />
-              <p className="text-sm text-green-800">This issue has been resolved and closed.</p>
+              <p className="text-sm text-green-800">This request has been completed.</p>
           </div>
       )}
     </div>
@@ -412,7 +564,6 @@ const Layout = ({ children, user, onLogout }) => {
             {user && (
               <div className="hidden md:flex items-center space-x-4">
                 <div className="flex items-center space-x-3 px-4 py-1.5 bg-white/10 rounded-full text-sm border border-white/10 backdrop-blur-md">
-                   {/* Badge Logic */}
                    {user.role === 'admin' ? <Shield size={14} className="text-yellow-300" /> : 
                     user.role === 'technician' ? <HardHat size={14} className="text-orange-300" /> : 
                     <User size={14} className="text-blue-200" />}
@@ -530,6 +681,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   const [updatingCreds, setUpdatingCreds] = useState(false);
   const [followUpText, setFollowUpText] = useState('');
   const [followingUpTo, setFollowingUpTo] = useState(null);
+  const [selectedPlanForApp, setSelectedPlanForApp] = useState(null); // To track application wizard
 
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
@@ -542,7 +694,6 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
 
   if (!userData) return <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500"><div className="animate-spin mb-4"><RefreshCw /></div><p>Loading your account details...</p></div>;
 
-  // Define isOverdue so we don't crash
   const isOverdue = userData.status === 'overdue' || userData.status === 'disconnected';
 
   const allAlerts = [
@@ -555,47 +706,62 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
 
   // --- APPLICANT VIEW ---
   if (userData.status === 'applicant' || userData.accountNumber === 'PENDING') {
-     const handleSelectPlan = async (plan) => {
-        if(confirm(`Do you want to apply for the ${plan.name}?`)) {
-           try {
-              const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
-              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { plan: plan.name });
-              
-              await sendSystemEmail(userData.email, 'Plan Application', `Application #${ticketId} for ${plan.name} received.`);
+     
+     const handleWizardSubmit = async (addressData) => {
+        try {
+            const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
+            const fullAddress = `${addressData.street}, ${addressData.barangay}, ${addressData.city}, ${addressData.province}`;
+            
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { 
+                plan: selectedPlanForApp.name,
+                address: fullAddress,
+                addressDetails: addressData // Save full details
+            });
+            
+            await sendSystemEmail(userData.email, 'Plan Application', `Application #${ticketId} for ${selectedPlanForApp.name} received.`);
 
-              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { 
-                ticketId,
-                userId: userData.uid, 
-                username: userData.username, 
-                subject: 'New Subscription Application', 
-                message: `Applicant ${userData.username} (${userData.email}) has applied for the ${plan.name} plan. Please approve and assign an account number.`, 
-                status: 'open', 
-                adminReply: '', 
-                isApplication: true, 
-                targetUserId: userData.uid, 
-                targetPlan: plan.name, 
-                date: new Date().toISOString() 
-              });
-              alert(`Application submitted! Ticket #${ticketId}.`);
-           } catch(e) { console.error(e); alert("Error submitting application"); }
-        }
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { 
+              ticketId,
+              userId: userData.uid, 
+              username: userData.username, 
+              subject: 'New Subscription Application', 
+              message: `Applicant ${userData.username} (${userData.email}) has applied for the ${selectedPlanForApp.name} plan.\nAddress: ${fullAddress}`, 
+              status: 'open', 
+              adminReply: '', 
+              isApplication: true, 
+              targetUserId: userData.uid, 
+              targetPlan: selectedPlanForApp.name, 
+              date: new Date().toISOString() 
+            });
+            setSelectedPlanForApp(null);
+            alert(`Application submitted! Ticket #${ticketId}.`);
+        } catch(e) { console.error(e); alert("Error submitting application"); }
      };
+
      return (
         <div className="w-full py-12 animate-in fade-in">
            <div className="text-center mb-12"><h1 className="text-3xl font-bold text-slate-800 mb-2">Welcome to SwiftNet!</h1><p className="text-slate-500">To get started, please select an internet plan below.</p></div>
            {userData.plan ? (
               <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-r-xl max-w-xl mx-auto shadow-sm"><div className="flex items-center gap-4"><Hourglass size={32} className="text-yellow-600" /><div><h3 className="text-lg font-bold text-yellow-800">Application Pending</h3><p className="text-yellow-700">You have applied for the <strong>{userData.plan}</strong>. An administrator will review your request.</p></div></div></div>
            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map(plan => (<div key={plan.id} className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-xl font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Fiber Optic</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => handleSelectPlan(plan)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Apply Now <ArrowRight size={16} /></button></div></div>))}{availablePlans.length === 0 && <p className="col-span-full text-center text-slate-400">No plans configured by admin yet.</p>}</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map(plan => (<div key={plan.id} className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-xl font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Fiber Optic</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => setSelectedPlanForApp(plan)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Apply Now <ArrowRight size={16} /></button></div></div>))}{availablePlans.length === 0 && <p className="col-span-full text-center text-slate-400">No plans configured by admin yet.</p>}</div>
            )}
            <div className="mt-12 text-center"><button onClick={() => signOut(getAuth(app))} className="text-slate-400 hover:text-slate-600 text-sm underline">Sign Out</button></div>
+           
+           {selectedPlanForApp && (
+               <ApplicationWizard 
+                  plan={selectedPlanForApp} 
+                  onClose={() => setSelectedPlanForApp(null)} 
+                  onSubmit={handleWizardSubmit}
+               />
+           )}
         </div>
      );
   }
 
   // ... (Dashboard handlers) ...
   const handlePaymentSubmit = async (e) => { e.preventDefault(); setSubmitting(true); await onPay(userData.id, refNumber, userData.username); setSubmitting(false); setShowQR(false); setRefNumber(''); };
-  const handleCreateTicket = async (e) => { if(e) e.preventDefault(); if (!newTicket.subject || !newTicket.message) return; setTicketLoading(true); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { userId: userData.uid, username: userData.username, subject: newTicket.subject, message: newTicket.message, status: 'open', adminReply: '', date: new Date().toISOString() }); setNewTicket({ subject: '', message: '' }); alert("Request submitted successfully!"); setActiveTab('support'); } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } setTicketLoading(false); };
+  const handleCreateTicket = async (e) => { if(e) e.preventDefault(); if (!newTicket.subject || !newTicket.message) return; setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: newTicket.subject, message: newTicket.message, status: 'open', adminReply: '', date: new Date().toISOString() }); setNewTicket({ subject: '', message: '' }); alert(`Ticket #${ticketId} submitted successfully!`); setActiveTab('support'); } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } setTicketLoading(false); };
   const handleFollowUpTicket = async (ticketId, originalMessage) => { if(!followUpText) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId); const timestamp = new Date().toLocaleString(); const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`; await updateDoc(docRef, { message: newMessage, status: 'open', date: new Date().toISOString() }); setFollowingUpTo(null); setFollowUpText(''); alert("Follow-up sent successfully!"); } catch(e) { console.error(e); alert("Failed to send follow-up"); } };
   const handleRequestRepair = async (e) => { e.preventDefault(); if(!repairNote) return; try { const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0'); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: randomId, userId: userData.uid, username: userData.username, address: userData.address || "No address provided", type: 'Service Repair - Internet', notes: repairNote, status: 'Submission', stepIndex: 0, technicianNote: 'Waiting for initial evaluation.', dateFiled: new Date().toISOString() }); setRepairNote(''); setShowRepairModal(false); alert("Repair request filed successfully!"); } catch(e) { console.error(e); alert("Failed to request repair."); } };
   const handleApplyPlan = (planName) => { if(confirm(`Apply for ${planName}?`)) { const msg = `Requesting plan change.\n\nCurrent: ${userData.plan}\nNew: ${planName}`; const submitPlanTicket = async () => { setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'Plan Change Request', message: msg, status: 'open', adminReply: '', date: new Date().toISOString() }); alert(`Application submitted! Ticket #${ticketId}.`); setActiveTab('support'); } catch(e) { alert("Failed."); } setTicketLoading(false); }; submitPlanTicket(); } };
@@ -751,6 +917,10 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   
   const [newDueDate, setNewDueDate] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
+  
+  // NEW: Job Creation State
+  const [showCreateJobModal, setShowCreateJobModal] = useState(false); 
+  const [newJob, setNewJob] = useState({ targetUserId: '', type: 'New Installation', notes: '', assignedTechId: '' });
 
   // ... (Existing useEffect and Handlers remain same) ...
   useEffect(() => {
@@ -774,38 +944,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
     return () => unsubscribe();
   }, []);
 
-  const handleApproveApplication = async (ticket) => { 
-      // 1. Prompt for Amount
-      const amountStr = prompt("Enter initial balance/installation fee for this user:", "1500");
-      if (amountStr === null) return; // Cancelled by user
-      const amount = parseFloat(amountStr);
-      if (isNaN(amount)) {
-          alert("Invalid amount. Please enter a number.");
-          return;
-      }
-
-      const newAccountNo = Math.floor(Math.random() * 1000000).toString(); 
-      const planName = ticket.targetPlan; 
-      
-      try { 
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.targetUserId), { 
-              status: 'active', 
-              accountNumber: newAccountNo, 
-              plan: planName, 
-              balance: amount, // Use the custom amount
-              dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() 
-          }); 
-          
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), { 
-              status: 'resolved', 
-              adminReply: `Approved! Account Number: ${newAccountNo}. Initial Balance: ₱${amount}. Please proceed to payment.` 
-          }); 
-          
-          alert(`Application Approved! Assigned Account #${newAccountNo} with balance ₱${amount}`); 
-      } catch(e) { 
-          alert("Failed to approve."); 
-      } 
-  };
 
   const handleStatusChange = async (userId, newStatus) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { status: newStatus }); } catch (e) { console.error(e); } };
   const handleAddBill = async (userId, currentBalance) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { balance: currentBalance + 50, status: (currentBalance + 50) > 0 ? 'overdue' : 'active', dueDate: new Date().toISOString() }); } catch (e) { console.error(e); } };
@@ -895,6 +1033,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       } catch(e) { console.error(e); alert("Failed to force complete."); }
   };
 
+  const handleApproveApplication = async (ticket) => { const amountStr = prompt("Enter initial balance/installation fee for this user:", "1500"); if (amountStr === null) return; const amount = parseFloat(amountStr); if (isNaN(amount)) { alert("Invalid amount. Please enter a number."); return; } const newAccountNo = Math.floor(Math.random() * 1000000).toString(); const planName = ticket.targetPlan; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.targetUserId), { status: 'active', accountNumber: newAccountNo, plan: planName, balance: amount, dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() }); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), { status: 'resolved', adminReply: `Approved! Account Number: ${newAccountNo}. Initial Balance: ₱${amount}. Please proceed to payment.` }); alert(`Application Approved! Assigned Account #${newAccountNo} with balance ₱${amount}`); } catch(e) { alert("Failed to approve."); } };
   const handleOpenNotify = (sub) => { setNotifyData({ targetId: sub.id, targetName: sub.username, title: '', message: '' }); setShowNotifyModal(true); };
   const handleSendNotification = async (e) => { e.preventDefault(); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', NOTIFICATIONS_COLLECTION), { userId: notifyData.targetId, title: notifyData.title, message: notifyData.message, date: new Date().toISOString(), type: 'info', read: false }); setShowNotifyModal(false); alert("Sent!"); } catch (e) { alert("Failed."); } };
   const handleDeleteSubscriber = async (id) => { if (confirm("Delete subscriber?")) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id)); alert("Deleted."); } catch (e) { alert("Failed."); } } };
@@ -914,8 +1053,44 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       } catch(e) { console.error(e); }
   };
 
-  const filteredSubscribers = subscribers.filter(sub => (sub.username?.toLowerCase().includes(searchTerm.toLowerCase()) || sub.accountNumber?.includes(searchTerm)));
+  // NEW: Admin Manual Job Creation Logic
+  const handleAdminCreateJob = async (e) => {
+      e.preventDefault();
+      if(!newJob.targetUserId || !newJob.notes) return alert("Select user and add details.");
+      
+      const targetUser = subscribers.find(u => u.id === newJob.targetUserId);
+      const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0');
+      
+      // If tech is assigned, start at Step 1 (Evaluation/Assigned), else Step 0 (Submission)
+      const startStep = newJob.assignedTechId ? 1 : 0;
+      const startStatus = newJob.assignedTechId ? 'Evaluation' : 'Submission';
+      const assignedTechName = newJob.assignedTechId ? technicians.find(t => t.uid === newJob.assignedTechId)?.username : null;
 
+      try {
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), {
+              requestId: randomId,
+              userId: targetUser.uid,
+              username: targetUser.username,
+              address: targetUser.address || "Address not set",
+              type: newJob.type,
+              notes: newJob.notes,
+              status: startStatus,
+              stepIndex: startStep,
+              assignedTechId: newJob.assignedTechId || null,
+              assignedTechName: assignedTechName || null,
+              technicianNote: newJob.assignedTechId ? 'Technician assigned by Admin.' : 'Waiting for assignment.',
+              dateFiled: new Date().toISOString()
+          });
+          setShowCreateJobModal(false);
+          setNewJob({ targetUserId: '', type: 'New Installation', notes: '', assignedTechId: '' });
+          alert("Job created successfully!");
+      } catch(e) {
+          console.error(e);
+          alert("Failed to create job.");
+      }
+  };
+
+  const filteredSubscribers = subscribers.filter(sub => (sub.username?.toLowerCase().includes(searchTerm.toLowerCase()) || sub.accountNumber?.includes(searchTerm)));
   const activeRepairs = (repairs || []).filter(r => r.status !== 'Completed');
   const historyRepairs = (repairs || []).filter(r => r.status === 'Completed');
 
@@ -983,18 +1158,18 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
 
       {/* ... (Tickets, Plans, Payments Tabs - UNCHANGED) ... */}
        {activeTab === 'tickets' && (<div className="space-y-4"><h2 className="text-xl font-bold text-slate-800">Support Tickets & Applications</h2><div className="grid grid-cols-1 gap-4">{tickets && tickets.length > 0 ? tickets.map(ticket => (<div key={ticket.id} className={`p-5 rounded-xl shadow-sm border ${ticket.isApplication ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}><div className="flex justify-between items-start mb-3"><div><h4 className="font-bold text-lg text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject} {ticket.isApplication && <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">APPLICATION</span>}</h4><p className="text-xs text-slate-500">From: <span className="font-bold text-blue-600">{ticket.username}</span> • {new Date(ticket.date).toLocaleString()}</p></div><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${ticket.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{ticket.status}</span></div><p className="text-slate-700 text-sm mb-4">{ticket.message}</p>{ticket.isApplication && ticket.status === 'open' && (<button onClick={() => handleApproveApplication(ticket)} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors">Approve & Assign Account #</button>)}{ticket.adminReply ? <div className="border-t border-slate-200 pt-3"><p className="text-xs font-bold text-slate-400 uppercase mb-1">Your Reply</p><p className="text-sm text-blue-700 font-medium">{ticket.adminReply}</p></div> : (<div className="flex gap-2 mt-2">{replyingTo === ticket.id ? (<div className="w-full"><textarea className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2" rows="3" value={replyText} onChange={(e) => setReplyText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setReplyingTo(null)} className="text-slate-500 text-sm font-bold">Cancel</button><button onClick={() => handleReplyTicket(ticket.id)} className="bg-blue-600 text-white text-sm font-bold px-4 py-1 rounded-lg">Send Reply</button></div></div>) : <button onClick={() => { setReplyingTo(ticket.id); setReplyText(''); }} className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg font-bold text-sm transition-colors"><MessageSquare size={16} /> Reply</button>}</div>)}</div>)) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400">No tickets found.</div>}</div></div>)}
+       
+       {/* UPDATED: Admin Repair View with Force Complete */}
        {activeTab === 'repairs' && (
          <div className="space-y-6">
             <div className="flex justify-between items-center">
-               <div>
-                  <h2 className="text-2xl font-bold text-slate-800">Repair Requests</h2>
-                  <p className="text-sm text-slate-500">Track status.</p>
+               <div><h2 className="text-2xl font-bold text-slate-800">Repair & Installation Requests</h2><p className="text-sm text-slate-500">Track service jobs.</p></div>
+               <div className="flex gap-2">
+                   <button onClick={() => setShowCreateJobModal(true)} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg flex items-center gap-2"><Briefcase size={18} /> Create Job</button>
+                   <button onClick={() => setShowRepairModal(true)} className="bg-red-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-red-700 shadow-lg flex items-center gap-2"><Hammer size={18} /> Request Repair</button>
                </div>
-               <button onClick={() => setShowRepairModal(true)} className="bg-red-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-red-700 shadow-lg flex items-center gap-2"><Hammer size={18} /> Request Repair</button>
             </div>
-            
             <div className="space-y-4">
-               <h3 className="text-sm font-bold text-slate-500 uppercase">Active Repairs</h3>
                {activeRepairs && activeRepairs.length > 0 ? activeRepairs.map(repair => (
                   <RepairStatusCard 
                      key={repair.id} 
@@ -1006,19 +1181,9 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                      onTechUpdate={handleUpdateRepairStatus} // Admins can use standard flow too
                      onForceComplete={handleForceComplete} // New Force Complete Handler
                   />
-               )) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400 text-sm">No active repairs.</div>}
+               )) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400 text-sm">No active jobs.</div>}
             </div>
-            
-            {historyRepairs.length > 0 && (
-                <div className="pt-8 mt-8 border-t border-slate-200">
-                   <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><Clock size={18}/> Repair History</h3>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       {historyRepairs.map(repair => (
-                           <RepairStatusCard key={repair.id} repair={repair} isSubscriber={false} />
-                       ))}
-                   </div>
-                </div>
-            )}
+            <div className="pt-8 border-t border-slate-200"><h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><Clock size={18}/> Job History</h3>{historyRepairs && historyRepairs.length > 0 ? (<div className="grid grid-cols-1 md:grid-cols-2 gap-4">{historyRepairs.map(repair => (<RepairStatusCard key={repair.id} repair={repair} isSubscriber={false} />))}</div>) : <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-100 text-slate-400 text-sm">No completed history.</div>}</div>
          </div>
       )}
        {activeTab === 'plans' && <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 className="font-bold mb-4">Manage Plans</h3><div className="space-y-2">{plans.map(p=><div key={p.id} className="flex justify-between items-center border-b pb-2"><span>{p.name}</span><button onClick={()=>handleDeletePlan(p.id)} className="text-red-500"><Trash2 size={14}/></button></div>)}</div><form className="mt-4 flex gap-2" onSubmit={handleAddPlan}><input className="border p-2 rounded text-sm" placeholder="New Plan" value={newPlanName} onChange={e=>setNewPlanName(e.target.value)}/><button className="bg-blue-600 text-white px-4 py-2 rounded text-sm">Add</button></form></div>}
@@ -1026,13 +1191,53 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
        {activeTab === 'speedtest' && <SpeedTest />}
 
        {/* Modals */}
-       {/* ... (Modals remain same) ... */}
-       {showAddTechModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><div className="bg-orange-600 p-5 flex justify-between items-center -m-6 mb-6"><h3 className="text-white font-bold flex items-center gap-2"><HardHat size={18} /> Add New Technician</h3><button onClick={() => setShowAddTechModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><form onSubmit={handleAddTechnician} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tech Name</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.username} onChange={(e) => setNewTech({...newTech, username: e.target.value})} placeholder="Technician Name" /></div><div className="border-t border-slate-100 pt-2"></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.email} onChange={(e) => setNewTech({...newTech, email: e.target.value})} /></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-mono" value={newTech.password} onChange={(e) => setNewTech({...newTech, password: e.target.value})} /></div><button type="submit" disabled={isCreatingUser} className="w-full py-2.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700">{isCreatingUser ? 'Creating...' : 'Create Technician Account'}</button></form></div></div>)}
-       {showAddAdminModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><h3 className="font-bold mb-4">Add Admin</h3><form onSubmit={handleAddAdmin} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Name" value={newAdmin.username} onChange={e=>setNewAdmin({...newAdmin, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newAdmin.email} onChange={e=>setNewAdmin({...newAdmin, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newAdmin.password} onChange={e=>setNewAdmin({...newAdmin, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddAdminModal(false)} className="text-slate-500">Cancel</button><button className="bg-slate-800 text-white px-4 py-2 rounded">Create</button></div></form></div></div>)}
-       {showAddModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Add Subscriber</h3><form onSubmit={handleAddSubscriber} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Username" value={newUser.username} onChange={e=>setNewUser({...newUser, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Account #" value={newUser.accountNumber} onChange={e=>setNewUser({...newUser, accountNumber: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newUser.email} onChange={e=>setNewUser({...newUser, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newUser.password} onChange={e=>setNewUser({...newUser, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddModal(false)} className="text-slate-500">Cancel</button><button className="bg-blue-600 text-white px-4 py-2 rounded">Add</button></div></form></div></div>)}
-       {showAnnounceModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Post Announcement</h3><input className="w-full border p-2 rounded mb-2" placeholder="Title" value={newAnnouncement.title} onChange={e=>setNewAnnouncement({...newAnnouncement, title: e.target.value})}/><textarea className="w-full border p-2 rounded mb-2" placeholder="Message" value={newAnnouncement.message} onChange={e=>setNewAnnouncement({...newAnnouncement, message: e.target.value})}></textarea><div className="flex justify-end gap-2"><button onClick={()=>setShowAnnounceModal(false)} className="text-slate-500">Cancel</button><button onClick={handlePostAnnouncement} className="bg-blue-600 text-white px-4 py-2 rounded">Post</button></div></div></div>)}
-       {showPasswordModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Change Password</h3><input className="w-full border p-2 rounded mb-4" type="password" placeholder="New Password" value={adminNewPass} onChange={e=>setAdminNewPass(e.target.value)}/><div className="flex justify-end gap-2"><button onClick={()=>setShowPasswordModal(false)} className="text-slate-500">Cancel</button><button onClick={handleChangePassword} className="bg-blue-600 text-white px-4 py-2 rounded">Update</button></div></div></div>)}
-       {showDateModal && (
+       {/* NEW: Create Job Modal */}
+       {showCreateJobModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6">
+             <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Briefcase size={18} /> Create New Job</h3><button onClick={() => setShowCreateJobModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div>
+             <form onSubmit={handleAdminCreateJob}>
+                <div className="space-y-3">
+                   <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase">Select User</label>
+                      <select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" value={newJob.targetUserId} onChange={(e) => setNewJob({...newJob, targetUserId: e.target.value})} required>
+                         <option value="">-- Select User --</option>
+                         {subscribers.filter(s => s.role !== 'admin' && s.role !== 'technician').map(u => (<option key={u.id} value={u.id}>{u.username} ({u.accountNumber})</option>))}
+                      </select>
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase">Job Type</label>
+                      <select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" value={newJob.type} onChange={(e) => setNewJob({...newJob, type: e.target.value})}>
+                         <option value="New Installation">New Installation</option>
+                         <option value="Service Repair">Service Repair</option>
+                         <option value="Maintenance">Maintenance</option>
+                      </select>
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase">Job Details / Notes</label>
+                      <textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 h-24 resize-none" placeholder="Enter installation details or issue description..." value={newJob.notes} onChange={(e) => setNewJob({...newJob, notes: e.target.value})} required></textarea>
+                   </div>
+                   <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase">Assign Technician (Optional)</label>
+                      <select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" value={newJob.assignedTechId} onChange={(e) => setNewJob({...newJob, assignedTechId: e.target.value})}>
+                         <option value="">-- Assign Later --</option>
+                         {technicians.map(t => (<option key={t.id} value={t.uid}>{t.username}</option>))}
+                      </select>
+                   </div>
+                   <button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">Create Job Ticket</button>
+                </div>
+             </form>
+          </div>
+        </div>
+      )}
+      
+      {/* ... (Other Modals: Tech, Admin, Subscriber, Announce, Password, Date, Notify) ... */}
+      {showAddTechModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><div className="bg-orange-600 p-5 flex justify-between items-center -m-6 mb-6"><h3 className="text-white font-bold flex items-center gap-2"><HardHat size={18} /> Add New Technician</h3><button onClick={() => setShowAddTechModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><form onSubmit={handleAddTechnician} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tech Name</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.username} onChange={(e) => setNewTech({...newTech, username: e.target.value})} placeholder="Technician Name" /></div><div className="border-t border-slate-100 pt-2"></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.email} onChange={(e) => setNewTech({...newTech, email: e.target.value})} /></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-mono" value={newTech.password} onChange={(e) => setNewTech({...newTech, password: e.target.value})} /></div><button type="submit" disabled={isCreatingUser} className="w-full py-2.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700">{isCreatingUser ? 'Creating...' : 'Create Technician Account'}</button></form></div></div>)}
+      {showAddAdminModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><h3 className="font-bold mb-4">Add Admin</h3><form onSubmit={handleAddAdmin} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Name" value={newAdmin.username} onChange={e=>setNewAdmin({...newAdmin, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newAdmin.email} onChange={e=>setNewAdmin({...newAdmin, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newAdmin.password} onChange={e=>setNewAdmin({...newAdmin, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddAdminModal(false)} className="text-slate-500">Cancel</button><button className="bg-slate-800 text-white px-4 py-2 rounded">Create</button></div></form></div></div>)}
+      {showAddModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Add Subscriber</h3><form onSubmit={handleAddSubscriber} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Username" value={newUser.username} onChange={e=>setNewUser({...newUser, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Account #" value={newUser.accountNumber} onChange={e=>setNewUser({...newUser, accountNumber: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newUser.email} onChange={e=>setNewUser({...newUser, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newUser.password} onChange={e=>setNewUser({...newUser, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddModal(false)} className="text-slate-500">Cancel</button><button className="bg-blue-600 text-white px-4 py-2 rounded">Add</button></div></form></div></div>)}
+      {showAnnounceModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Post Announcement</h3><input className="w-full border p-2 rounded mb-2" placeholder="Title" value={newAnnouncement.title} onChange={e=>setNewAnnouncement({...newAnnouncement, title: e.target.value})}/><textarea className="w-full border p-2 rounded mb-2" placeholder="Message" value={newAnnouncement.message} onChange={e=>setNewAnnouncement({...newAnnouncement, message: e.target.value})}></textarea><div className="flex justify-end gap-2"><button onClick={()=>setShowAnnounceModal(false)} className="text-slate-500">Cancel</button><button onClick={handlePostAnnouncement} className="bg-blue-600 text-white px-4 py-2 rounded">Post</button></div></div></div>)}
+      {showPasswordModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Change Password</h3><input className="w-full border p-2 rounded mb-4" type="password" placeholder="New Password" value={adminNewPass} onChange={e=>setAdminNewPass(e.target.value)}/><div className="flex justify-end gap-2"><button onClick={()=>setShowPasswordModal(false)} className="text-slate-500">Cancel</button><button onClick={handleChangePassword} className="bg-blue-600 text-white px-4 py-2 rounded">Update</button></div></div></div>)}
+      {showDateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold">Change Due Date</h3><button onClick={() => setShowDateModal(null)} className="text-white/80 hover:text-white"><X size={24} /></button></div>
@@ -1154,7 +1359,10 @@ export default function App() {
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), orderBy('date', 'desc')), s => setTickets(s.docs.map(d => ({id: d.id, ...d.data()}))));
     } 
     else if (user.role === 'technician') {
-        const q = query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), where('assignedTechId', '==', user.uid));
+        const q = query(
+            collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION),
+            where('assignedTechId', '==', user.uid)
+        );
         onSnapshot(q, s => {
             const allAssigned = s.docs.map(d => ({id: d.id, ...d.data()}));
             setRepairs(allAssigned); 
