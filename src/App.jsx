@@ -83,7 +83,7 @@ import {
   CheckSquare,
   Briefcase,
   Phone,
-  Edit // Ensure this is imported to prevent ReferenceError
+  Edit // FIXED: Added missing Edit icon import
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -129,242 +129,75 @@ const ODOO_CONFIG = {
 // --- Helper Functions ---
 const sendSystemEmail = async (to, subject, htmlContent) => {
   console.log("Attempting to send email via Odoo...");
-  // (Kept as simulated to prevent CORS errors in frontend-only env)
-  console.log(`%c[SIMULATED EMAIL] To: ${to}\nSubject: ${subject}`, 'color: blue');
-  return true; 
+  const jsonRpc = async (url, method, params) => {
+    try {
+        const response = await fetch(`${url}/jsonrpc`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            method: "call",
+            params: params,
+            id: Math.floor(Math.random() * 1000000000)
+          })
+        });
+        return await response.json();
+    } catch (error) {
+        console.warn("CORS/Network Error (Odoo):", error);
+        return { error: { data: { message: "Network/CORS Error" } } };
+    }
+  };
+  try {
+    const authResult = await jsonRpc(ODOO_CONFIG.url, "call", {
+      service: "common",
+      method: "authenticate",
+      args: [ODOO_CONFIG.db, ODOO_CONFIG.username, ODOO_CONFIG.password, {}]
+    });
+    if (authResult.error) {
+      console.warn(`Odoo Auth Failed: ${authResult.error.data ? authResult.error.data.message : 'Unknown'}`);
+      console.log(`%c[SIMULATED EMAIL] To: ${to}\nSubject: ${subject}`, 'color: blue');
+      return false; 
+    }
+    const uid = authResult.result;
+    if (uid) {
+        await jsonRpc(ODOO_CONFIG.url, "call", {
+        service: "object",
+        method: "execute_kw",
+        args: [ODOO_CONFIG.db, uid, ODOO_CONFIG.password, "mail.mail", "create", [{ subject: subject, body_html: htmlContent, email_to: to, state: 'outgoing' }]]
+        });
+        console.log(`%c[ODOO EMAIL SENT]`, 'color: green; font-weight: bold;');
+    }
+    return true;
+  } catch (error) {
+    console.error("Odoo Error:", error);
+    return false;
+  }
 };
 
-// --- Components ---
+// --- Helper Components ---
 
-// 1. Application Wizard (New Form Logic)
+// 1. Application Wizard
 const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
   const [step, setStep] = useState(1);
-  // Initial state matches the requirements
   const [formData, setFormData] = useState({
-    fullName: '',
-    contactNumber: '',
-    province: 'CAGAYAN',
-    city: 'STA ANA',
-    barangay: 'BGY MAREDE',
-    subdivision: '',
-    street: '',
-    building: '',
-    houseNo: '',
-    block: '',
-    lot: '',
-    landmark: ''
+    fullName: '', contactNumber: '', province: 'CAGAYAN', city: 'STA ANA', barangay: 'BGY MAREDE', subdivision: '', street: '', building: '', houseNo: '', block: '', lot: '', landmark: ''
   });
-
-  const handleNext = () => {
-     // Step 1 Validation: Personal Info
-     if (step === 1) {
-         if (!formData.fullName || !formData.contactNumber) {
-            alert("Please enter your Full Name and Contact Number.");
-            return;
-         }
-     }
-     // Step 2 Validation: Basic Address
-     if (step === 2) {
-         if (!formData.province || !formData.city || !formData.barangay) {
-            alert("Province, City, and Barangay are required.");
-            return;
-         }
-     }
-     setStep(step + 1);
+  const handleNext = () => { 
+      if (step === 1 && (!formData.fullName || !formData.contactNumber)) return alert("Please fill in all details."); 
+      if (step === 2 && (!formData.province || !formData.city || !formData.barangay)) return alert("Address required.");
+      setStep(step + 1); 
   };
-  
-  const handleBack = () => setStep(step - 1);
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4 animate-in fade-in zoom-in-95 duration-200">
       <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden flex flex-col max-h-[90vh]">
-        
-        {/* Header */}
-        <div className="bg-red-600 p-6 text-white relative overflow-hidden">
-            <h2 className="text-2xl font-bold mb-1 relative z-10">Guiding you in every step</h2>
-            <p className="text-red-100 text-sm relative z-10">New Application - {plan.name}</p>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10"></div>
-            <button onClick={onClose} className="absolute top-4 right-4 text-white/80 hover:text-white z-20"><X size={24}/></button>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="px-8 pt-6 pb-2">
-           <div className="flex items-center justify-between mb-2">
-              {[1, 2, 3].map((s) => (
-                 <div key={s} className={`w-full h-2 rounded-full mr-2 ${step >= s ? 'bg-red-500' : 'bg-slate-200'}`}></div>
-              ))}
-           </div>
-           <div className="flex justify-between text-xs text-slate-400">
-               <span>Personal</span>
-               <span>Address</span>
-               <span>Review</span>
-           </div>
-        </div>
-
-        {/* Content Area */}
+        <div className="bg-red-600 p-6 text-white relative"><h2 className="text-2xl font-bold relative z-10">New Application</h2><p className="text-red-100 text-sm relative z-10">Applying for: {plan.name}</p><button onClick={onClose} className="absolute top-4 right-4 text-white/80 hover:text-white z-20"><X size={24}/></button></div>
+        <div className="px-8 pt-6 pb-2"><div className="flex items-center justify-between mb-2">{[1, 2, 3].map((s) => (<div key={s} className={`w-full h-2 rounded-full mr-2 ${step >= s ? 'bg-red-500' : 'bg-slate-200'}`}></div>))}</div><p className="text-xs text-slate-400 text-right">Step {step} of 3</p></div>
         <div className="p-8 overflow-y-auto flex-grow">
-           
-           {/* STEP 1: Personal Details */}
-           {step === 1 && (
-             <div className="space-y-6 animate-in slide-in-from-right-8 duration-300">
-                <div className="text-center mb-6">
-                   <h3 className="text-2xl font-bold text-red-600">Personal Information</h3>
-                   <p className="text-slate-600">Please provide your contact details so we can reach you.</p>
-                </div>
-
-                <div className="space-y-4 max-w-lg mx-auto">
-                   <div>
-                      <label className="block text-xs font-bold text-red-600 uppercase mb-1">Full Name</label>
-                      <div className="relative">
-                          <User className="absolute left-3 top-3 text-slate-400" size={18} />
-                          <input 
-                             type="text" 
-                             className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 outline-none"
-                             placeholder="e.g. Juan Dela Cruz"
-                             value={formData.fullName}
-                             onChange={(e) => setFormData({...formData, fullName: e.target.value})}
-                          />
-                      </div>
-                   </div>
-                   <div>
-                      <label className="block text-xs font-bold text-red-600 uppercase mb-1">Contact Number</label>
-                      <div className="relative">
-                          <Phone className="absolute left-3 top-3 text-slate-400" size={18} />
-                          <input 
-                             type="tel" 
-                             className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 outline-none"
-                             placeholder="e.g. 0912 345 6789"
-                             value={formData.contactNumber}
-                             onChange={(e) => setFormData({...formData, contactNumber: e.target.value})}
-                          />
-                      </div>
-                   </div>
-                </div>
-             </div>
-           )}
-
-           {/* STEP 2: Address Details */}
-           {step === 2 && (
-             <div className="space-y-6 animate-in slide-in-from-right-8 duration-300">
-                <div className="text-center mb-4">
-                   <h3 className="text-xl font-bold text-red-600">Service Address</h3>
-                   <p className="text-sm text-slate-500">Where should we install your connection?</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                   {/* Province, City, Barangay are often fixed/dropdowns in real apps, using inputs for flexibility here */}
-                   <div>
-                      <label className="text-xs font-bold text-red-600 uppercase">* Province</label>
-                      <input className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold text-slate-700 uppercase focus:ring-1 focus:ring-red-500 outline-none" value={formData.province} onChange={e => setFormData({...formData, province: e.target.value})} placeholder="CAGAYAN" />
-                   </div>
-                   <div>
-                      <label className="text-xs font-bold text-red-600 uppercase">* City</label>
-                      <input className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold text-slate-700 uppercase focus:ring-1 focus:ring-red-500 outline-none" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} placeholder="STA ANA" />
-                   </div>
-                   <div className="col-span-2">
-                      <label className="text-xs font-bold text-red-600 uppercase">* Barangay</label>
-                      <input className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold text-slate-700 uppercase focus:ring-1 focus:ring-red-500 outline-none" value={formData.barangay} onChange={e => setFormData({...formData, barangay: e.target.value})} placeholder="BGY MAREDE" />
-                   </div>
-                   
-                   <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Subdivision</label>
-                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm outline-none focus:border-red-500" placeholder="Search..." value={formData.subdivision} onChange={e => setFormData({...formData, subdivision: e.target.value})} />
-                   </div>
-                   <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Street</label>
-                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm outline-none focus:border-red-500" placeholder="Search..." value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} />
-                   </div>
-
-                   <div className="col-span-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase">Building</label>
-                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm outline-none focus:border-red-500" placeholder="Type in your building" value={formData.building} onChange={e => setFormData({...formData, building: e.target.value})} />
-                   </div>
-
-                   <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">House No.</label>
-                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm outline-none focus:border-red-500" placeholder="e.g. 123" value={formData.houseNo} onChange={e => setFormData({...formData, houseNo: e.target.value})} />
-                   </div>
-                   <div className="grid grid-cols-2 gap-2">
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase">Block</label>
-                            <input className="w-full border border-slate-300 rounded-lg p-3 text-sm outline-none focus:border-red-500" placeholder="Blk" value={formData.block} onChange={e => setFormData({...formData, block: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase">Lot</label>
-                            <input className="w-full border border-slate-300 rounded-lg p-3 text-sm outline-none focus:border-red-500" placeholder="Lot" value={formData.lot} onChange={e => setFormData({...formData, lot: e.target.value})} />
-                        </div>
-                   </div>
-                   
-                   <div className="col-span-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase">Landmark</label>
-                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm outline-none focus:border-red-500" placeholder="e.g. Near the Chapel / Blue Gate" value={formData.landmark} onChange={e => setFormData({...formData, landmark: e.target.value})} />
-                   </div>
-                </div>
-             </div>
-           )}
-
-           {/* STEP 3: Review */}
-           {step === 3 && (
-             <div className="text-center space-y-6 animate-in slide-in-from-right-8 duration-300">
-                <h3 className="text-2xl font-bold text-red-600">Review Application</h3>
-                <p className="text-slate-600">Please ensure all details are correct before submitting.</p>
-                
-                <div className="bg-slate-50 p-6 rounded-xl text-left space-y-4 border border-slate-200 shadow-sm">
-                   <div className="flex justify-between border-b border-slate-200 pb-2">
-                      <span className="text-sm text-slate-500">Selected Plan</span>
-                      <span className="font-bold text-blue-600">{plan.name}</span>
-                   </div>
-                   <div className="flex justify-between border-b border-slate-200 pb-2">
-                      <span className="text-sm text-slate-500">Applicant Name</span>
-                      <span className="font-bold text-slate-800">{formData.fullName}</span>
-                   </div>
-                   <div className="flex justify-between border-b border-slate-200 pb-2">
-                      <span className="text-sm text-slate-500">Contact Number</span>
-                      <span className="font-bold text-slate-800">{formData.contactNumber}</span>
-                   </div>
-                   <div>
-                      <span className="text-sm text-slate-500 block mb-1">Installation Address</span>
-                      <span className="font-bold text-slate-800 text-sm uppercase block bg-white p-3 rounded border border-slate-200">
-                          {[
-                              formData.houseNo, 
-                              formData.block ? `BLK ${formData.block}` : '',
-                              formData.lot ? `LOT ${formData.lot}` : '',
-                              formData.street, 
-                              formData.subdivision,
-                              formData.barangay, 
-                              formData.city, 
-                              formData.province
-                          ].filter(Boolean).join(', ')}
-                      </span>
-                      {formData.landmark && <p className="text-xs text-slate-500 mt-2 italic flex items-center gap-1"><MapPin size={12}/> Landmark: {formData.landmark}</p>}
-                   </div>
-                </div>
-             </div>
-           )}
-
+           {step === 1 && (<div className="space-y-4"><div className="text-center mb-6"><h3 className="text-2xl font-bold text-slate-800">Personal Information</h3></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Full Name</label><div className="relative"><User className="absolute left-3 top-3 text-slate-400" size={18} /><input type="text" className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl outline-none" placeholder="e.g. Juan Dela Cruz" value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})} /></div></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contact Number</label><div className="relative"><Phone className="absolute left-3 top-3 text-slate-400" size={18} /><input type="tel" className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl outline-none" placeholder="e.g. 0912..." value={formData.contactNumber} onChange={(e) => setFormData({...formData, contactNumber: e.target.value})} /></div></div></div>)}
+           {step === 2 && (<div className="space-y-4"><div className="text-center mb-4"><h3 className="text-xl font-bold text-slate-800">Service Address</h3></div><div className="grid grid-cols-2 gap-4"><div><label className="text-xs font-bold text-slate-500">Province</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.province} onChange={e => setFormData({...formData, province: e.target.value})} /></div><div><label className="text-xs font-bold text-slate-500">City</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} /></div><div className="col-span-2"><label className="text-xs font-bold text-slate-500">Barangay</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.barangay} onChange={e => setFormData({...formData, barangay: e.target.value})} /></div><div><label className="text-xs font-bold text-slate-500">Street</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Street Name" value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} /></div><div><label className="text-xs font-bold text-slate-500">House No.</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 123" value={formData.houseNo} onChange={e => setFormData({...formData, houseNo: e.target.value})} /></div><div className="col-span-2"><label className="text-xs font-bold text-slate-500">Landmark</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. Near the Chapel" value={formData.landmark} onChange={e => setFormData({...formData, landmark: e.target.value})} /></div></div></div>)}
+           {step === 3 && (<div className="text-center space-y-6"><h3 className="text-2xl font-bold text-slate-800">Review</h3><div className="bg-slate-50 p-6 rounded-xl text-left space-y-4 border border-slate-200"><div className="flex justify-between border-b pb-2"><span className="text-sm text-slate-500">Plan</span><span className="font-bold text-blue-600">{plan.name}</span></div><div className="flex justify-between border-b pb-2"><span className="text-sm text-slate-500">Applicant</span><span className="font-bold text-slate-800">{formData.fullName}</span></div><div className="flex justify-between border-b pb-2"><span className="text-sm text-slate-500">Contact</span><span className="font-bold text-slate-800">{formData.contactNumber}</span></div><div><span className="text-sm text-slate-500 block mb-1">Address</span><span className="font-bold text-slate-800 text-sm">{formData.houseNo} {formData.street}, {formData.barangay}, {formData.city}</span></div></div></div>)}
         </div>
-
-        {/* Footer Actions */}
-        <div className="p-6 border-t border-slate-100 flex justify-between bg-white">
-           {step > 1 ? (
-              <button onClick={handleBack} className="px-8 py-3 border border-slate-300 text-slate-600 font-bold rounded-full hover:bg-slate-50 transition-colors">
-                 BACK
-              </button>
-           ) : (
-               <div></div> // Spacer
-           )}
-           
-           {step < 3 ? (
-              <button onClick={handleNext} className="px-10 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200 flex items-center gap-2">
-                 NEXT <ArrowRight size={18}/>
-              </button>
-           ) : (
-              <button onClick={() => onSubmit(formData)} className="px-10 py-3 bg-green-600 text-white font-bold rounded-full hover:bg-green-700 transition-colors shadow-lg shadow-green-200 flex items-center gap-2">
-                 SUBMIT APPLICATION <CheckCircle2 size={18}/>
-              </button>
-           )}
-        </div>
-
+        <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-white">{step > 1 && <button onClick={() => setStep(step-1)} className="px-6 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-xl">Back</button>}{step < 3 ? <button onClick={handleNext} className="px-8 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700">Next</button> : <button onClick={() => onSubmit(formData)} className="px-8 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700">Submit</button>}</div>
       </div>
     </div>
   );
@@ -372,87 +205,19 @@ const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
 
 // 2. Repair Status Card
 const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssign, isTechnician, onTechUpdate, isAdmin, onForceComplete }) => {
-  const steps = [
-    { label: 'Submission', icon: <Check size={16} /> },
-    { label: 'Evaluation', icon: <ClipboardList size={16} /> },
-    { label: 'Processing', icon: <RefreshCw size={16} /> },
-    { label: 'Confirmation', icon: <UserCheck size={16} /> }, 
-    { label: 'Completed', icon: <CheckCircle2 size={16} /> }
-  ];
-
+  const steps = [{ label: 'Submission', icon: <Check size={16} /> }, { label: 'Evaluation', icon: <ClipboardList size={16} /> }, { label: 'Processing', icon: <RefreshCw size={16} /> }, { label: 'Confirmation', icon: <UserCheck size={16} /> }, { label: 'Completed', icon: <CheckCircle2 size={16} /> }];
   const currentStepIndex = repair.stepIndex || 0;
   const isCompleted = repair.status === 'Completed';
-  
-  const getActionLabel = () => {
-     if (currentStepIndex === 0) return { text: "Start Evaluation", icon: <ClipboardList size={16} /> };
-     if (currentStepIndex === 1) return { text: "Start Processing", icon: <PlayCircle size={16} /> };
-     if (currentStepIndex === 2) return { text: "Mark for Confirmation", icon: <CheckCircle2 size={16} /> };
-     return { text: "Update Status", icon: <RefreshCw size={16} /> };
-  };
-
-  const actionLabel = getActionLabel();
+  const actionLabel = { text: "Update Status", icon: <RefreshCw size={16} /> };
+  if (currentStepIndex === 0) { actionLabel.text = "Start Evaluation"; actionLabel.icon = <ClipboardList size={16} />; }
+  if (currentStepIndex === 1) { actionLabel.text = "Start Processing"; actionLabel.icon = <PlayCircle size={16} />; }
+  if (currentStepIndex === 2) { actionLabel.text = "Mark for Confirmation"; actionLabel.icon = <CheckCircle2 size={16} />; }
 
   return (
     <div className={`bg-white rounded-2xl shadow-sm border ${isCompleted ? 'border-green-200 bg-green-50/30' : 'border-slate-200'} p-6 mb-6 animate-in fade-in slide-in-from-bottom-4`}>
-      <div className="flex justify-between items-start mb-4">
-         <div>
-            <h4 className={`text-xs font-bold uppercase tracking-wider mb-1 ${isCompleted ? 'text-green-600' : 'text-red-600'}`}>{isCompleted ? 'Completed' : 'Ongoing'}</h4>
-            <div className="flex items-center gap-3">
-               <div className={`p-3 rounded-full ${isCompleted ? 'bg-green-100' : 'bg-slate-100'}`}>
-                  {repair.type === 'New Installation' ? <Briefcase className={`${isCompleted ? 'text-green-600' : 'text-slate-600'}`} size={24} /> : <Wifi className={`${isCompleted ? 'text-green-600' : 'text-slate-600'}`} size={24} />}
-               </div>
-               <div>
-                  <h3 className="text-lg font-bold text-slate-800">{repair.type || 'Service Repair'}</h3>
-                  <p className="text-sm text-slate-500 font-mono">#{repair.requestId}</p>
-                  {!isSubscriber && repair.assignedTechName && (<span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit mt-1"><HardHat size={10}/> Tech: {repair.assignedTechName}</span>)}
-               </div>
-            </div>
-         </div>
-         {isCompleted && repair.completedDate && (<div className="text-right"><p className="text-xs font-bold text-slate-400 uppercase">Completed On</p><p className="text-sm font-bold text-slate-700">{new Date(repair.completedDate).toLocaleDateString()}</p></div>)}
-      </div>
-
-      {/* Customer Details Block (Visible to Admin & Techs) */}
-      {(!isSubscriber) && (
-         <div className="mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div>
-                     <p className="text-xs font-bold text-slate-400 uppercase mb-1">Customer</p>
-                     <p className="text-sm font-bold text-slate-800 flex items-center gap-2"><User size={14}/> {repair.username}</p>
-                 </div>
-                 <div>
-                     <p className="text-xs font-bold text-slate-400 uppercase mb-1">Service Address</p>
-                     <p className="text-sm text-slate-700 flex items-start gap-2"><MapPin size={14} className="text-red-500 mt-0.5 shrink-0"/> {repair.address || "No address provided"}</p>
-                 </div>
-             </div>
-             <div className="mt-3 pt-3 border-t border-slate-200">
-                 <p className="text-xs font-bold text-slate-400 uppercase mb-1">Reported Issue / Details</p>
-                 <p className="text-sm text-slate-700 italic bg-white p-2 rounded border border-slate-100">"{repair.notes}"</p>
-             </div>
-         </div>
-      )}
-
-      {!isCompleted && (
-        <>
-          {isSubscriber && (<p className="text-sm text-slate-600 mb-4 border-b border-slate-100 pb-4">Requests are usually processed within 24 hours.</p>)}
-          <div className="w-full overflow-x-auto pb-4">
-            <div className="relative flex justify-between items-center min-w-[600px] px-2"> 
-               <div className="absolute top-4 left-0 w-full h-1 bg-slate-100 -z-10 rounded-full"></div>
-               <div className="absolute top-4 left-0 h-1 bg-red-600 -z-0 rounded-full transition-all duration-500" style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}></div>
-               {steps.map((step, index) => {
-                  const isStepCompleted = index <= currentStepIndex;
-                  return (<div key={index} className="flex flex-col items-center gap-2 relative group"><div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isStepCompleted ? 'bg-red-600 border-red-600 text-white' : 'bg-white border-slate-200 text-slate-300'}`}>{isStepCompleted ? <Check size={16} /> : step.icon}</div><span className={`text-[10px] font-bold text-center w-24 absolute -bottom-8 transition-colors ${isStepCompleted ? 'text-slate-800' : 'text-slate-400'}`}>{step.label}</span></div>)
-               })}
-            </div>
-          </div>
-          <div className="mt-10 p-4 bg-slate-50 rounded-xl border border-slate-100 flex flex-col gap-2">
-             <div className="flex gap-3"><div className="text-slate-400 mt-0.5"><Megaphone size={18} /></div><div className="text-sm text-slate-600 w-full"><p className="font-bold text-slate-700 mb-1">Status Update</p>{repair.technicianNote || "Waiting for initial evaluation."}{!isSubscriber && !isTechnician && technicians && (<div className="mt-4 border-t border-slate-200 pt-3"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Assign Technician</label><select className="w-full border border-slate-300 rounded px-2 py-1 text-sm" value={repair.assignedTechId || ''} onChange={(e) => onAssign(repair.id, e.target.value)}><option value="">-- Select Technician --</option>{technicians.map(t => (<option key={t.id} value={t.uid}>{t.username}</option>))}</select></div>)}</div></div>
-             {(isTechnician || isAdmin) && currentStepIndex < 3 && (<div className="mt-2 flex justify-end border-t border-slate-200 pt-3 gap-2">{isAdmin && (<button onClick={() => onForceComplete(repair.id)} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"><CheckSquare size={16} /> Force Complete</button>)}<button onClick={() => onTechUpdate(repair.id, currentStepIndex)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors">{actionLabel.icon} {actionLabel.text}</button></div>)}
-             {isAdmin && currentStepIndex === 3 && (<div className="mt-2 flex justify-end border-t border-slate-200 pt-3"><span className="text-xs text-slate-500 font-bold bg-slate-100 px-3 py-1 rounded-full">Waiting for Customer Confirmation</span><button onClick={() => onForceComplete(repair.id)} className="ml-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1 rounded-lg font-bold text-xs shadow-sm flex items-center gap-1 transition-colors">Override</button></div>)}
-             {isSubscriber && currentStepIndex === 3 && (<div className="mt-2 flex justify-end border-t border-slate-200 pt-3"><div className="flex flex-col items-end gap-2"><p className="text-xs text-slate-500">Technician marked this as resolved. Please confirm.</p><button onClick={() => onConfirm(repair.id)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"><CheckCircle2 size={16} /> Confirm Resolution</button></div></div>)}
-          </div>
-        </>
-      )}
-      
+      <div className="flex justify-between items-start mb-4"><div><h4 className={`text-xs font-bold uppercase tracking-wider mb-1 ${isCompleted ? 'text-green-600' : 'text-red-600'}`}>{isCompleted ? 'Completed' : 'Ongoing'}</h4><div className="flex items-center gap-3"><div className={`p-3 rounded-full ${isCompleted ? 'bg-green-100' : 'bg-slate-100'}`}>{repair.type === 'New Installation' ? <Briefcase className={`${isCompleted ? 'text-green-600' : 'text-slate-600'}`} size={24} /> : <Wifi className={`${isCompleted ? 'text-green-600' : 'text-slate-600'}`} size={24} />}</div><div><h3 className="text-lg font-bold text-slate-800">{repair.type || 'Service Repair'}</h3><p className="text-sm text-slate-500 font-mono">#{repair.requestId}</p>{!isSubscriber && repair.assignedTechName && (<span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit mt-1"><HardHat size={10}/> Tech: {repair.assignedTechName}</span>)}</div></div></div>{isCompleted && repair.completedDate && (<div className="text-right"><p className="text-xs font-bold text-slate-400 uppercase">Completed On</p><p className="text-sm font-bold text-slate-700">{new Date(repair.completedDate).toLocaleDateString()}</p></div>)}</div>
+      {(!isSubscriber) && (<div className="mb-6 bg-slate-50 p-3 rounded-lg border border-slate-200"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><p className="text-xs font-bold text-slate-400 uppercase">Customer</p><p className="text-sm font-bold text-slate-800 flex items-center gap-1"><User size={14}/> {repair.username}</p></div><div><p className="text-xs font-bold text-slate-400 uppercase">Service Address</p><p className="text-sm text-slate-700 flex items-center gap-1"><MapPin size={14} className="text-red-500"/> {repair.address || "No address provided"}</p></div></div><div className="mt-3 pt-3 border-t border-slate-200"><p className="text-xs font-bold text-slate-400 uppercase">Details</p><p className="text-sm text-slate-700 italic">"{repair.notes}"</p></div></div>)}
+      {!isCompleted && (<>{isSubscriber && (<p className="text-sm text-slate-600 mb-4 border-b border-slate-100 pb-4">Requests are usually processed within 24 hours.</p>)}<div className="w-full overflow-x-auto pb-4"><div className="relative flex justify-between items-center min-w-[600px] px-2"> <div className="absolute top-4 left-0 w-full h-1 bg-slate-100 -z-10 rounded-full"></div><div className="absolute top-4 left-0 h-1 bg-red-600 -z-0 rounded-full transition-all duration-500" style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}></div>{steps.map((step, index) => { const isStepCompleted = index <= currentStepIndex; return (<div key={index} className="flex flex-col items-center gap-2 relative group"><div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isStepCompleted ? 'bg-red-600 border-red-600 text-white' : 'bg-white border-slate-200 text-slate-300'}`}>{isStepCompleted ? <Check size={16} /> : step.icon}</div><span className={`text-[10px] font-bold text-center w-24 absolute -bottom-8 transition-colors ${isStepCompleted ? 'text-slate-800' : 'text-slate-400'}`}>{step.label}</span></div>) })}</div></div><div className="mt-10 p-4 bg-slate-50 rounded-xl border border-slate-100 flex flex-col gap-2"><div className="flex gap-3"><div className="text-slate-400 mt-0.5"><Megaphone size={18} /></div><div className="text-sm text-slate-600 w-full"><p className="font-bold text-slate-700 mb-1">Status Update</p>{repair.technicianNote || "Waiting for initial evaluation."}{!isSubscriber && !isTechnician && technicians && (<div className="mt-4 border-t border-slate-200 pt-3"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Assign Technician</label><select className="w-full border border-slate-300 rounded px-2 py-1 text-sm" value={repair.assignedTechId || ''} onChange={(e) => onAssign(repair.id, e.target.value)}><option value="">-- Select Technician --</option>{technicians.map(t => (<option key={t.id} value={t.uid}>{t.username}</option>))}</select></div>)}</div></div>{(isTechnician || isAdmin) && currentStepIndex < 3 && (<div className="mt-2 flex justify-end border-t border-slate-200 pt-3 gap-2">{isAdmin && (<button onClick={() => onForceComplete(repair.id)} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"><CheckSquare size={16} /> Force Complete</button>)}<button onClick={() => onTechUpdate(repair.id, currentStepIndex)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors">{actionLabel.icon} {actionLabel.text}</button></div>)}{isAdmin && currentStepIndex === 3 && (<div className="mt-2 flex justify-end border-t border-slate-200 pt-3"><span className="text-xs text-slate-500 font-bold bg-slate-100 px-3 py-1 rounded-full">Waiting for Customer Confirmation</span><button onClick={() => onForceComplete(repair.id)} className="ml-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1 rounded-lg font-bold text-xs shadow-sm flex items-center gap-1 transition-colors">Override</button></div>)}{isSubscriber && currentStepIndex === 3 && (<div className="mt-2 flex justify-end border-t border-slate-200 pt-3"><div className="flex flex-col items-end gap-2"><p className="text-xs text-slate-500">Technician marked this as resolved. Please confirm.</p><button onClick={() => onConfirm(repair.id)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"><CheckCircle2 size={16} /> Confirm Resolution</button></div></div>)}</div></>)}
       {isCompleted && (<div className="mt-4 p-3 bg-white rounded-lg border border-green-100 flex items-center gap-3"><CheckCircle2 className="text-green-600" size={20} /><p className="text-sm text-green-800">This issue has been resolved and closed.</p></div>)}
     </div>
   );
@@ -576,8 +341,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAvailablePlans(fetchedPlans);
+      setAvailablePlans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
     return () => unsubscribe();
   }, []);
@@ -702,7 +466,7 @@ const TechnicianDashboard = ({ repairs, onTechUpdate }) => {
   );
 };
 
-// 8. Admin Dashboard
+// 8. Admin Dashboard (Restored)
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -710,7 +474,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [technicians, setTechnicians] = useState([]);
   const [showChangePlanModal, setShowChangePlanModal] = useState(null);
 
-  // Modal States
+  // ... (Admin Modal States) ...
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
   const [showAddTechModal, setShowAddTechModal] = useState(false);
