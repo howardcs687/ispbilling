@@ -125,8 +125,70 @@ const ODOO_CONFIG = {
 
 // --- Helper Functions ---
 const sendSystemEmail = async (to, subject, htmlContent) => {
-  console.log(`%c[SIMULATED EMAIL] To: ${to}\nSubject: ${subject}`, 'color: blue');
-  return true; 
+  console.log("Attempting to send email via Odoo...");
+
+  const jsonRpc = async (url, method, params) => {
+    try {
+        const response = await fetch(`${url}/jsonrpc`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            method: "call",
+            params: params,
+            id: Math.floor(Math.random() * 1000000000)
+          })
+        });
+        return await response.json();
+    } catch (error) {
+        console.warn("CORS or Network Error interacting with Odoo directly from browser.", error);
+        return { error: { data: { message: "Network/CORS Error" } } };
+    }
+  };
+
+  try {
+    const authResult = await jsonRpc(ODOO_CONFIG.url, "call", {
+      service: "common",
+      method: "authenticate",
+      args: [ODOO_CONFIG.db, ODOO_CONFIG.username, ODOO_CONFIG.password, {}]
+    });
+
+    if (authResult.error) {
+      console.warn(`Odoo Auth Skipped/Failed: ${authResult.error.data ? authResult.error.data.message : 'Unknown Error'}`);
+      console.log(`%c[SIMULATED EMAIL] To: ${to}\nSubject: ${subject}`, 'color: blue');
+      return false; 
+    }
+
+    const uid = authResult.result;
+    
+    if (uid) {
+        await jsonRpc(ODOO_CONFIG.url, "call", {
+        service: "object",
+        method: "execute_kw",
+        args: [
+            ODOO_CONFIG.db,
+            uid,
+            ODOO_CONFIG.password,
+            "mail.mail",
+            "create",
+            [{
+            subject: subject,
+            body_html: htmlContent,
+            email_to: to,
+            state: 'outgoing' 
+            }]
+        ]
+        });
+        console.log(`%c[ODOO EMAIL SENT]`, 'color: green; font-weight: bold;');
+    }
+    return true;
+
+  } catch (error) {
+    console.error("Odoo Integration Error:", error);
+    return false;
+  }
 };
 
 // --- Helper Components ---
@@ -350,6 +412,7 @@ const Layout = ({ children, user, onLogout }) => {
             {user && (
               <div className="hidden md:flex items-center space-x-4">
                 <div className="flex items-center space-x-3 px-4 py-1.5 bg-white/10 rounded-full text-sm border border-white/10 backdrop-blur-md">
+                   {/* Badge Logic */}
                    {user.role === 'admin' ? <Shield size={14} className="text-yellow-300" /> : 
                     user.role === 'technician' ? <HardHat size={14} className="text-orange-300" /> : 
                     <User size={14} className="text-blue-200" />}
@@ -479,6 +542,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
 
   if (!userData) return <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500"><div className="animate-spin mb-4"><RefreshCw /></div><p>Loading your account details...</p></div>;
 
+  // Define isOverdue so we don't crash
   const isOverdue = userData.status === 'overdue' || userData.status === 'disconnected';
 
   const allAlerts = [
@@ -625,7 +689,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
                      key={repair.id} 
                      repair={repair} 
                      isSubscriber={true} 
-                     onConfirm={onConfirmRepair} // Correctly passing the function
+                     onConfirm={onConfirmRepair} 
                   />
                )) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400 text-sm">No active repairs.</div>}
             </div>
@@ -710,6 +774,38 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
     return () => unsubscribe();
   }, []);
 
+  const handleApproveApplication = async (ticket) => { 
+      // 1. Prompt for Amount
+      const amountStr = prompt("Enter initial balance/installation fee for this user:", "1500");
+      if (amountStr === null) return; // Cancelled by user
+      const amount = parseFloat(amountStr);
+      if (isNaN(amount)) {
+          alert("Invalid amount. Please enter a number.");
+          return;
+      }
+
+      const newAccountNo = Math.floor(Math.random() * 1000000).toString(); 
+      const planName = ticket.targetPlan; 
+      
+      try { 
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.targetUserId), { 
+              status: 'active', 
+              accountNumber: newAccountNo, 
+              plan: planName, 
+              balance: amount, // Use the custom amount
+              dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() 
+          }); 
+          
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), { 
+              status: 'resolved', 
+              adminReply: `Approved! Account Number: ${newAccountNo}. Initial Balance: ₱${amount}. Please proceed to payment.` 
+          }); 
+          
+          alert(`Application Approved! Assigned Account #${newAccountNo} with balance ₱${amount}`); 
+      } catch(e) { 
+          alert("Failed to approve."); 
+      } 
+  };
 
   const handleStatusChange = async (userId, newStatus) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { status: newStatus }); } catch (e) { console.error(e); } };
   const handleAddBill = async (userId, currentBalance) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { balance: currentBalance + 50, status: (currentBalance + 50) > 0 ? 'overdue' : 'active', dueDate: new Date().toISOString() }); } catch (e) { console.error(e); } };
@@ -799,7 +895,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       } catch(e) { console.error(e); alert("Failed to force complete."); }
   };
 
-  const handleApproveApplication = async (ticket) => { const newAccountNo = Math.floor(Math.random() * 1000000).toString(); const planName = ticket.targetPlan; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.targetUserId), { status: 'active', accountNumber: newAccountNo, plan: planName, balance: 1500, dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() }); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), { status: 'resolved', adminReply: `Approved! Account Number: ${newAccountNo}. Please proceed to payment.` }); alert(`Application Approved! Assigned Account #${newAccountNo}`); } catch(e) { alert("Failed to approve."); } };
   const handleOpenNotify = (sub) => { setNotifyData({ targetId: sub.id, targetName: sub.username, title: '', message: '' }); setShowNotifyModal(true); };
   const handleSendNotification = async (e) => { e.preventDefault(); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', NOTIFICATIONS_COLLECTION), { userId: notifyData.targetId, title: notifyData.title, message: notifyData.message, date: new Date().toISOString(), type: 'info', read: false }); setShowNotifyModal(false); alert("Sent!"); } catch (e) { alert("Failed."); } };
   const handleDeleteSubscriber = async (id) => { if (confirm("Delete subscriber?")) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id)); alert("Deleted."); } catch (e) { alert("Failed."); } } };
