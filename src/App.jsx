@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, deleteApp } from 'firebase/app';
 import { getAnalytics } from "firebase/analytics";
 import { 
   getAuth, 
@@ -125,8 +125,6 @@ const ODOO_CONFIG = {
 
 // --- Helper Functions ---
 const sendSystemEmail = async (to, subject, htmlContent) => {
-  console.log("Attempting to send email via Odoo...");
-  // Email logic kept simulated/console for stability
   console.log(`%c[SIMULATED EMAIL] To: ${to}\nSubject: ${subject}`, 'color: blue');
   return true; 
 };
@@ -184,7 +182,6 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
          )}
       </div>
 
-      {/* Customer Details (Hidden for Subscriber to avoid redundancy) */}
       {(!isSubscriber) && (
          <div className="mb-6 bg-slate-50 p-3 rounded-lg border border-slate-200">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -272,9 +269,16 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
                 </div>
              </div>
 
-             {/* TECHNICIAN ACTION */}
-             {isTechnician && currentStepIndex < 3 && ( 
+             {(isTechnician || isAdmin) && currentStepIndex < 3 && ( 
                  <div className="mt-2 flex justify-end border-t border-slate-200 pt-3 gap-2">
+                    {isAdmin && (
+                        <button 
+                            onClick={() => onForceComplete(repair.id)}
+                            className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"
+                        >
+                            <CheckSquare size={16} /> Force Complete
+                        </button>
+                    )}
                     <button 
                         onClick={() => onTechUpdate(repair.id, currentStepIndex)}
                         className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"
@@ -284,29 +288,18 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
                  </div>
              )}
              
-             {/* ADMIN ACTIONS (Including Force Complete) */}
-             {isAdmin && !isTechnician && (
-                 <div className="mt-2 flex justify-end border-t border-slate-200 pt-3 gap-2">
-                      {currentStepIndex < 4 && (
-                        <button 
+             {isAdmin && currentStepIndex === 3 && (
+                 <div className="mt-2 flex justify-end border-t border-slate-200 pt-3">
+                      <span className="text-xs text-slate-500 font-bold bg-slate-100 px-3 py-1 rounded-full">Waiting for Customer Confirmation</span>
+                      <button 
                             onClick={() => onForceComplete(repair.id)}
-                            className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-bold text-xs shadow-sm flex items-center gap-2 transition-colors"
+                            className="ml-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1 rounded-lg font-bold text-xs shadow-sm flex items-center gap-1 transition-colors"
                         >
-                            <CheckSquare size={14} /> Force Complete
+                            Override
                         </button>
-                      )}
-                      {currentStepIndex < 3 && (
-                          <button 
-                            onClick={() => onTechUpdate(repair.id, currentStepIndex)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-xs shadow-sm flex items-center gap-2 transition-colors"
-                          >
-                             {actionLabel.text}
-                          </button>
-                      )}
                  </div>
              )}
 
-             {/* CUSTOMER CONFIRMATION */}
              {isSubscriber && currentStepIndex === 3 && (
                  <div className="mt-2 flex justify-end border-t border-slate-200 pt-3">
                      <div className="flex flex-col items-end gap-2">
@@ -325,21 +318,15 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
       )}
       
       {isCompleted && (
-          <div className="mt-4 p-4 bg-white rounded-xl border border-green-200 flex items-center gap-3 bg-green-50/50">
-              <div className="bg-green-100 p-2 rounded-full text-green-600">
-                  <CheckCircle2 size={20} />
-              </div>
-              <div>
-                  <p className="text-sm font-bold text-green-800">Repair Completed</p>
-                  <p className="text-xs text-green-700">This issue has been resolved and closed.</p>
-              </div>
+          <div className="mt-4 p-3 bg-white rounded-lg border border-green-100 flex items-center gap-3">
+              <CheckCircle2 className="text-green-600" size={20} />
+              <p className="text-sm text-green-800">This issue has been resolved and closed.</p>
           </div>
       )}
     </div>
   );
 };
 
-// ... (SpeedTest, Layout, Login components remain unchanged) ...
 const SpeedTest = () => {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 h-full min-h-[500px] flex flex-col items-center justify-center text-center animate-in fade-in duration-500 relative overflow-hidden">
@@ -363,7 +350,6 @@ const Layout = ({ children, user, onLogout }) => {
             {user && (
               <div className="hidden md:flex items-center space-x-4">
                 <div className="flex items-center space-x-3 px-4 py-1.5 bg-white/10 rounded-full text-sm border border-white/10 backdrop-blur-md">
-                   {/* Badge Logic */}
                    {user.role === 'admin' ? <Shield size={14} className="text-yellow-300" /> : 
                     user.role === 'technician' ? <HardHat size={14} className="text-orange-300" /> : 
                     <User size={14} className="text-blue-200" />}
@@ -383,7 +369,6 @@ const Layout = ({ children, user, onLogout }) => {
 };
 
 const Login = ({ onLogin }) => {
-  // ... (Login logic same as before)
   const [isSignUp, setIsSignUp] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [email, setEmail] = useState('');
@@ -494,7 +479,6 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
 
   if (!userData) return <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500"><div className="animate-spin mb-4"><RefreshCw /></div><p>Loading your account details...</p></div>;
 
-  // FIX: Restored missing isOverdue definition
   const isOverdue = userData.status === 'overdue' || userData.status === 'disconnected';
 
   const allAlerts = [
@@ -502,7 +486,6 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
     ...(notifications || []).map(n => ({ ...n, isPublic: false }))
   ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  // Separate Active and History Repairs for Subscriber
   const activeRepairs = (repairs || []).filter(r => r.status !== 'Completed');
   const historyRepairs = (repairs || []).filter(r => r.status === 'Completed');
 
@@ -546,7 +529,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
      );
   }
 
-  // ... (Dashboard handlers same as before) ...
+  // ... (Dashboard handlers) ...
   const handlePaymentSubmit = async (e) => { e.preventDefault(); setSubmitting(true); await onPay(userData.id, refNumber, userData.username); setSubmitting(false); setShowQR(false); setRefNumber(''); };
   const handleCreateTicket = async (e) => { if(e) e.preventDefault(); if (!newTicket.subject || !newTicket.message) return; setTicketLoading(true); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { userId: userData.uid, username: userData.username, subject: newTicket.subject, message: newTicket.message, status: 'open', adminReply: '', date: new Date().toISOString() }); setNewTicket({ subject: '', message: '' }); alert("Request submitted successfully!"); setActiveTab('support'); } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } setTicketLoading(false); };
   const handleFollowUpTicket = async (ticketId, originalMessage) => { if(!followUpText) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId); const timestamp = new Date().toLocaleString(); const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`; await updateDoc(docRef, { message: newMessage, status: 'open', date: new Date().toISOString() }); setFollowingUpTo(null); setFollowUpText(''); alert("Follow-up sent successfully!"); } catch(e) { console.error(e); alert("Failed to send follow-up"); } };
@@ -636,7 +619,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
             </div>
             
             <div className="space-y-4">
-               <h3 className="text-sm font-bold text-slate-500 uppercase">Active Repairs</h3>
+               <h3 className="text-sm font-bold text-slate-500 uppercase">Active Requests</h3>
                {activeRepairs && activeRepairs.length > 0 ? activeRepairs.map(repair => (
                   <RepairStatusCard 
                      key={repair.id} 
@@ -767,6 +750,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const handlePostAnnouncement = async (e) => { e.preventDefault(); if(!newAnnouncement.title) return; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), { ...newAnnouncement, date: new Date().toISOString() }); setShowAnnounceModal(false); };
   const handleDeleteAnnouncement = async (id) => { if(confirm("Delete?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION, id)); };
   
+  // FIX: Ensure date update is handled correctly and visibility issue
   const handleUpdateDueDate = async (e) => { 
       e.preventDefault(); 
       if (!showDateModal || !newDueDate) return;
@@ -913,6 +897,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                </div>
                <button onClick={() => setShowRepairModal(true)} className="bg-red-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-red-700 shadow-lg flex items-center gap-2"><Hammer size={18} /> Request Repair</button>
             </div>
+            
             <div className="space-y-4">
                <h3 className="text-sm font-bold text-slate-500 uppercase">Active Repairs</h3>
                {activeRepairs && activeRepairs.length > 0 ? activeRepairs.map(repair => (
@@ -928,18 +913,17 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                   />
                )) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400 text-sm">No active repairs.</div>}
             </div>
-            <div className="pt-8 border-t border-slate-200">
-               <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><Clock size={18}/> Repair History</h3>
-               {historyRepairs && historyRepairs.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     {historyRepairs.map(repair => (
-                        <RepairStatusCard key={repair.id} repair={repair} isSubscriber={false} />
-                     ))}
-                  </div>
-               ) : (
-                  <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-100 text-slate-400 text-sm">No completed repairs history.</div>
-               )}
-            </div>
+            
+            {historyRepairs.length > 0 && (
+                <div className="pt-8 mt-8 border-t border-slate-200">
+                   <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><Clock size={18}/> Repair History</h3>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       {historyRepairs.map(repair => (
+                           <RepairStatusCard key={repair.id} repair={repair} isSubscriber={false} />
+                       ))}
+                   </div>
+                </div>
+            )}
          </div>
       )}
        {activeTab === 'plans' && <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 className="font-bold mb-4">Manage Plans</h3><div className="space-y-2">{plans.map(p=><div key={p.id} className="flex justify-between items-center border-b pb-2"><span>{p.name}</span><button onClick={()=>handleDeletePlan(p.id)} className="text-red-500"><Trash2 size={14}/></button></div>)}</div><form className="mt-4 flex gap-2" onSubmit={handleAddPlan}><input className="border p-2 rounded text-sm" placeholder="New Plan" value={newPlanName} onChange={e=>setNewPlanName(e.target.value)}/><button className="bg-blue-600 text-white px-4 py-2 rounded text-sm">Add</button></form></div>}
@@ -964,8 +948,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
           </div>
         </div>
       )}
-      
-       {/* Notify Modal */}
        {showNotifyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6">
@@ -1031,8 +1013,20 @@ export default function App() {
         if (docSnap.exists()) {
           firestoreData = { id: docSnap.id, ...docSnap.data() };
         } else {
+          // AUTO RE-CREATE FOR DELETED USERS
           if (currentUser.email !== ADMIN_EMAIL) {
-             firestoreData = { uid: currentUser.uid, username: currentUser.displayName || currentUser.email.split('@')[0], email: currentUser.email, role: 'subscriber', status: 'applicant', accountNumber: 'PENDING', plan: null, balance: 0, dueDate: new Date().toISOString() };
+             console.log("User profile missing. Re-initializing as applicant.");
+             firestoreData = {
+                uid: currentUser.uid,
+                username: currentUser.displayName || currentUser.email.split('@')[0],
+                email: currentUser.email,
+                role: 'subscriber',
+                status: 'applicant', 
+                accountNumber: 'PENDING', 
+                plan: null,
+                balance: 0,
+                dueDate: new Date().toISOString()
+             };
              await setDoc(docRef, firestoreData);
           }
         }
