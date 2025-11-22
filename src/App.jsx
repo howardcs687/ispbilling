@@ -82,7 +82,7 @@ import {
   MapPin,
   CheckSquare,
   Briefcase,
-  Phone // Added for Contact Number
+  Phone
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -117,23 +117,15 @@ const REPAIRS_COLLECTION = 'isp_repairs_v1';
 const NOTIFICATIONS_COLLECTION = 'isp_notifications_v1';
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
-// --- Odoo Configuration ---
-const ODOO_CONFIG = {
-  url: "https://swiftnetisp1.odoo.com", 
-  db: "swiftnetisp1",             
-  username: "howardkingsleyramos5@gmail.com",      
-  password: "Howard020405@"  
-};
-
 // --- Helper Functions ---
 const sendSystemEmail = async (to, subject, htmlContent) => {
   console.log(`%c[SIMULATED EMAIL] To: ${to}\nSubject: ${subject}`, 'color: blue');
   return true; 
 };
 
-// --- Helper Components ---
+// --- Components ---
 
-// NEW: Application Wizard Form
+// 1. Application Wizard (New Form)
 const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -165,9 +157,8 @@ const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
         
         {/* Header */}
         <div className="bg-red-600 p-6 text-white relative overflow-hidden">
-            <h2 className="text-2xl font-bold mb-1 relative z-10">Guiding you in every step</h2>
-            <p className="text-red-100 text-sm relative z-10">New Application - {plan.name}</p>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10"></div>
+            <h2 className="text-2xl font-bold mb-1 relative z-10">New Application</h2>
+            <p className="text-red-100 text-sm relative z-10">Applying for: {plan.name}</p>
             <button onClick={onClose} className="absolute top-4 right-4 text-white/80 hover:text-white z-20"><X size={24}/></button>
         </div>
 
@@ -188,13 +179,12 @@ const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
            {step === 1 && (
              <div className="space-y-6">
                 <div className="text-center mb-6">
-                   <h3 className="text-2xl font-bold text-red-600">Personal Information</h3>
-                   <p className="text-slate-600">Please provide your contact details so we can reach you.</p>
+                   <h3 className="text-2xl font-bold text-slate-800">Personal Information</h3>
+                   <p className="text-slate-500">Please provide your contact details.</p>
                 </div>
-
                 <div className="space-y-4">
                    <div>
-                      <label className="block text-xs font-bold text-red-600 uppercase mb-1">Full Name</label>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Full Name</label>
                       <div className="relative">
                           <User className="absolute left-3 top-3 text-slate-400" size={18} />
                           <input 
@@ -207,7 +197,7 @@ const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
                       </div>
                    </div>
                    <div>
-                      <label className="block text-xs font-bold text-red-600 uppercase mb-1">Contact Number</label>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contact Number</label>
                       <div className="relative">
                           <Phone className="absolute left-3 top-3 text-slate-400" size={18} />
                           <input 
@@ -227,37 +217,16 @@ const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
            {step === 2 && (
              <div className="space-y-6">
                 <div className="text-center mb-4">
-                   <h3 className="text-xl font-bold text-red-600">Service Address</h3>
+                   <h3 className="text-xl font-bold text-slate-800">Service Address</h3>
                    <p className="text-sm text-slate-500">Where should we install your connection?</p>
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
-                   <div>
-                      <label className="text-xs font-bold text-red-600">* Province</label>
-                      <input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.province} onChange={e => setFormData({...formData, province: e.target.value})} />
-                   </div>
-                   <div>
-                      <label className="text-xs font-bold text-red-600">* City</label>
-                      <input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} />
-                   </div>
-                   <div className="col-span-2">
-                      <label className="text-xs font-bold text-red-600">* Barangay</label>
-                      <input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.barangay} onChange={e => setFormData({...formData, barangay: e.target.value})} />
-                   </div>
-                   
-                   <div>
-                      <label className="text-xs font-bold text-slate-500">Street</label>
-                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Street Name" value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} />
-                   </div>
-                   <div>
-                      <label className="text-xs font-bold text-slate-500">House No.</label>
-                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 123" value={formData.houseNo} onChange={e => setFormData({...formData, houseNo: e.target.value})} />
-                   </div>
-                   
-                   <div className="col-span-2">
-                      <label className="text-xs font-bold text-slate-500">Landmark / Building</label>
-                      <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. Near the Chapel / Blue Gate" value={formData.landmark} onChange={e => setFormData({...formData, landmark: e.target.value})} />
-                   </div>
+                   <div><label className="text-xs font-bold text-slate-500">Province</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.province} onChange={e => setFormData({...formData, province: e.target.value})} /></div>
+                   <div><label className="text-xs font-bold text-slate-500">City</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} /></div>
+                   <div className="col-span-2"><label className="text-xs font-bold text-slate-500">Barangay</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.barangay} onChange={e => setFormData({...formData, barangay: e.target.value})} /></div>
+                   <div><label className="text-xs font-bold text-slate-500">Street</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Street Name" value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} /></div>
+                   <div><label className="text-xs font-bold text-slate-500">House No.</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 123" value={formData.houseNo} onChange={e => setFormData({...formData, houseNo: e.target.value})} /></div>
+                   <div className="col-span-2"><label className="text-xs font-bold text-slate-500">Landmark / Building</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. Near the Chapel" value={formData.landmark} onChange={e => setFormData({...formData, landmark: e.target.value})} /></div>
                 </div>
              </div>
            )}
@@ -265,65 +234,34 @@ const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
            {/* STEP 3: Review */}
            {step === 3 && (
              <div className="text-center space-y-6">
-                <h3 className="text-2xl font-bold text-red-600">Review Application</h3>
-                <p className="text-slate-600">Please ensure all details are correct before submitting.</p>
-                
+                <h3 className="text-2xl font-bold text-slate-800">Review Application</h3>
                 <div className="bg-slate-50 p-6 rounded-xl text-left space-y-4 border border-slate-200">
-                   <div className="flex justify-between border-b border-slate-200 pb-2">
-                      <span className="text-sm text-slate-500">Plan</span>
-                      <span className="font-bold text-blue-600">{plan.name}</span>
-                   </div>
-                   <div className="flex justify-between border-b border-slate-200 pb-2">
-                      <span className="text-sm text-slate-500">Applicant</span>
-                      <span className="font-bold text-slate-800">{formData.fullName}</span>
-                   </div>
-                   <div className="flex justify-between border-b border-slate-200 pb-2">
-                      <span className="text-sm text-slate-500">Contact</span>
-                      <span className="font-bold text-slate-800">{formData.contactNumber}</span>
-                   </div>
-                   <div>
-                      <span className="text-sm text-slate-500 block mb-1">Address</span>
-                      <span className="font-bold text-slate-800 text-sm">
-                          {formData.houseNo} {formData.street}, {formData.barangay}, {formData.city}, {formData.province} 
-                          {formData.landmark && <span className="block text-xs text-slate-500 font-normal mt-1">({formData.landmark})</span>}
-                      </span>
-                   </div>
+                   <div className="flex justify-between border-b border-slate-200 pb-2"><span className="text-sm text-slate-500">Plan</span><span className="font-bold text-blue-600">{plan.name}</span></div>
+                   <div className="flex justify-between border-b border-slate-200 pb-2"><span className="text-sm text-slate-500">Applicant</span><span className="font-bold text-slate-800">{formData.fullName}</span></div>
+                   <div className="flex justify-between border-b border-slate-200 pb-2"><span className="text-sm text-slate-500">Contact</span><span className="font-bold text-slate-800">{formData.contactNumber}</span></div>
+                   <div><span className="text-sm text-slate-500 block mb-1">Address</span><span className="font-bold text-slate-800 text-sm">{formData.houseNo} {formData.street}, {formData.barangay}, {formData.city}, {formData.province} {formData.landmark && `(${formData.landmark})`}</span></div>
                 </div>
              </div>
            )}
-
         </div>
 
         {/* Footer Actions */}
         <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-white">
-           {step > 1 && (
-              <button onClick={handleBack} className="px-8 py-3 border border-red-600 text-red-600 font-bold rounded-full hover:bg-red-50 transition-colors">
-                 BACK
-              </button>
-           )}
-           
-           {step < 3 ? (
-              <button onClick={handleNext} className="px-8 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200">
-                 NEXT
-              </button>
-           ) : (
-              <button onClick={() => onSubmit(formData)} className="px-8 py-3 bg-green-600 text-white font-bold rounded-full hover:bg-green-700 transition-colors shadow-lg shadow-green-200">
-                 SUBMIT APPLICATION
-              </button>
-           )}
+           {step > 1 && <button onClick={handleBack} className="px-6 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-xl">Back</button>}
+           {step < 3 ? <button onClick={handleNext} className="px-8 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700">Next</button> : <button onClick={() => onSubmit(formData)} className="px-8 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700">Submit Application</button>}
         </div>
-
       </div>
     </div>
   );
 };
 
+// 2. Repair Status Card
 const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssign, isTechnician, onTechUpdate, isAdmin, onForceComplete }) => {
   const steps = [
     { label: 'Submission', icon: <Check size={16} /> },
     { label: 'Evaluation', icon: <ClipboardList size={16} /> },
     { label: 'Processing', icon: <RefreshCw size={16} /> },
-    { label: 'Customer Confirmation', icon: <UserCheck size={16} /> },
+    { label: 'Confirmation', icon: <UserCheck size={16} /> }, // Shortened label for fit
     { label: 'Completed', icon: <CheckCircle2 size={16} /> }
   ];
 
@@ -343,9 +281,7 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
     <div className={`bg-white rounded-2xl shadow-sm border ${isCompleted ? 'border-green-200 bg-green-50/30' : 'border-slate-200'} p-6 mb-6 animate-in fade-in slide-in-from-bottom-4`}>
       <div className="flex justify-between items-start mb-4">
          <div>
-            <h4 className={`text-xs font-bold uppercase tracking-wider mb-1 ${isCompleted ? 'text-green-600' : 'text-red-600'}`}>
-              {isCompleted ? 'Completed' : 'Ongoing'}
-            </h4>
+            <h4 className={`text-xs font-bold uppercase tracking-wider mb-1 ${isCompleted ? 'text-green-600' : 'text-red-600'}`}>{isCompleted ? 'Completed' : 'Ongoing'}</h4>
             <div className="flex items-center gap-3">
                <div className={`p-3 rounded-full ${isCompleted ? 'bg-green-100' : 'bg-slate-100'}`}>
                   {repair.type === 'New Installation' ? <Briefcase className={`${isCompleted ? 'text-green-600' : 'text-slate-600'}`} size={24} /> : <Wifi className={`${isCompleted ? 'text-green-600' : 'text-slate-600'}`} size={24} />}
@@ -353,167 +289,43 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
                <div>
                   <h3 className="text-lg font-bold text-slate-800">{repair.type || 'Service Repair'}</h3>
                   <p className="text-sm text-slate-500 font-mono">#{repair.requestId}</p>
-                  {!isSubscriber && repair.assignedTechName && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit mt-1">
-                          <HardHat size={10}/> Tech: {repair.assignedTechName}
-                      </span>
-                  )}
+                  {!isSubscriber && repair.assignedTechName && (<span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit mt-1"><HardHat size={10}/> Tech: {repair.assignedTechName}</span>)}
                </div>
             </div>
          </div>
-         {isCompleted && repair.completedDate && (
-             <div className="text-right">
-                <p className="text-xs font-bold text-slate-400 uppercase">Completed On</p>
-                <p className="text-sm font-bold text-slate-700">{new Date(repair.completedDate).toLocaleDateString()}</p>
-             </div>
-         )}
+         {isCompleted && repair.completedDate && (<div className="text-right"><p className="text-xs font-bold text-slate-400 uppercase">Completed On</p><p className="text-sm font-bold text-slate-700">{new Date(repair.completedDate).toLocaleDateString()}</p></div>)}
       </div>
 
-      {(!isSubscriber) && (
-         <div className="mb-6 bg-slate-50 p-3 rounded-lg border border-slate-200">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div>
-                     <p className="text-xs font-bold text-slate-400 uppercase">Customer</p>
-                     <p className="text-sm font-bold text-slate-800 flex items-center gap-1">
-                        <User size={14}/> {repair.username}
-                     </p>
-                 </div>
-                 <div>
-                     <p className="text-xs font-bold text-slate-400 uppercase">Service Address</p>
-                     <p className="text-sm text-slate-700 flex items-center gap-1">
-                        <MapPin size={14} className="text-red-500"/> {repair.address || "No address provided"}
-                     </p>
-                 </div>
-             </div>
-             <div className="mt-3 pt-3 border-t border-slate-200">
-                 <p className="text-xs font-bold text-slate-400 uppercase">Details</p>
-                 <p className="text-sm text-slate-700 italic">"{repair.notes}"</p>
-             </div>
-         </div>
-      )}
+      {!isSubscriber && (<div className="mb-6 bg-slate-50 p-3 rounded-lg border border-slate-200"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><p className="text-xs font-bold text-slate-400 uppercase">Customer</p><p className="text-sm font-bold text-slate-800 flex items-center gap-1"><User size={14}/> {repair.username}</p></div><div><p className="text-xs font-bold text-slate-400 uppercase">Service Address</p><p className="text-sm text-slate-700 flex items-center gap-1"><MapPin size={14} className="text-red-500"/> {repair.address || "No address provided"}</p></div></div><div className="mt-3 pt-3 border-t border-slate-200"><p className="text-xs font-bold text-slate-400 uppercase">Details</p><p className="text-sm text-slate-700 italic">"{repair.notes}"</p></div></div>)}
 
       {!isCompleted && (
         <>
-          {isSubscriber && (
-             <p className="text-sm text-slate-600 mb-4 border-b border-slate-100 pb-4">
-                 Requests are usually processed within 24 hours.
-             </p>
-          )}
-
-          {/* Stepper UI */}
+          {isSubscriber && (<p className="text-sm text-slate-600 mb-4 border-b border-slate-100 pb-4">Requests are usually processed within 24 hours.</p>)}
           <div className="w-full overflow-x-auto pb-4">
             <div className="relative flex justify-between items-center min-w-[600px] px-2"> 
                <div className="absolute top-4 left-0 w-full h-1 bg-slate-100 -z-10 rounded-full"></div>
-               <div 
-                  className="absolute top-4 left-0 h-1 bg-red-600 -z-0 rounded-full transition-all duration-500"
-                  style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}
-               ></div>
+               <div className="absolute top-4 left-0 h-1 bg-red-600 -z-0 rounded-full transition-all duration-500" style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}></div>
                {steps.map((step, index) => {
                   const isStepCompleted = index <= currentStepIndex;
-                  return (
-                     <div key={index} className="flex flex-col items-center gap-2 relative group">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
-                           isStepCompleted 
-                              ? 'bg-red-600 border-red-600 text-white' 
-                              : 'bg-white border-slate-200 text-slate-300'
-                        }`}>
-                           {isStepCompleted ? <Check size={16} /> : step.icon} 
-                        </div>
-                        <span className={`text-[10px] font-bold text-center w-24 absolute -bottom-8 transition-colors ${
-                           isStepCompleted ? 'text-slate-800' : 'text-slate-400'
-                        }`}>
-                           {step.label}
-                        </span>
-                     </div>
-                  )
+                  return (<div key={index} className="flex flex-col items-center gap-2 relative group"><div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isStepCompleted ? 'bg-red-600 border-red-600 text-white' : 'bg-white border-slate-200 text-slate-300'}`}>{isStepCompleted ? <Check size={16} /> : step.icon}</div><span className={`text-[10px] font-bold text-center w-24 absolute -bottom-8 transition-colors ${isStepCompleted ? 'text-slate-800' : 'text-slate-400'}`}>{step.label}</span></div>)
                })}
             </div>
           </div>
-          
           <div className="mt-10 p-4 bg-slate-50 rounded-xl border border-slate-100 flex flex-col gap-2">
-             <div className="flex gap-3">
-                <div className="text-slate-400 mt-0.5"><Megaphone size={18} /></div>
-                <div className="text-sm text-slate-600 w-full">
-                   <p className="font-bold text-slate-700 mb-1">Status Update</p>
-                   {repair.technicianNote || "Waiting for initial evaluation."}
-                   
-                   {/* ADMIN: Assign Technician */}
-                   {!isSubscriber && !isTechnician && technicians && (
-                       <div className="mt-4 border-t border-slate-200 pt-3">
-                           <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Assign Technician</label>
-                           <select 
-                              className="w-full border border-slate-300 rounded px-2 py-1 text-sm"
-                              value={repair.assignedTechId || ''}
-                              onChange={(e) => onAssign(repair.id, e.target.value)}
-                           >
-                               <option value="">-- Select Technician --</option>
-                               {technicians.map(t => (
-                                   <option key={t.id} value={t.uid}>{t.username}</option>
-                               ))}
-                           </select>
-                       </div>
-                   )}
-                </div>
-             </div>
-
-             {(isTechnician || isAdmin) && currentStepIndex < 3 && ( 
-                 <div className="mt-2 flex justify-end border-t border-slate-200 pt-3 gap-2">
-                    {isAdmin && (
-                        <button 
-                            onClick={() => onForceComplete(repair.id)}
-                            className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"
-                        >
-                            <CheckSquare size={16} /> Force Complete
-                        </button>
-                    )}
-                    <button 
-                        onClick={() => onTechUpdate(repair.id, currentStepIndex)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"
-                    >
-                        {actionLabel.icon} {actionLabel.text}
-                    </button>
-                 </div>
-             )}
-             
-             {isAdmin && currentStepIndex === 3 && (
-                 <div className="mt-2 flex justify-end border-t border-slate-200 pt-3">
-                      <span className="text-xs text-slate-500 font-bold bg-slate-100 px-3 py-1 rounded-full">Waiting for Customer Confirmation</span>
-                      <button 
-                            onClick={() => onForceComplete(repair.id)}
-                            className="ml-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1 rounded-lg font-bold text-xs shadow-sm flex items-center gap-1 transition-colors"
-                        >
-                            Override
-                        </button>
-                 </div>
-             )}
-
-             {isSubscriber && currentStepIndex === 3 && (
-                 <div className="mt-2 flex justify-end border-t border-slate-200 pt-3">
-                     <div className="flex flex-col items-end gap-2">
-                        <p className="text-xs text-slate-500">Technician marked this as resolved. Please confirm.</p>
-                        <button 
-                            onClick={() => onConfirm(repair.id)}
-                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"
-                        >
-                            <CheckCircle2 size={16} /> Confirm Resolution
-                        </button>
-                     </div>
-                 </div>
-             )}
+             <div className="flex gap-3"><div className="text-slate-400 mt-0.5"><Megaphone size={18} /></div><div className="text-sm text-slate-600 w-full"><p className="font-bold text-slate-700 mb-1">Status Update</p>{repair.technicianNote || "Waiting for initial evaluation."}{!isSubscriber && !isTechnician && technicians && (<div className="mt-4 border-t border-slate-200 pt-3"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Assign Technician</label><select className="w-full border border-slate-300 rounded px-2 py-1 text-sm" value={repair.assignedTechId || ''} onChange={(e) => onAssign(repair.id, e.target.value)}><option value="">-- Select Technician --</option>{technicians.map(t => (<option key={t.id} value={t.uid}>{t.username}</option>))}</select></div>)}</div></div>
+             {(isTechnician || isAdmin) && currentStepIndex < 3 && (<div className="mt-2 flex justify-end border-t border-slate-200 pt-3 gap-2">{isAdmin && (<button onClick={() => onForceComplete(repair.id)} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"><CheckSquare size={16} /> Force Complete</button>)}<button onClick={() => onTechUpdate(repair.id, currentStepIndex)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors">{actionLabel.icon} {actionLabel.text}</button></div>)}
+             {isAdmin && currentStepIndex === 3 && (<div className="mt-2 flex justify-end border-t border-slate-200 pt-3"><span className="text-xs text-slate-500 font-bold bg-slate-100 px-3 py-1 rounded-full">Waiting for Customer Confirmation</span><button onClick={() => onForceComplete(repair.id)} className="ml-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1 rounded-lg font-bold text-xs shadow-sm flex items-center gap-1 transition-colors">Override</button></div>)}
+             {isSubscriber && currentStepIndex === 3 && (<div className="mt-2 flex justify-end border-t border-slate-200 pt-3"><div className="flex flex-col items-end gap-2"><p className="text-xs text-slate-500">Technician marked this as resolved. Please confirm.</p><button onClick={() => onConfirm(repair.id)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"><CheckCircle2 size={16} /> Confirm Resolution</button></div></div>)}
           </div>
         </>
       )}
       
-      {isCompleted && (
-          <div className="mt-4 p-3 bg-white rounded-lg border border-green-100 flex items-center gap-3">
-              <CheckCircle2 className="text-green-600" size={20} />
-              <p className="text-sm text-green-800">This issue has been resolved and closed.</p>
-          </div>
-      )}
+      {isCompleted && (<div className="mt-4 p-3 bg-white rounded-lg border border-green-100 flex items-center gap-3"><CheckCircle2 className="text-green-600" size={20} /><p className="text-sm text-green-800">This issue has been resolved and closed.</p></div>)}
     </div>
   );
 };
 
+// 3. Speed Test Component
 const SpeedTest = () => {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 h-full min-h-[500px] flex flex-col items-center justify-center text-center animate-in fade-in duration-500 relative overflow-hidden">
@@ -526,6 +338,7 @@ const SpeedTest = () => {
   );
 };
 
+// 4. Layout Component
 const Layout = ({ children, user, onLogout }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   return (
@@ -537,7 +350,6 @@ const Layout = ({ children, user, onLogout }) => {
             {user && (
               <div className="hidden md:flex items-center space-x-4">
                 <div className="flex items-center space-x-3 px-4 py-1.5 bg-white/10 rounded-full text-sm border border-white/10 backdrop-blur-md">
-                   {/* Badge Logic */}
                    {user.role === 'admin' ? <Shield size={14} className="text-yellow-300" /> : 
                     user.role === 'technician' ? <HardHat size={14} className="text-orange-300" /> : 
                     <User size={14} className="text-blue-200" />}
@@ -556,6 +368,7 @@ const Layout = ({ children, user, onLogout }) => {
   );
 };
 
+// 5. Login Component
 const Login = ({ onLogin }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
@@ -639,7 +452,7 @@ const Login = ({ onLogin }) => {
   );
 };
 
-// 3. Subscriber Dashboard
+// 6. Subscriber Dashboard
 const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair }) => {
   const [activeTab, setActiveTab] = useState('overview'); 
   const [showQR, setShowQR] = useState(false);
@@ -655,53 +468,42 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   const [updatingCreds, setUpdatingCreds] = useState(false);
   const [followUpText, setFollowUpText] = useState('');
   const [followingUpTo, setFollowingUpTo] = useState(null);
-  const [selectedPlanForApp, setSelectedPlanForApp] = useState(null); // To track application wizard
+  const [selectedPlanForApp, setSelectedPlanForApp] = useState(null); 
 
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAvailablePlans(fetchedPlans);
+      setAvailablePlans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
     return () => unsubscribe();
   }, []);
 
   if (!userData) return <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500"><div className="animate-spin mb-4"><RefreshCw /></div><p>Loading your account details...</p></div>;
 
-  // Define isOverdue so we don't crash
   const isOverdue = userData.status === 'overdue' || userData.status === 'disconnected';
-
-  const allAlerts = [
-    ...(announcements || []).map(a => ({ ...a, isPublic: true })),
-    ...(notifications || []).map(n => ({ ...n, isPublic: false }))
-  ].sort((a, b) => new Date(b.date) - new Date(a.date));
-
+  const allAlerts = [...(announcements || []).map(a => ({ ...a, isPublic: true })), ...(notifications || []).map(n => ({ ...n, isPublic: false }))].sort((a, b) => new Date(b.date) - new Date(a.date));
+  
   const activeRepairs = (repairs || []).filter(r => r.status !== 'Completed');
   const historyRepairs = (repairs || []).filter(r => r.status === 'Completed');
 
   // --- APPLICANT VIEW ---
   if (userData.status === 'applicant' || userData.accountNumber === 'PENDING') {
-     
      const handleWizardSubmit = async (addressData) => {
         try {
             const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
             const fullAddress = `${addressData.street}, ${addressData.barangay}, ${addressData.city}, ${addressData.province}`;
-            
-            // Save profile details including the new contact number
             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { 
                 plan: selectedPlanForApp.name,
                 address: fullAddress,
                 addressDetails: addressData,
-                contactNumber: addressData.contactNumber, // Save contact number
-                fullName: addressData.fullName // Save full name
+                contactNumber: addressData.contactNumber, 
+                fullName: addressData.fullName 
             });
-            
             await sendSystemEmail(userData.email, 'Plan Application', `Application #${ticketId} for ${selectedPlanForApp.name} received.`);
-
             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { 
               ticketId,
               userId: userData.uid, 
-              username: addressData.fullName || userData.username, // Use real name if provided
+              username: addressData.fullName || userData.username, 
               subject: 'New Subscription Application', 
               message: `Applicant ${addressData.fullName} (${userData.email})\nContact: ${addressData.contactNumber}\nPlan: ${selectedPlanForApp.name}\nAddress: ${fullAddress}`, 
               status: 'open', 
@@ -725,21 +527,13 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map(plan => (<div key={plan.id} className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-xl font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Fiber Optic</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => setSelectedPlanForApp(plan)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Apply Now <ArrowRight size={16} /></button></div></div>))}{availablePlans.length === 0 && <p className="col-span-full text-center text-slate-400">No plans configured by admin yet.</p>}</div>
            )}
            <div className="mt-12 text-center"><button onClick={() => signOut(getAuth(app))} className="text-slate-400 hover:text-slate-600 text-sm underline">Sign Out</button></div>
-           
-           {selectedPlanForApp && (
-               <ApplicationWizard 
-                  plan={selectedPlanForApp} 
-                  onClose={() => setSelectedPlanForApp(null)} 
-                  onSubmit={handleWizardSubmit}
-               />
-           )}
+           {selectedPlanForApp && (<ApplicationWizard plan={selectedPlanForApp} onClose={() => setSelectedPlanForApp(null)} onSubmit={handleWizardSubmit} />)}
         </div>
      );
   }
 
-  // ... (Dashboard handlers same as before) ...
   const handlePaymentSubmit = async (e) => { e.preventDefault(); setSubmitting(true); await onPay(userData.id, refNumber, userData.username); setSubmitting(false); setShowQR(false); setRefNumber(''); };
-  const handleCreateTicket = async (e) => { if(e) e.preventDefault(); if (!newTicket.subject || !newTicket.message) return; setTicketLoading(true); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { userId: userData.uid, username: userData.username, subject: newTicket.subject, message: newTicket.message, status: 'open', adminReply: '', date: new Date().toISOString() }); setNewTicket({ subject: '', message: '' }); alert("Request submitted successfully!"); setActiveTab('support'); } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } setTicketLoading(false); };
+  const handleCreateTicket = async (e) => { if(e) e.preventDefault(); if (!newTicket.subject || !newTicket.message) return; setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: newTicket.subject, message: newTicket.message, status: 'open', adminReply: '', date: new Date().toISOString() }); setNewTicket({ subject: '', message: '' }); alert("Request submitted successfully!"); setActiveTab('support'); } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } setTicketLoading(false); };
   const handleFollowUpTicket = async (ticketId, originalMessage) => { if(!followUpText) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId); const timestamp = new Date().toLocaleString(); const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`; await updateDoc(docRef, { message: newMessage, status: 'open', date: new Date().toISOString() }); setFollowingUpTo(null); setFollowUpText(''); alert("Follow-up sent successfully!"); } catch(e) { console.error(e); alert("Failed to send follow-up"); } };
   
   const handleRequestRepair = async (e) => { 
@@ -771,15 +565,11 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   const handleUpdatePassword = async (e) => { e.preventDefault(); if (managePass.length < 6) return alert("Min 6 chars."); setUpdatingCreds(true); try { await updatePassword(auth.currentUser, managePass); setManagePass(''); alert("Password updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
   const handleUpdateEmail = async (e) => { e.preventDefault(); if (!manageEmail) return; setUpdatingCreds(true); try { await updateEmail(auth.currentUser, manageEmail); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { email: manageEmail }); setManageEmail(''); alert("Email updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
 
-  const getIcon = (type) => { switch(type) { case 'warning': return <AlertCircle size={18} />; case 'success': return <CheckCircle size={18} />; default: return <Megaphone size={18} />; } };
-  const getBgColor = (type) => { switch(type) { case 'warning': return 'bg-orange-50 text-orange-600'; case 'success': return 'bg-green-50 text-green-600'; default: return 'bg-blue-50 text-blue-600'; } };
-
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
         {['overview', 'repairs', 'plans', 'speedtest', 'support', 'settings'].map(tab => (
-           <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
+           <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>{tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
            </button>
         ))}
       </div>
@@ -851,6 +641,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
                <button onClick={() => setShowRepairModal(true)} className="bg-red-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-red-700 shadow-lg flex items-center gap-2"><Hammer size={18} /> Request Repair</button>
             </div>
             
+            {/* Active Repairs */}
             <div className="space-y-4">
                <h3 className="text-sm font-bold text-slate-500 uppercase">Active Requests</h3>
                {activeRepairs && activeRepairs.length > 0 ? activeRepairs.map(repair => (
@@ -863,6 +654,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
                )) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400 text-sm">No active repairs.</div>}
             </div>
             
+            {/* Repair History */}
             {historyRepairs.length > 0 && (
                 <div className="pt-8 mt-8 border-t border-slate-200">
                    <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><Clock size={18}/> Repair History</h3>
@@ -877,7 +669,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       )}
 
       {/* Other tabs (plans, support, settings) remain same */}
-      {activeTab === 'plans' && (<div className="space-y-6"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-slate-800">Available Internet Plans</h2><span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">Current: {userData.plan}</span></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map((plan) => (<div key={plan.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-lg font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => handleApplyPlan(plan.name)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Request Change <ArrowRight size={16} /></button></div></div>))}</div></div>)}
+      {activeTab === 'plans' && (<div className="space-y-6"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-slate-800">Available Internet Plans</h2><span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">Current: {userData.plan}</span></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map((plan) => (<div key={plan.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-lg font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Fiber Optic</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => handleApplyPlan(plan.name)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Request Change <ArrowRight size={16} /></button></div></div>))}</div></div>)}
       {activeTab === 'support' && (<div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-1 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><MessageSquare size={20} className="text-blue-600"/> Create New Ticket</h3><form onSubmit={handleCreateTicket} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-white" value={newTicket.subject} onChange={(e) => setNewTicket({...newTicket, subject: e.target.value})}><option value="">Select...</option><option value="No Internet">No Internet</option><option value="Billing">Billing</option><option value="Other">Other</option></select></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Message</label><textarea required className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none h-32 resize-none" value={newTicket.message} onChange={(e) => setNewTicket({...newTicket, message: e.target.value})}></textarea></div><button type="submit" disabled={ticketLoading} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">{ticketLoading ? 'Submitting...' : 'Submit Ticket'}</button></form></div><div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-2 h-fit"><h3 className="font-bold text-slate-800 mb-4">My Ticket History</h3><div className="space-y-4 max-h-[600px] overflow-y-auto">{tickets && tickets.length > 0 ? tickets.map(ticket => (<div key={ticket.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50"><div className="flex justify-between items-start mb-2"><h4 className="font-bold text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject}</h4><span className="text-[10px] font-bold uppercase bg-yellow-100 text-yellow-700 px-2 py-1 rounded">{ticket.status}</span></div><p className="text-sm text-slate-600 mb-3">{ticket.message}</p>{ticket.adminReply && <div className="bg-white border-l-4 border-blue-500 p-3 rounded-r-lg mt-3"><p className="text-xs font-bold text-blue-600 mb-1">Admin Response:</p><p className="text-sm text-slate-700">{ticket.adminReply}</p></div>}<div className="mt-3 pt-2 border-t border-slate-100">{followingUpTo === ticket.id ? (<div className="mt-2"><textarea className="w-full border p-2 text-sm" rows="2" value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setFollowingUpTo(null)} className="text-xs font-bold px-3">Cancel</button><button onClick={() => handleFollowUpTicket(ticket.id, ticket.message)} className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded">Send</button></div></div>) : (<button onClick={() => setFollowingUpTo(ticket.id)} className="text-blue-600 text-xs font-bold flex items-center gap-1 mt-1"><MessageCircle size={14} /> Add Note</button>)}</div></div>)) : <p className="text-center text-slate-400">No tickets found.</p>}</div></div></div>)}
       {activeTab === 'settings' && (<div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Lock size={20} className="text-blue-600"/> Change Password</h3><form onSubmit={handleUpdatePassword} className="space-y-4"><input type="password" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={managePass} onChange={(e) => setManagePass(e.target.value)} placeholder="New password" /><button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">{updatingCreds ? 'Updating...' : 'Update'}</button></form></div><div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Mail size={20} className="text-blue-600"/> Update Email</h3><form onSubmit={handleUpdateEmail} className="space-y-4"><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={manageEmail} onChange={(e) => setManageEmail(e.target.value)} placeholder="new@email.com" /><button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900">{updatingCreds ? 'Updating...' : 'Update'}</button></form></div></div>)}
 
@@ -889,35 +681,39 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   );
 };
 
-// 4. Admin Dashboard (UNCHANGED - Keeping it clean for brevity as requested focus was on Subscriber)
+// 7. Admin Dashboard (RESTORED)
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
-  // ... (Admin Dashboard Logic - identical to previous working version) ...
-  // ... Copying AdminDashboard logic ...
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
   const [showAddTechModal, setShowAddTechModal] = useState(false); 
-  const [newTech, setNewTech] = useState({ email: '', password: '', username: '' });
+  const [showCreateJobModal, setShowCreateJobModal] = useState(false);
+
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showDateModal, setShowDateModal] = useState(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showAnnounceModal, setShowAnnounceModal] = useState(false);
-  const [showNotifyModal, setShowNotifyModal] = useState(false); 
+  const [showNotifyModal, setShowNotifyModal] = useState(false);
+  
   const [adminNewPass, setAdminNewPass] = useState('');
   const [replyText, setReplyText] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
+  
   const [plans, setPlans] = useState([]);
   const [newPlanName, setNewPlanName] = useState('');
+  const [technicians, setTechnicians] = useState([]); 
+
   const [newUser, setNewUser] = useState({ email: '', password: '', username: '', accountNumber: '', plan: '' });
   const [newAdmin, setNewAdmin] = useState({ email: '', password: '', username: '' });
+  const [newTech, setNewTech] = useState({ email: '', password: '', username: '' });
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', message: '', type: 'info' });
   const [notifyData, setNotifyData] = useState({ targetId: null, targetName: '', title: '', message: '' });
+  
+  const [newJob, setNewJob] = useState({ targetUserId: '', type: 'New Installation', notes: '', assignedTechId: '' });
+
   const [newDueDate, setNewDueDate] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
-  const [technicians, setTechnicians] = useState([]); 
-  const [showCreateJobModal, setShowCreateJobModal] = useState(false); 
-  const [newJob, setNewJob] = useState({ targetUserId: '', type: 'New Installation', notes: '', assignedTechId: '' });
 
   useEffect(() => { const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION)); onSnapshot(q, s => setPlans(s.docs.map(d => ({ id: d.id, ...d.data() })))); }, []);
   useEffect(() => { const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), where('role', '==', 'technician')); onSnapshot(q, s => setTechnicians(s.docs.map(d => ({ id: d.id, ...d.data() })))); }, []);
@@ -932,11 +728,20 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const handleDeletePlan = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION, id)); };
   const handlePostAnnouncement = async (e) => { e.preventDefault(); if(!newAnnouncement.title) return; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), { ...newAnnouncement, date: new Date().toISOString() }); setShowAnnounceModal(false); };
   const handleDeleteAnnouncement = async (id) => { if(confirm("Delete?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION, id)); };
-  const handleUpdateDueDate = async (e) => { e.preventDefault(); try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, showDateModal.id), { dueDate: new Date(newDueDate).toISOString() }); setShowDateModal(null); } catch(e) { alert("Failed"); } };
+  const handleUpdateDueDate = async (e) => { e.preventDefault(); try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, showDateModal.id), { dueDate: new Date(newDueDate).toISOString() }); alert("Updated"); setShowDateModal(null); } catch(e) { alert("Failed"); } };
   const handleReplyTicket = async (ticketId) => { if(!replyText) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId), { adminReply: replyText, status: 'resolved' }); setReplyingTo(null); setReplyText(''); } catch(e) { alert("Failed"); } };
-  const handleUpdateRepairStatus = async (repairId, currentStep) => { if (currentStep === 3) return alert("Waiting for customer."); const newStep = currentStep < 4 ? currentStep + 1 : 4; const statusLabels = ['Submission', 'Evaluation', 'Processing', 'Customer Confirmation', 'Completed']; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId), { stepIndex: newStep, status: statusLabels[newStep] }); } catch(e) { console.error(e); } };
+  
+  const handleUpdateRepairStatus = async (repairId, currentStep) => { 
+      if (currentStep === 3) return alert("Waiting for customer.");
+      const newStep = currentStep < 4 ? currentStep + 1 : 4; 
+      const statusLabels = ['Submission', 'Evaluation', 'Processing', 'Customer Confirmation', 'Completed']; 
+      try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId), { stepIndex: newStep, status: statusLabels[newStep] }); } catch(e) { console.error(e); } 
+  };
+  
   const handleForceComplete = async (repairId) => { if (!confirm("Force complete?")) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId), { stepIndex: 4, status: 'Completed', completedDate: new Date().toISOString() }); } catch(e) { alert("Failed"); } };
+  
   const handleApproveApplication = async (ticket) => { const amountStr = prompt("Initial Balance:", "1500"); if (amountStr===null) return; const amount = parseFloat(amountStr); if(isNaN(amount)) return alert("Invalid"); const newAccountNo = Math.floor(Math.random()*1000000).toString(); try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.targetUserId), { status: 'active', accountNumber: newAccountNo, plan: ticket.targetPlan, balance: amount, dueDate: new Date(Date.now() + 30*24*60*60*1000).toISOString() }); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), { status: 'resolved', adminReply: `Approved! Account #${newAccountNo}. Balance ₱${amount}.` }); alert(`Approved!`); } catch(e) { alert("Failed"); } };
+  
   const handleOpenNotify = (sub) => { setNotifyData({ targetId: sub.id, targetName: sub.username, title: '', message: '' }); setShowNotifyModal(true); };
   const handleSendNotification = async (e) => { e.preventDefault(); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', NOTIFICATIONS_COLLECTION), { userId: notifyData.targetId, title: notifyData.title, message: notifyData.message, date: new Date().toISOString(), type: 'info', read: false }); setShowNotifyModal(false); alert("Sent!"); } catch (e) { alert("Failed."); } };
   const handleDeleteSubscriber = async (id) => { if (confirm("Delete?")) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id)); alert("Deleted."); } catch (e) { alert("Failed."); } } };
@@ -950,11 +755,9 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
 
   return (
     <div className="space-y-6 animate-in fade-in">
-       {/* Tabs */}
        <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit flex space-x-1 overflow-x-auto max-w-full mx-auto md:mx-0">
          {['subscribers', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (<button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>{tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab}</button>))}
        </div>
-       {/* Tab Content */}
        {activeTab === 'speedtest' && <SpeedTest />}
        {activeTab === 'subscribers' && (
           <>
@@ -970,30 +773,42 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
             <div className="pt-8 border-t border-slate-200"><h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><Clock size={18}/> Job History</h3>{historyRepairs && historyRepairs.length > 0 ? (<div className="grid grid-cols-1 md:grid-cols-2 gap-4">{historyRepairs.map(repair => (<RepairStatusCard key={repair.id} repair={repair} isSubscriber={false} />))}</div>) : <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-100 text-slate-400 text-sm">No completed history.</div>}</div>
          </div>
       )}
-      {/* Remaining Tabs */}
       {activeTab === 'plans' && <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 className="font-bold mb-4">Manage Plans</h3><div className="space-y-2">{plans.map(p=><div key={p.id} className="flex justify-between items-center border-b pb-2"><span>{p.name}</span><button onClick={()=>handleDeletePlan(p.id)} className="text-red-500"><Trash2 size={14}/></button></div>)}</div><form className="mt-4 flex gap-2" onSubmit={handleAddPlan}><input className="border p-2 rounded text-sm" placeholder="New Plan" value={newPlanName} onChange={e=>setNewPlanName(e.target.value)}/><button className="bg-blue-600 text-white px-4 py-2 rounded text-sm">Add</button></form></div>}
       {activeTab === 'payments' && <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 className="font-bold mb-4">Payments</h3><div className="space-y-2">{payments.map(p=><div key={p.id} className="flex justify-between border-b pb-2"><span>{p.username}</span><span className="font-mono text-blue-600">{p.refNumber}</span><span className="text-xs text-slate-400">{new Date(p.date).toLocaleDateString()}</span><span className={`px-2 py-1 rounded text-xs font-bold uppercase ${p.status === 'verified' ? 'bg-green-200 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{p.status || 'pending'}</span>{p.status !== 'verified' && (<button onClick={() => handleVerifyPayment(p.id, p.userId)} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-blue-700 transition-colors">Verify</button>)}</div>)}</div></div>}
       {activeTab === 'tickets' && (<div className="space-y-4"><h2 className="text-xl font-bold text-slate-800">Support Tickets & Applications</h2><div className="grid grid-cols-1 gap-4">{tickets && tickets.length > 0 ? tickets.map(ticket => (<div key={ticket.id} className={`p-5 rounded-xl shadow-sm border ${ticket.isApplication ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}><div className="flex justify-between items-start mb-3"><div><h4 className="font-bold text-lg text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject} {ticket.isApplication && <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">APPLICATION</span>}</h4><p className="text-xs text-slate-500">From: <span className="font-bold text-blue-600">{ticket.username}</span> • {new Date(ticket.date).toLocaleString()}</p></div><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${ticket.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{ticket.status}</span></div><p className="text-slate-700 text-sm mb-4">{ticket.message}</p>{ticket.isApplication && ticket.status === 'open' && (<button onClick={() => handleApproveApplication(ticket)} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors">Approve & Assign Account #</button>)}{ticket.adminReply ? <div className="border-t border-slate-200 pt-3"><p className="text-xs font-bold text-slate-400 uppercase mb-1">Your Reply</p><p className="text-sm text-blue-700 font-medium">{ticket.adminReply}</p></div> : (<div className="flex gap-2 mt-2">{replyingTo === ticket.id ? (<div className="w-full"><textarea className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2" rows="3" value={replyText} onChange={(e) => setReplyText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setReplyingTo(null)} className="text-slate-500 text-sm font-bold">Cancel</button><button onClick={() => handleReplyTicket(ticket.id)} className="bg-blue-600 text-white text-sm font-bold px-4 py-1 rounded-lg">Send Reply</button></div></div>) : <button onClick={() => { setReplyingTo(ticket.id); setReplyText(''); }} className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg font-bold text-sm transition-colors"><MessageSquare size={16} /> Reply</button>}</div>)}</div>)) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400">No tickets found.</div>}</div></div>)}
       
-      {/* Modals ... Same as before but ensure all are present */}
+      {/* Modals */}
       {showCreateJobModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Briefcase size={18} /> Create New Job</h3><button onClick={() => setShowCreateJobModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div><form onSubmit={handleAdminCreateJob}><div className="space-y-3"><div><label className="text-xs font-bold text-slate-500 uppercase">Select User</label><select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" value={newJob.targetUserId} onChange={(e) => setNewJob({...newJob, targetUserId: e.target.value})} required><option value="">-- Select User --</option>{subscribers.filter(s => s.role !== 'admin' && s.role !== 'technician').map(u => (<option key={u.id} value={u.id}>{u.username} ({u.accountNumber})</option>))}</select></div><div><label className="text-xs font-bold text-slate-500 uppercase">Job Type</label><select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" value={newJob.type} onChange={(e) => setNewJob({...newJob, type: e.target.value})}><option value="New Installation">New Installation</option><option value="Service Repair">Service Repair</option><option value="Maintenance">Maintenance</option></select></div><div><label className="text-xs font-bold text-slate-500 uppercase">Job Details / Notes</label><textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 h-24 resize-none" placeholder="Enter installation details..." value={newJob.notes} onChange={(e) => setNewJob({...newJob, notes: e.target.value})} required></textarea></div><div><label className="text-xs font-bold text-slate-500 uppercase">Assign Technician (Optional)</label><select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" value={newJob.assignedTechId} onChange={(e) => setNewJob({...newJob, assignedTechId: e.target.value})}><option value="">-- Assign Later --</option>{technicians.map(t => (<option key={t.id} value={t.uid}>{t.username}</option>))}</select></div><button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">Create Job Ticket</button></div></form></div></div>)}
-      
-      {/* ... Other modals ... */}
       {showAddTechModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><div className="bg-orange-600 p-5 flex justify-between items-center -m-6 mb-6"><h3 className="text-white font-bold flex items-center gap-2"><HardHat size={18} /> Add New Technician</h3><button onClick={() => setShowAddTechModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><form onSubmit={handleAddTechnician} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tech Name</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.username} onChange={(e) => setNewTech({...newTech, username: e.target.value})} placeholder="Technician Name" /></div><div className="border-t border-slate-100 pt-2"></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.email} onChange={(e) => setNewTech({...newTech, email: e.target.value})} /></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-mono" value={newTech.password} onChange={(e) => setNewTech({...newTech, password: e.target.value})} /></div><button type="submit" disabled={isCreatingUser} className="w-full py-2.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700">{isCreatingUser ? 'Creating...' : 'Create Technician Account'}</button></form></div></div>)}
       {showAddAdminModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><h3 className="font-bold mb-4">Add Admin</h3><form onSubmit={handleAddAdmin} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Name" value={newAdmin.username} onChange={e=>setNewAdmin({...newAdmin, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newAdmin.email} onChange={e=>setNewAdmin({...newAdmin, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newAdmin.password} onChange={e=>setNewAdmin({...newAdmin, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddAdminModal(false)} className="text-slate-500">Cancel</button><button className="bg-slate-800 text-white px-4 py-2 rounded">Create</button></div></form></div></div>)}
       {showAddModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Add Subscriber</h3><form onSubmit={handleAddSubscriber} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Username" value={newUser.username} onChange={e=>setNewUser({...newUser, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Account #" value={newUser.accountNumber} onChange={e=>setNewUser({...newUser, accountNumber: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newUser.email} onChange={e=>setNewUser({...newUser, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newUser.password} onChange={e=>setNewUser({...newUser, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddModal(false)} className="text-slate-500">Cancel</button><button className="bg-blue-600 text-white px-4 py-2 rounded">Add</button></div></form></div></div>)}
       {showAnnounceModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Post Announcement</h3><input className="w-full border p-2 rounded mb-2" placeholder="Title" value={newAnnouncement.title} onChange={e=>setNewAnnouncement({...newAnnouncement, title: e.target.value})}/><textarea className="w-full border p-2 rounded mb-2" placeholder="Message" value={newAnnouncement.message} onChange={e=>setNewAnnouncement({...newAnnouncement, message: e.target.value})}></textarea><div className="flex justify-end gap-2"><button onClick={()=>setShowAnnounceModal(false)} className="text-slate-500">Cancel</button><button onClick={handlePostAnnouncement} className="bg-blue-600 text-white px-4 py-2 rounded">Post</button></div></div></div>)}
       {showPasswordModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Change Password</h3><input className="w-full border p-2 rounded mb-4" type="password" placeholder="New Password" value={adminNewPass} onChange={e=>setAdminNewPass(e.target.value)}/><div className="flex justify-end gap-2"><button onClick={()=>setShowPasswordModal(false)} className="text-slate-500">Cancel</button><button onClick={handleChangePassword} className="bg-blue-600 text-white px-4 py-2 rounded">Update</button></div></div></div>)}
-      {showDateModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold">Change Due Date</h3><button onClick={() => setShowDateModal(null)} className="text-white/80 hover:text-white"><X size={24} /></button></div><form onSubmit={handleUpdateDueDate} className="p-6 space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Due Date</label><input type="date" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} /></div><button type="submit" className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">Update Date</button></form></div></div>)}
-      {showNotifyModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Bell size={18} /> Notify {notifyData.targetName}</h3><button onClick={() => setShowNotifyModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div><form onSubmit={handleSendNotification}><div className="space-y-3"><div><label className="text-xs font-bold text-slate-500 uppercase">Title</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" placeholder="e.g. Payment Received" value={notifyData.title} onChange={(e) => setNotifyData({...notifyData, title: e.target.value})} required /></div><div><label className="text-xs font-bold text-slate-500 uppercase">Message</label><textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 h-24 resize-none" placeholder="Write your message here..." value={notifyData.message} onChange={(e) => setNotifyData({...notifyData, message: e.target.value})} required ></textarea></div><button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">Send Notification</button></div></form></div></div>)}
-      {showRepairModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-red-600 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center gap-2"><Hammer size={20} /> Request Service Repair</h3><button onClick={() => setShowRepairModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><div className="p-6"><p className="text-slate-600 text-sm mb-4">Please describe the issue.</p><textarea className="w-full border border-slate-300 rounded-lg p-3 h-32" value={repairNote} onChange={(e) => setRepairNote(e.target.value)}></textarea><div className="mt-4 flex justify-end gap-2"><button onClick={() => setShowRepairModal(false)} className="px-4 py-2 text-slate-500 font-bold">Cancel</button><button onClick={handleRequestRepair} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700">Submit</button></div></div></div></div>)}
-    </div>
-  );
+      {showDateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold">Change Due Date</h3><button onClick={() => setShowDateModal(null)} className="text-white/80 hover:text-white"><X size={24} /></button></div>
+            <form onSubmit={handleUpdateDueDate} className="p-6 space-y-4">
+              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Due Date</label><input type="date" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} /></div>
+              <button type="submit" className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">Update Date</button>
+            </form>
+          </div>
+        </div>
+      )}
+       {showNotifyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6">
+             <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Bell size={18} /> Notify {notifyData.targetName}</h3><button onClick={() => setShowNotifyModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div>
+             <form onSubmit={handleSendNotification}><div className="space-y-3"><div><label className="text-xs font-bold text-slate-500 uppercase">Title</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" placeholder="e.g. Payment Received" value={notifyData.title} onChange={(e) => setNotifyData({...notifyData, title: e.target.value})} required /></div><div><label className="text-xs font-bold text-slate-500 uppercase">Message</label><textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 h-24 resize-none" placeholder="Write your message here..." value={notifyData.message} onChange={(e) => setNotifyData({...notifyData, message: e.target.value})} required ></textarea></div><button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">Send Notification</button></div></form>
+          </div>
+        </div>
+       )}
+     </div>
+   );
 };
 
 // 5. New Technician Dashboard (Same as previous)
 const TechnicianDashboard = ({ repairs, onTechUpdate }) => {
-  // ... Same as previous ...
   const activeTechRepairs = (repairs || []).filter(r => r.status === 'Evaluation' || r.status === 'Processing');
   const historyTechRepairs = (repairs || []).filter(r => r.status === 'Completed');
   return (
@@ -1006,9 +821,7 @@ const TechnicianDashboard = ({ repairs, onTechUpdate }) => {
 };
 
 // 6. Main App Logic
-// ... (Same as previous) ...
 export default function App() {
-  // ... (Keep existing state/effects/handlers) ...
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [subscribers, setSubscribers] = useState([]);
