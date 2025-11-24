@@ -153,30 +153,119 @@ const InvoiceModal = ({ invoice, userData, onClose }) => {
 
   const handlePrint = () => {
     const printContent = printRef.current.innerHTML;
-    const win = window.open('', '', 'height=800,width=800');
+    const win = window.open('', '', 'height=1123,width=794'); // A4 size ratio
     win.document.write('<html><head><title>Invoice #' + invoice.refNumber + '</title>');
     win.document.write(`
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
       <style>
-        body { font-family: sans-serif; padding: 40px; color: #333; }
-        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 40px; }
-        .logo { font-size: 24px; font-weight: bold; color: #2563eb; }
-        .invoice-title { font-size: 32px; font-weight: bold; text-align: right; color: #1e293b; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
-        .section-title { font-size: 12px; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 8px; }
-        .info { font-size: 14px; line-height: 1.5; }
-        table { w-full; width: 100%; border-collapse: collapse; margin-bottom: 40px; }
-        th { text-align: left; padding: 12px; border-bottom: 2px solid #eee; font-size: 12px; text-transform: uppercase; color: #64748b; }
-        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; }
-        .total-row td { border-top: 2px solid #333; border-bottom: none; font-weight: bold; font-size: 16px; padding-top: 20px; }
-        .footer { text-align: center; font-size: 12px; color: #94a3b8; margin-top: 80px; }
-        .status-paid { color: #16a34a; font-weight: bold; border: 2px solid #16a34a; padding: 5px 10px; border-radius: 4px; display: inline-block; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            margin: 0; 
+            padding: 40px; 
+            background-color: #f1f5f9; 
+            color: #0f172a;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+        .invoice-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border: 1px solid #e2e8f0;
+        }
+        .header-banner {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            padding: 40px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .company-name { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+        .company-sub { color: #93c5fd; }
+        .invoice-title { font-size: 42px; font-weight: 800; opacity: 0.2; letter-spacing: 4px; text-transform: uppercase; }
+        
+        .content-body { padding: 40px; }
+        
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+        
+        .section-label { 
+            font-size: 11px; 
+            text-transform: uppercase; 
+            letter-spacing: 1px; 
+            font-weight: 700; 
+            color: #64748b; 
+            margin-bottom: 8px; 
+        }
+        .info-text { font-size: 14px; line-height: 1.6; color: #334155; }
+        .info-text strong { color: #0f172a; font-weight: 600; font-size: 15px; }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #dcfce7;
+            color: #15803d;
+            border-radius: 99px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            border: 1px solid #bbf7d0;
+        }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        thead th { 
+            text-align: left; 
+            padding: 16px; 
+            background: #f8fafc; 
+            color: #475569; 
+            font-size: 12px; 
+            text-transform: uppercase; 
+            font-weight: 700; 
+            border-bottom: 2px solid #e2e8f0; 
+        }
+        tbody td { 
+            padding: 20px 16px; 
+            border-bottom: 1px solid #e2e8f0; 
+            font-size: 14px; 
+            color: #334155;
+        }
+        .amount-col { text-align: right; font-family: 'Courier New', monospace; font-weight: 600; }
+        
+        .total-row td { 
+            background: #f8fafc; 
+            border-top: 2px solid #cbd5e1; 
+            font-size: 18px; 
+            font-weight: 800; 
+            color: #0f172a; 
+            padding-top: 24px; 
+            padding-bottom: 24px;
+        }
+
+        .footer {
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            padding: 24px;
+            text-align: center;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        
+        @media print {
+            body { background: white; padding: 0; }
+            .invoice-container { box-shadow: none; border: none; border-radius: 0; }
+        }
       </style>
     `);
     win.document.write('</head><body>');
     win.document.write(printContent);
     win.document.write('</body></html>');
     win.document.close();
-    win.print();
+    setTimeout(() => {
+      win.print();
+    }, 500);
   };
 
   return (
@@ -185,72 +274,92 @@ const InvoiceModal = ({ invoice, userData, onClose }) => {
         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
           <h3 className="font-bold text-slate-800 flex items-center gap-2"><FileText size={18}/> Invoice Preview</h3>
           <div className="flex gap-2">
-             <button onClick={handlePrint} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-2 shadow-sm">
+             <button onClick={handlePrint} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-2 shadow-sm transition-colors">
                <Printer size={16}/> Print / Save PDF
              </button>
-             <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-500"><X size={20}/></button>
+             <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
           </div>
         </div>
         
-        <div className="overflow-y-auto p-8 bg-white">
-           <div ref={printRef}>
-              <div className="header">
-                 <div className="logo">SwiftNet<span style={{color: '#93c5fd'}}>ISP</span></div>
-                 <div className="invoice-title">INVOICE</div>
-              </div>
-              <div className="grid">
-                 <div>
-                    <div className="section-title">From</div>
-                    <div className="info">
-                       <strong>SwiftNet ISP Inc.</strong><br/>
-                       123 Fiber Street, Brgy. Marede<br/>
-                       Santa Ana, Cagayan, Philippines 3514<br/>
-                       support@swiftnet.com
+        <div className="overflow-y-auto bg-slate-100 p-8 flex justify-center">
+           {/* PREVIEW CONTAINER (Scalable) */}
+           <div ref={printRef} className="bg-white w-full max-w-2xl shadow-xl rounded-xl overflow-hidden border border-slate-200">
+              <div className="invoice-container">
+                <div className="header-banner">
+                    <div>
+                        <div className="company-name">SwiftNet<span className="company-sub">ISP</span></div>
+                        <div style={{fontSize: '12px', opacity: 0.8, marginTop: '4px'}}>Fast. Reliable. Yours.</div>
                     </div>
-                 </div>
-                 <div style={{textAlign: 'right'}}>
-                    <div className="section-title">To</div>
-                    <div className="info">
-                       <strong>{userData.username}</strong><br/>
-                       Account #: {userData.accountNumber}<br/>
-                       {userData.address || 'Address on File'}<br/>
-                       {userData.email}
+                    <div className="invoice-title">INVOICE</div>
+                </div>
+
+                <div className="content-body">
+                    <div className="grid-2">
+                        <div>
+                            <div className="section-label">From</div>
+                            <div className="info-text">
+                                <strong>SwiftNet ISP Inc.</strong><br/>
+                                123 Fiber Street, Brgy. Marede<br/>
+                                Santa Ana, Cagayan, 3514<br/>
+                                billing@swiftnet.com
+                            </div>
+                        </div>
+                        <div style={{textAlign: 'right'}}>
+                            <div className="section-label">Bill To</div>
+                            <div className="info-text">
+                                <strong>{userData.username}</strong><br/>
+                                Acct: {userData.accountNumber}<br/>
+                                {userData.address || 'Address on file'}<br/>
+                                {userData.email}
+                            </div>
+                        </div>
                     </div>
-                 </div>
-              </div>
-              <div className="grid">
-                 <div>
-                    <div className="section-title">Invoice Details</div>
-                    <div className="info">
-                       <strong>Ref Number:</strong> {invoice.refNumber}<br/>
-                       <strong>Date:</strong> {new Date(invoice.date).toLocaleDateString()}<br/>
-                       <strong>Status:</strong> <span className="status-paid">PAID</span>
+
+                    <div className="grid-2" style={{marginBottom: '20px'}}>
+                        <div>
+                            <div className="section-label">Payment Details</div>
+                            <div className="info-text">
+                                Ref: <span style={{fontFamily: 'monospace'}}>{invoice.refNumber}</span><br/>
+                                Date: {new Date(invoice.date).toLocaleDateString()}<br/>
+                            </div>
+                        </div>
+                        <div style={{textAlign: 'right'}}>
+                             <div className="section-label">Status</div>
+                             <span className="status-badge">PAID</span>
+                        </div>
                     </div>
-                 </div>
-              </div>
-              <table>
-                 <thead>
-                    <tr>
-                       <th>Description</th>
-                       <th>Billing Period</th>
-                       <th style={{textAlign: 'right'}}>Amount</th>
-                    </tr>
-                 </thead>
-                 <tbody>
-                    <tr>
-                       <td>Internet Service - {userData.plan || 'Standard Plan'}</td>
-                       <td>{new Date(invoice.date).toLocaleDateString()} - {new Date(new Date(invoice.date).setMonth(new Date(invoice.date).getMonth() + 1)).toLocaleDateString()}</td>
-                       <td style={{textAlign: 'right'}}>₱{invoice.amount ? parseFloat(invoice.amount).toFixed(2) : '0.00'}</td>
-                    </tr>
-                    <tr className="total-row">
-                       <td>Total</td>
-                       <td></td>
-                       <td style={{textAlign: 'right'}}>₱{invoice.amount ? parseFloat(invoice.amount).toFixed(2) : '0.00'}</td>
-                    </tr>
-                 </tbody>
-              </table>
-              <div className="footer">
-                 <p>Thank you for choosing SwiftNet ISP. This is a computer-generated invoice.</p>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th>Billing Period</th>
+                                <th className="amount-col">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <strong>Internet Service - {userData.plan || 'Standard Plan'}</strong><br/>
+                                    <span style={{fontSize: '12px', color: '#64748b'}}>Monthly Subscription Fee</span>
+                                </td>
+                                <td>
+                                    {new Date(invoice.date).toLocaleDateString()} - {new Date(new Date(invoice.date).setMonth(new Date(invoice.date).getMonth() + 1)).toLocaleDateString()}
+                                </td>
+                                <td className="amount-col">₱{invoice.amount ? parseFloat(invoice.amount).toFixed(2) : '0.00'}</td>
+                            </tr>
+                            <tr className="total-row">
+                                <td colSpan="2">Total Paid</td>
+                                <td className="amount-col" style={{color: '#1e40af'}}>₱{invoice.amount ? parseFloat(invoice.amount).toFixed(2) : '0.00'}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div className="footer">
+                    <p>Thank you for your business. For billing inquiries, please contact support@swiftnet.com.</p>
+                    <p style={{marginTop: '8px', opacity: 0.7}}>This is a system-generated invoice. No signature required.</p>
+                </div>
               </div>
            </div>
         </div>
