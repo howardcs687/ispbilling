@@ -3,12 +3,12 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import { getAnalytics } from "firebase/analytics";
 import { 
   getAuth, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged, 
-  updatePassword, 
-  updateEmail, 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  updatePassword,
+  updateEmail,
   sendPasswordResetEmail, 
   signInAnonymously 
 } from 'firebase/auth';
@@ -16,16 +16,16 @@ import {
   getFirestore, 
   collection, 
   addDoc, 
-  setDoc, 
+  setDoc,
   onSnapshot, 
   doc, 
   updateDoc, 
-  deleteDoc, 
+  deleteDoc,
   query, 
-  where, 
-  getDoc, 
-  orderBy, 
-  serverTimestamp, 
+  where,
+  getDoc,
+  orderBy,
+  serverTimestamp,
   getDocs 
 } from 'firebase/firestore';
 import { 
@@ -36,51 +36,51 @@ import {
   Shield, 
   CheckCircle, 
   AlertCircle, 
-  Smartphone, 
-  Activity, 
-  Search, 
-  Menu, 
-  X, 
-  Plus, 
-  Settings, 
-  Trash2, 
-  Zap, 
-  Mail, 
-  Lock, 
-  Eye, 
-  EyeOff, 
-  RefreshCw, 
-  Calendar, 
-  Megaphone, 
-  MessageSquare, 
-  FileText, 
-  Send, 
-  ArrowRight, 
-  Gauge, 
+  Smartphone,
+  Activity,
+  Search,
+  Menu,
+  X,
+  Plus,
+  Settings,
+  Trash2,
+  Zap,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  Calendar,
+  Megaphone,
+  MessageSquare,
+  FileText,
+  Send,
+  ArrowRight,
+  Gauge,
   Download, 
-  Upload, 
-  UserPlus, 
-  UserCog, 
+  Upload,
+  UserPlus,
+  UserCog,
   Globe, 
-  Check, 
-  MessageCircle, 
+  Check,
+  MessageCircle,
   Wrench, 
   ClipboardList, 
   UserCheck, 
   CheckCircle2, 
-  Hammer, 
-  Hourglass, 
-  HelpCircle, 
-  Bell, 
-  Hash, 
-  UserX, 
-  PhilippinePeso, 
-  Clock, 
-  HardHat, 
-  PlayCircle, 
-  History, 
-  MapPin, 
-  CheckSquare, 
+  Hammer,
+  Hourglass,
+  HelpCircle,
+  Bell,
+  Hash,
+  UserX,
+  PhilippinePeso,
+  Clock,
+  HardHat,
+  PlayCircle,
+  History,
+  MapPin,
+  CheckSquare,
   Briefcase
 } from 'lucide-react';
 
@@ -353,12 +353,12 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
 
   const currentStepIndex = repair.stepIndex || 0;
   const isCompleted = repair.status === 'Completed';
-   
+  
   const getActionLabel = () => {
-      if (currentStepIndex === 0) return { text: "Start Evaluation", icon: <ClipboardList size={16} /> };
-      if (currentStepIndex === 1) return { text: "Start Processing", icon: <PlayCircle size={16} /> };
-      if (currentStepIndex === 2) return { text: "Mark for Confirmation", icon: <CheckCircle2 size={16} /> };
-      return { text: "Update Status", icon: <RefreshCw size={16} /> };
+     if (currentStepIndex === 0) return { text: "Start Evaluation", icon: <ClipboardList size={16} /> };
+     if (currentStepIndex === 1) return { text: "Start Processing", icon: <PlayCircle size={16} /> };
+     if (currentStepIndex === 2) return { text: "Mark for Confirmation", icon: <CheckCircle2 size={16} /> };
+     return { text: "Update Status", icon: <RefreshCw size={16} /> };
   };
 
   const actionLabel = getActionLabel();
@@ -435,20 +435,20 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
                {steps.map((step, index) => {
                   const isStepCompleted = index <= currentStepIndex;
                   return (
-                      <div key={index} className="flex flex-col items-center gap-2 relative group">
-                         <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
-                            isStepCompleted 
+                     <div key={index} className="flex flex-col items-center gap-2 relative group">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
+                           isStepCompleted 
                               ? 'bg-red-600 border-red-600 text-white' 
                               : 'bg-white border-slate-200 text-slate-300'
-                         }`}>
-                            {isStepCompleted ? <Check size={16} /> : step.icon} 
-                         </div>
-                         <span className={`text-[10px] font-bold text-center w-24 absolute -bottom-8 transition-colors ${
-                            isStepCompleted ? 'text-slate-800' : 'text-slate-400'
-                         }`}>
-                            {step.label}
-                         </span>
-                      </div>
+                        }`}>
+                           {isStepCompleted ? <Check size={16} /> : step.icon} 
+                        </div>
+                        <span className={`text-[10px] font-bold text-center w-24 absolute -bottom-8 transition-colors ${
+                           isStepCompleted ? 'text-slate-800' : 'text-slate-400'
+                        }`}>
+                           {step.label}
+                        </span>
+                     </div>
                   )
                })}
             </div>
@@ -519,10 +519,10 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
                      <div className="flex flex-col items-end gap-2">
                         <p className="text-xs text-slate-500">Technician marked this as resolved. Please confirm.</p>
                         <button 
-                            onClick={() => onConfirm(repair.id)}
-                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"
+                           onClick={() => onConfirm(repair.id)}
+                           className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"
                         >
-                            <CheckCircle2 size={16} /> Confirm Resolution
+                           <CheckCircle2 size={16} /> Confirm Resolution
                         </button>
                      </div>
                  </div>
@@ -708,7 +708,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   if (userData.status === 'applicant' || userData.accountNumber === 'PENDING') {
       
       const handleWizardSubmit = async (addressData) => {
-        try {
+         try {
             const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
             const fullAddress = `${addressData.street}, ${addressData.barangay}, ${addressData.city}, ${addressData.province}`;
             
@@ -765,7 +765,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   const handleFollowUpTicket = async (ticketId, originalMessage) => { if(!followUpText) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId); const timestamp = new Date().toLocaleString(); const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`; await updateDoc(docRef, { message: newMessage, status: 'open', date: new Date().toISOString() }); setFollowingUpTo(null); setFollowUpText(''); alert("Follow-up sent successfully!"); } catch(e) { console.error(e); alert("Failed to send follow-up"); } };
   const handleRequestRepair = async (e) => { e.preventDefault(); if(!repairNote) return; try { const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0'); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: randomId, userId: userData.uid, username: userData.username, address: userData.address || "No address provided", type: 'Service Repair - Internet', notes: repairNote, status: 'Submission', stepIndex: 0, technicianNote: 'Waiting for initial evaluation.', dateFiled: new Date().toISOString() }); setRepairNote(''); setShowRepairModal(false); alert("Repair request filed successfully!"); } catch(e) { console.error(e); alert("Failed to request repair."); } };
   
-  // UPDATED: Handle Apply Plan - ADDED TYPE AND TARGET PLAN
+  // UPDATED: Handle Apply Plan to include plan details in ticket
   const handleApplyPlan = (planName) => { 
       if(confirm(`Apply for ${planName}?`)) { 
           const msg = `Requesting plan change.\n\nCurrent: ${userData.plan}\nNew: ${planName}`; 
@@ -781,9 +781,9 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
                       message: msg, 
                       status: 'open', 
                       adminReply: '', 
-                      type: 'plan_change', // Added this field
-                      targetPlan: planName, // Added this field
-                      date: new Date().toISOString() 
+                      date: new Date().toISOString(),
+                      isPlanChange: true, // Flag for Admin
+                      targetPlan: planName // Target Plan for Admin to approve
                   }); 
                   alert(`Application submitted! Ticket #${ticketId}.`); 
                   setActiveTab('support'); 
@@ -795,7 +795,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           submitPlanTicket(); 
       } 
   };
-  
+
   const handleUpdatePassword = async (e) => { e.preventDefault(); if (managePass.length < 6) return alert("Min 6 chars."); setUpdatingCreds(true); try { await updatePassword(auth.currentUser, managePass); setManagePass(''); alert("Password updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
   const handleUpdateEmail = async (e) => { e.preventDefault(); if (!manageEmail) return; setUpdatingCreds(true); try { await updateEmail(auth.currentUser, manageEmail); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { email: manageEmail }); setManageEmail(''); alert("Email updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
 
@@ -855,8 +855,8 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
                     <div className={`p-2.5 rounded-full mr-4 flex-shrink-0 ${getBgColor(ann.type)}`}>{getIcon(ann.type)}</div>
                     <div>
                       <div className="flex items-center gap-2">
-                          <p className="font-bold text-sm text-slate-700">{ann.title}</p>
-                          {!ann.isPublic && <span className="text-[9px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded font-bold uppercase">Private</span>}
+                         <p className="font-bold text-sm text-slate-700">{ann.title}</p>
+                         {!ann.isPublic && <span className="text-[9px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded font-bold uppercase">Private</span>}
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">{ann.message}</p>
                       <p className="text-[10px] text-slate-400 mt-1">{new Date(ann.date).toLocaleDateString()}</p>
@@ -959,7 +959,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       if(fetchedPlans.length === 0) {
-          ['Fiber 100Mbps', 'Fiber 300Mbps'].forEach(async n => await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION), { name: n }));
+         ['Fiber 100Mbps', 'Fiber 300Mbps'].forEach(async n => await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION), { name: n }));
       }
       setPlans(fetchedPlans);
     });
@@ -1064,31 +1064,25 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       } catch(e) { console.error(e); alert("Failed to force complete."); }
   };
 
-  // ADDED: Auto-Update Plan for User when Approved
+  // UPDATED: Handle Plan Change Approval
   const handleApprovePlanChange = async (ticket) => {
-     if(!confirm(`Approve plan change to ${ticket.targetPlan}? This will update the user's dashboard.`)) return;
-     
-     try {
-         // 1. Update the User's Plan
-         const usersRef = collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME);
-         // We need to find the user doc based on userId (which is the doc id in our setup)
-         const userDocRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.userId);
-         
-         await updateDoc(userDocRef, {
-             plan: ticket.targetPlan
-         });
-
-         // 2. Mark Ticket Resolved
-         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), {
-             status: 'resolved',
-             adminReply: `Plan Change Request Approved. Your plan has been updated to ${ticket.targetPlan}.`
-         });
-
-         alert("Plan updated successfully!");
-     } catch(e) {
-         console.error(e);
-         alert("Failed to update plan.");
-     }
+      if(!confirm(`Approve plan change to ${ticket.targetPlan} for ${ticket.username}?`)) return;
+      try {
+          // Update User Plan
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.userId), {
+              plan: ticket.targetPlan
+          });
+          
+          // Close Ticket
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), {
+              status: 'resolved',
+              adminReply: `Plan change to ${ticket.targetPlan} approved and updated.`
+          });
+          alert("Plan updated successfully!");
+      } catch (e) {
+          console.error(e);
+          alert("Failed to update plan.");
+      }
   };
 
   const handleApproveApplication = async (ticket) => { const amountStr = prompt("Enter initial balance/installation fee for this user:", "1500"); if (amountStr === null) return; const amount = parseFloat(amountStr); if (isNaN(amount)) { alert("Invalid amount. Please enter a number."); return; } const newAccountNo = Math.floor(Math.random() * 1000000).toString(); const planName = ticket.targetPlan; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.targetUserId), { status: 'active', accountNumber: newAccountNo, plan: planName, balance: amount, dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() }); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), { status: 'resolved', adminReply: `Approved! Account Number: ${newAccountNo}. Initial Balance: ₱${amount}. Please proceed to payment.` }); alert(`Application Approved! Assigned Account #${newAccountNo} with balance ₱${amount}`); } catch(e) { alert("Failed to approve."); } };
@@ -1215,62 +1209,19 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       )}
 
       {/* ... (Tickets, Plans, Payments Tabs - UNCHANGED) ... */}
-       {activeTab === 'tickets' && (
-           <div className="space-y-4">
-               <h2 className="text-xl font-bold text-slate-800">Support Tickets & Applications</h2>
-               <div className="grid grid-cols-1 gap-4">
-                   {tickets && tickets.length > 0 ? tickets.map(ticket => (
-                       <div key={ticket.id} className={`p-5 rounded-xl shadow-sm border ${ticket.isApplication ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}>
-                           <div className="flex justify-between items-start mb-3">
-                               <div>
-                                   <h4 className="font-bold text-lg text-slate-800">
-                                       #{ticket.ticketId || '---'} - {ticket.subject} 
-                                       {ticket.isApplication && <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">APPLICATION</span>}
-                                       {ticket.type === 'plan_change' && <span className="bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">PLAN CHANGE</span>}
-                                   </h4>
-                                   <p className="text-xs text-slate-500">From: <span className="font-bold text-blue-600">{ticket.username}</span> • {new Date(ticket.date).toLocaleString()}</p>
-                               </div>
-                               <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${ticket.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{ticket.status}</span>
-                            </div>
-                            <p className="text-slate-700 text-sm mb-4">{ticket.message}</p>
-                            
-                            {/* APPROVE NEW APPLICATION BUTTON */}
-                            {ticket.isApplication && ticket.status === 'open' && (
-                                <button onClick={() => handleApproveApplication(ticket)} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors">Approve & Assign Account #</button>
-                            )}
-
-                            {/* APPROVE PLAN CHANGE BUTTON (NEW) */}
-                            {ticket.type === 'plan_change' && ticket.status === 'open' && (
-                                <button onClick={() => handleApprovePlanChange(ticket)} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors flex items-center justify-center gap-2">
-                                    <RefreshCw size={16}/> Approve Plan Change to {ticket.targetPlan}
-                                </button>
-                            )}
-
-                            {ticket.adminReply ? (
-                                <div className="border-t border-slate-200 pt-3">
-                                    <p className="text-xs font-bold text-slate-400 uppercase mb-1">Your Reply</p>
-                                    <p className="text-sm text-blue-700 font-medium">{ticket.adminReply}</p>
-                                </div>
-                            ) : (
-                                <div className="flex gap-2 mt-2">
-                                    {replyingTo === ticket.id ? (
-                                        <div className="w-full">
-                                            <textarea className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2" rows="3" value={replyText} onChange={(e) => setReplyText(e.target.value)}></textarea>
-                                            <div className="flex gap-2 justify-end">
-                                                <button onClick={() => setReplyingTo(null)} className="text-slate-500 text-sm font-bold">Cancel</button>
-                                                <button onClick={() => handleReplyTicket(ticket.id)} className="bg-blue-600 text-white text-sm font-bold px-4 py-1 rounded-lg">Send Reply</button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <button onClick={() => { setReplyingTo(ticket.id); setReplyText(''); }} className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg font-bold text-sm transition-colors"><MessageSquare size={16} /> Reply</button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                   )) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400">No tickets found.</div>}
-               </div>
-           </div>
+       {activeTab === 'tickets' && (<div className="space-y-4"><h2 className="text-xl font-bold text-slate-800">Support Tickets & Applications</h2><div className="grid grid-cols-1 gap-4">{tickets && tickets.length > 0 ? tickets.map(ticket => (<div key={ticket.id} className={`p-5 rounded-xl shadow-sm border ${ticket.isApplication ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}><div className="flex justify-between items-start mb-3"><div><h4 className="font-bold text-lg text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject} {ticket.isApplication && <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">APPLICATION</span>}</h4><p className="text-xs text-slate-500">From: <span className="font-bold text-blue-600">{ticket.username}</span> • {new Date(ticket.date).toLocaleString()}</p></div><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${ticket.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{ticket.status}</span></div><p className="text-slate-700 text-sm mb-4">{ticket.message}</p>
+       
+       {/* NEW: PLAN CHANGE APPROVAL BUTTON */}
+       {ticket.isPlanChange && ticket.status === 'open' && (
+           <button 
+                onClick={() => handleApprovePlanChange(ticket)}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors flex items-center justify-center gap-2"
+           >
+               <CheckCircle size={16} /> Approve Plan Change
+           </button>
        )}
+
+       {ticket.isApplication && ticket.status === 'open' && (<button onClick={() => handleApproveApplication(ticket)} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors">Approve & Assign Account #</button>)}{ticket.adminReply ? <div className="border-t border-slate-200 pt-3"><p className="text-xs font-bold text-slate-400 uppercase mb-1">Your Reply</p><p className="text-sm text-blue-700 font-medium">{ticket.adminReply}</p></div> : (<div className="flex gap-2 mt-2">{replyingTo === ticket.id ? (<div className="w-full"><textarea className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2" rows="3" value={replyText} onChange={(e) => setReplyText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setReplyingTo(null)} className="text-slate-500 text-sm font-bold">Cancel</button><button onClick={() => handleReplyTicket(ticket.id)} className="bg-blue-600 text-white text-sm font-bold px-4 py-1 rounded-lg">Send Reply</button></div></div>) : <button onClick={() => { setReplyingTo(ticket.id); setReplyText(''); }} className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg font-bold text-sm transition-colors"><MessageSquare size={16} /> Reply</button>}</div>)}</div>)) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400">No tickets found.</div>}</div></div>)}
        
        {/* UPDATED: Admin Repair View with Force Complete */}
        {activeTab === 'repairs' && (
@@ -1342,35 +1293,35 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
              </form>
           </div>
         </div>
-      )}
-      
-      {/* ... (Other Modals: Tech, Admin, Subscriber, Announce, Password, Date, Notify) ... */}
-      {showAddTechModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><div className="bg-orange-600 p-5 flex justify-between items-center -m-6 mb-6"><h3 className="text-white font-bold flex items-center gap-2"><HardHat size={18} /> Add New Technician</h3><button onClick={() => setShowAddTechModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><form onSubmit={handleAddTechnician} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tech Name</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.username} onChange={(e) => setNewTech({...newTech, username: e.target.value})} placeholder="Technician Name" /></div><div className="border-t border-slate-100 pt-2"></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.email} onChange={(e) => setNewTech({...newTech, email: e.target.value})} /></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-mono" value={newTech.password} onChange={(e) => setNewTech({...newTech, password: e.target.value})} /></div><button type="submit" disabled={isCreatingUser} className="w-full py-2.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700">{isCreatingUser ? 'Creating...' : 'Create Technician Account'}</button></form></div></div>)}
-      {showAddAdminModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><h3 className="font-bold mb-4">Add Admin</h3><form onSubmit={handleAddAdmin} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Name" value={newAdmin.username} onChange={e=>setNewAdmin({...newAdmin, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newAdmin.email} onChange={e=>setNewAdmin({...newAdmin, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newAdmin.password} onChange={e=>setNewAdmin({...newAdmin, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddAdminModal(false)} className="text-slate-500">Cancel</button><button className="bg-slate-800 text-white px-4 py-2 rounded">Create</button></div></form></div></div>)}
-      {showAddModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Add Subscriber</h3><form onSubmit={handleAddSubscriber} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Username" value={newUser.username} onChange={e=>setNewUser({...newUser, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Account #" value={newUser.accountNumber} onChange={e=>setNewUser({...newUser, accountNumber: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newUser.email} onChange={e=>setNewUser({...newUser, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newUser.password} onChange={e=>setNewUser({...newUser, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddModal(false)} className="text-slate-500">Cancel</button><button className="bg-blue-600 text-white px-4 py-2 rounded">Add</button></div></form></div></div>)}
-      {showAnnounceModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Post Announcement</h3><input className="w-full border p-2 rounded mb-2" placeholder="Title" value={newAnnouncement.title} onChange={e=>setNewAnnouncement({...newAnnouncement, title: e.target.value})}/><textarea className="w-full border p-2 rounded mb-2" placeholder="Message" value={newAnnouncement.message} onChange={e=>setNewAnnouncement({...newAnnouncement, message: e.target.value})}></textarea><div className="flex justify-end gap-2"><button onClick={()=>setShowAnnounceModal(false)} className="text-slate-500">Cancel</button><button onClick={handlePostAnnouncement} className="bg-blue-600 text-white px-4 py-2 rounded">Post</button></div></div></div>)}
-      {showPasswordModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Change Password</h3><input className="w-full border p-2 rounded mb-4" type="password" placeholder="New Password" value={adminNewPass} onChange={e=>setAdminNewPass(e.target.value)}/><div className="flex justify-end gap-2"><button onClick={()=>setShowPasswordModal(false)} className="text-slate-500">Cancel</button><button onClick={handleChangePassword} className="bg-blue-600 text-white px-4 py-2 rounded">Update</button></div></div></div>)}
-      {showDateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold">Change Due Date</h3><button onClick={() => setShowDateModal(null)} className="text-white/80 hover:text-white"><X size={24} /></button></div>
-            <form onSubmit={handleUpdateDueDate} className="p-6 space-y-4">
-              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Due Date</label><input type="date" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} /></div>
-              <button type="submit" className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">Update Date</button>
-            </form>
-          </div>
-        </div>
-      )}
-       {showNotifyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6">
-             <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Bell size={18} /> Notify {notifyData.targetName}</h3><button onClick={() => setShowNotifyModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div>
-             <form onSubmit={handleSendNotification}><div className="space-y-3"><div><label className="text-xs font-bold text-slate-500 uppercase">Title</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" placeholder="e.g. Payment Received" value={notifyData.title} onChange={(e) => setNotifyData({...notifyData, title: e.target.value})} required /></div><div><label className="text-xs font-bold text-slate-500 uppercase">Message</label><textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 h-24 resize-none" placeholder="Write your message here..." value={notifyData.message} onChange={(e) => setNotifyData({...notifyData, message: e.target.value})} required ></textarea></div><button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">Send Notification</button></div></form>
-          </div>
-        </div>
        )}
-     </div>
-   );
+       
+       {/* ... (Other Modals: Tech, Admin, Subscriber, Announce, Password, Date, Notify) ... */}
+       {showAddTechModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><div className="bg-orange-600 p-5 flex justify-between items-center -m-6 mb-6"><h3 className="text-white font-bold flex items-center gap-2"><HardHat size={18} /> Add New Technician</h3><button onClick={() => setShowAddTechModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><form onSubmit={handleAddTechnician} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tech Name</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.username} onChange={(e) => setNewTech({...newTech, username: e.target.value})} placeholder="Technician Name" /></div><div className="border-t border-slate-100 pt-2"></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.email} onChange={(e) => setNewTech({...newTech, email: e.target.value})} /></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-mono" value={newTech.password} onChange={(e) => setNewTech({...newTech, password: e.target.value})} /></div><button type="submit" disabled={isCreatingUser} className="w-full py-2.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700">{isCreatingUser ? 'Creating...' : 'Create Technician Account'}</button></form></div></div>)}
+       {showAddAdminModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><h3 className="font-bold mb-4">Add Admin</h3><form onSubmit={handleAddAdmin} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Name" value={newAdmin.username} onChange={e=>setNewAdmin({...newAdmin, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newAdmin.email} onChange={e=>setNewAdmin({...newAdmin, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newAdmin.password} onChange={e=>setNewAdmin({...newAdmin, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddAdminModal(false)} className="text-slate-500">Cancel</button><button className="bg-slate-800 text-white px-4 py-2 rounded">Create</button></div></form></div></div>)}
+       {showAddModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Add Subscriber</h3><form onSubmit={handleAddSubscriber} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Username" value={newUser.username} onChange={e=>setNewUser({...newUser, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Account #" value={newUser.accountNumber} onChange={e=>setNewUser({...newUser, accountNumber: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newUser.email} onChange={e=>setNewUser({...newUser, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newUser.password} onChange={e=>setNewUser({...newUser, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddModal(false)} className="text-slate-500">Cancel</button><button className="bg-blue-600 text-white px-4 py-2 rounded">Add</button></div></form></div></div>)}
+       {showAnnounceModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Post Announcement</h3><input className="w-full border p-2 rounded mb-2" placeholder="Title" value={newAnnouncement.title} onChange={e=>setNewAnnouncement({...newAnnouncement, title: e.target.value})}/><textarea className="w-full border p-2 rounded mb-2" placeholder="Message" value={newAnnouncement.message} onChange={e=>setNewAnnouncement({...newAnnouncement, message: e.target.value})}></textarea><div className="flex justify-end gap-2"><button onClick={()=>setShowAnnounceModal(false)} className="text-slate-500">Cancel</button><button onClick={handlePostAnnouncement} className="bg-blue-600 text-white px-4 py-2 rounded">Post</button></div></div></div>)}
+       {showPasswordModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Change Password</h3><input className="w-full border p-2 rounded mb-4" type="password" placeholder="New Password" value={adminNewPass} onChange={e=>setAdminNewPass(e.target.value)}/><div className="flex justify-end gap-2"><button onClick={()=>setShowPasswordModal(false)} className="text-slate-500">Cancel</button><button onClick={handleChangePassword} className="bg-blue-600 text-white px-4 py-2 rounded">Update</button></div></div></div>)}
+       {showDateModal && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200">
+             <div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold">Change Due Date</h3><button onClick={() => setShowDateModal(null)} className="text-white/80 hover:text-white"><X size={24} /></button></div>
+             <form onSubmit={handleUpdateDueDate} className="p-6 space-y-4">
+               <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Due Date</label><input type="date" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} /></div>
+               <button type="submit" className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">Update Date</button>
+             </form>
+           </div>
+         </div>
+       )}
+        {showNotifyModal && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6">
+              <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Bell size={18} /> Notify {notifyData.targetName}</h3><button onClick={() => setShowNotifyModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div>
+              <form onSubmit={handleSendNotification}><div className="space-y-3"><div><label className="text-xs font-bold text-slate-500 uppercase">Title</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" placeholder="e.g. Payment Received" value={notifyData.title} onChange={(e) => setNotifyData({...notifyData, title: e.target.value})} required /></div><div><label className="text-xs font-bold text-slate-500 uppercase">Message</label><textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 h-24 resize-none" placeholder="Write your message here..." value={notifyData.message} onChange={(e) => setNotifyData({...notifyData, message: e.target.value})} required ></textarea></div><button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">Send Notification</button></div></form>
+           </div>
+         </div>
+        )}
+      </div>
+    );
 };
 
 // 5. New Technician Dashboard (Unchanged)
