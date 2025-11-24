@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAnalytics } from "firebase/analytics";
 import { 
@@ -84,7 +84,12 @@ import {
   Briefcase,
   Facebook,
   Twitter,
-  Instagram
+  Instagram,
+  Box,
+  Server,
+  Router,
+  Printer,
+  FileText as InvoiceIcon
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -117,20 +122,137 @@ const PAYMENTS_COLLECTION = 'isp_payments_v1';
 const TICKETS_COLLECTION = 'isp_tickets_v1';
 const REPAIRS_COLLECTION = 'isp_repairs_v1'; 
 const NOTIFICATIONS_COLLECTION = 'isp_notifications_v1';
+const INVENTORY_COLLECTION = 'isp_inventory_v1'; 
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
 // --- Helper Functions ---
 const sendSystemEmail = async (to, subject, htmlContent) => {
-  // Simulated email sending
   console.log(`%c[SYSTEM EMAIL] To: ${to}\nSubject: ${subject}\nContent: ${htmlContent}`, 'color: blue; font-weight: bold;');
   return true;
 };
 
 // --- Helper Components ---
 
+const InvoiceModal = ({ invoice, userData, onClose }) => {
+  const printRef = useRef();
+
+  const handlePrint = () => {
+    const printContent = printRef.current.innerHTML;
+    const win = window.open('', '', 'height=800,width=800');
+    win.document.write('<html><head><title>Invoice #' + invoice.refNumber + '</title>');
+    // Basic CSS for print
+    win.document.write(`
+      <style>
+        body { font-family: sans-serif; padding: 40px; color: #333; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 40px; }
+        .logo { font-size: 24px; font-weight: bold; color: #2563eb; }
+        .invoice-title { font-size: 32px; font-weight: bold; text-align: right; color: #1e293b; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+        .section-title { font-size: 12px; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 8px; }
+        .info { font-size: 14px; line-height: 1.5; }
+        table { w-full; width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+        th { text-align: left; padding: 12px; border-bottom: 2px solid #eee; font-size: 12px; text-transform: uppercase; color: #64748b; }
+        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; }
+        .total-row td { border-top: 2px solid #333; border-bottom: none; font-weight: bold; font-size: 16px; padding-top: 20px; }
+        .footer { text-align: center; font-size: 12px; color: #94a3b8; margin-top: 80px; }
+        .status-paid { color: #16a34a; font-weight: bold; border: 2px solid #16a34a; padding: 5px 10px; border-radius: 4px; display: inline-block; }
+      </style>
+    `);
+    win.document.write('</head><body>');
+    win.document.write(printContent);
+    win.document.write('</body></html>');
+    win.document.close();
+    win.print();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <h3 className="font-bold text-slate-800 flex items-center gap-2"><FileText size={18}/> Invoice Preview</h3>
+          <div className="flex gap-2">
+             <button onClick={handlePrint} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-2 shadow-sm">
+               <Printer size={16}/> Print / Save PDF
+             </button>
+             <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-500"><X size={20}/></button>
+          </div>
+        </div>
+        
+        <div className="overflow-y-auto p-8 bg-white">
+           {/* This div is what gets printed */}
+           <div ref={printRef}>
+              <div className="header">
+                 <div className="logo">SwiftNet<span style={{color: '#93c5fd'}}>ISP</span></div>
+                 <div className="invoice-title">INVOICE</div>
+              </div>
+
+              <div className="grid">
+                 <div>
+                    <div className="section-title">From</div>
+                    <div className="info">
+                       <strong>SwiftNet ISP Inc.</strong><br/>
+                       123 Fiber Street, Brgy. Marede<br/>
+                       Santa Ana, Cagayan, Philippines 3514<br/>
+                       support@swiftnet.com
+                    </div>
+                 </div>
+                 <div style={{textAlign: 'right'}}>
+                    <div className="section-title">To</div>
+                    <div className="info">
+                       <strong>{userData.username}</strong><br/>
+                       Account #: {userData.accountNumber}<br/>
+                       {userData.address || 'Address on File'}<br/>
+                       {userData.email}
+                    </div>
+                 </div>
+              </div>
+
+              <div className="grid">
+                 <div>
+                    <div className="section-title">Invoice Details</div>
+                    <div className="info">
+                       <strong>Ref Number:</strong> {invoice.refNumber}<br/>
+                       <strong>Date:</strong> {new Date(invoice.date).toLocaleDateString()}<br/>
+                       <strong>Status:</strong> <span className="status-paid">PAID</span>
+                    </div>
+                 </div>
+              </div>
+
+              <table>
+                 <thead>
+                    <tr>
+                       <th>Description</th>
+                       <th>Billing Period</th>
+                       <th style={{textAlign: 'right'}}>Amount</th>
+                    </tr>
+                 </thead>
+                 <tbody>
+                    <tr>
+                       <td>Internet Service - {userData.plan || 'Standard Plan'}</td>
+                       <td>{new Date(invoice.date).toLocaleDateString()} - {new Date(new Date(invoice.date).setMonth(new Date(invoice.date).getMonth() + 1)).toLocaleDateString()}</td>
+                       <td style={{textAlign: 'right'}}>₱{invoice.amount ? parseFloat(invoice.amount).toFixed(2) : '0.00'}</td>
+                    </tr>
+                    <tr className="total-row">
+                       <td>Total</td>
+                       <td></td>
+                       <td style={{textAlign: 'right'}}>₱{invoice.amount ? parseFloat(invoice.amount).toFixed(2) : '0.00'}</td>
+                    </tr>
+                 </tbody>
+              </table>
+
+              <div className="footer">
+                 <p>Thank you for choosing SwiftNet ISP. This is a computer-generated invoice.</p>
+              </div>
+           </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
   const [step, setStep] = useState(1);
-  const [addressType, setAddressType] = useState('house'); // house | condo
+  const [addressType, setAddressType] = useState('house'); 
   const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState({
     province: 'CAGAYAN',
@@ -158,16 +280,12 @@ const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4 animate-in fade-in zoom-in-95 duration-200">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh]">
-        
-        {/* Header */}
         <div className="bg-red-600 p-6 text-white relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10"></div>
             <h2 className="text-2xl font-bold mb-1">Guiding you in every step</h2>
             <p className="text-red-100 text-sm">New Application - {plan.name}</p>
             <button onClick={onClose} className="absolute top-4 right-4 text-white/80 hover:text-white"><X size={24}/></button>
         </div>
-
-        {/* Progress Bar */}
         <div className="px-8 pt-6 pb-2">
            <div className="flex items-center justify-between mb-2">
               {steps.map((s) => (
@@ -176,176 +294,78 @@ const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
            </div>
            <p className="text-xs text-slate-400 text-right">Step {step} of 4</p>
         </div>
-
-        {/* Content Area */}
         <div className="p-8 overflow-y-auto flex-grow">
-            
-            {/* STEP 1: Address Search */}
             {step === 1 && (
               <div className="text-center space-y-6">
                  <h3 className="text-2xl font-bold text-red-600">Let's check your Address</h3>
                  <p className="text-slate-600">Type in your address and make sure to drop the pin to the closest location of your residence</p>
-                 
                  <div className="flex justify-center mb-6">
                     <div className="bg-slate-100 p-1 rounded-full inline-flex">
-                       <button 
-                         onClick={() => setAddressType('house')}
-                         className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${addressType === 'house' ? 'bg-red-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
-                       >HOUSE/APARTMENT</button>
-                       <button 
-                         onClick={() => setAddressType('condo')}
-                         className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${addressType === 'condo' ? 'bg-red-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
-                       >CONDOMINIUM</button>
+                       <button onClick={() => setAddressType('house')} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${addressType === 'house' ? 'bg-red-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>HOUSE/APARTMENT</button>
+                       <button onClick={() => setAddressType('condo')} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${addressType === 'condo' ? 'bg-red-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>CONDOMINIUM</button>
                     </div>
                  </div>
-
                  <div className="relative">
                     <Search className="absolute left-4 top-3.5 text-slate-400" size={20} />
-                    <input 
-                      type="text" 
-                      placeholder="Type in address..." 
-                      className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-full focus:ring-2 focus:ring-red-500 outline-none shadow-sm"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
+                    <input type="text" placeholder="Type in address..." className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-full focus:ring-2 focus:ring-red-500 outline-none shadow-sm" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}/>
                  </div>
               </div>
             )}
-
-            {/* STEP 2: Map Pin */}
             {step === 2 && (
               <div className="text-center space-y-4">
                  <h3 className="text-xl font-bold text-red-600">Pin Location</h3>
-                 <div className="bg-slate-100 rounded-full px-4 py-2 text-sm text-slate-700 font-medium inline-flex items-center gap-2">
-                    <Search size={14} /> {searchQuery || "Marede, Santa Ana, Cagayan"}
-                 </div>
+                 <div className="bg-slate-100 rounded-full px-4 py-2 text-sm text-slate-700 font-medium inline-flex items-center gap-2"><Search size={14} /> {searchQuery || "Marede, Santa Ana, Cagayan"}</div>
                  <p className="text-xs text-red-500 font-bold">Move the pin below to mark your exact location on the map.</p>
-                 
                  <div className="aspect-video bg-blue-50 rounded-xl border-2 border-slate-200 relative overflow-hidden group cursor-crosshair">
-                    {/* Mock Map Background */}
                     <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"></div>
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                       <MapPin size={48} className="text-red-600 drop-shadow-2xl animate-bounce" fill="currentColor" />
-                    </div>
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"><MapPin size={48} className="text-red-600 drop-shadow-2xl animate-bounce" fill="currentColor" /></div>
                  </div>
               </div>
             )}
-
-            {/* STEP 3: Review */}
             {step === 3 && (
               <div className="text-center space-y-6">
                  <h3 className="text-2xl font-bold text-red-600">Good News! SwiftNet is available in your area!</h3>
                  <p className="text-slate-600">Please review the address below to ensure all details are correct.</p>
-                 
                  <div className="bg-slate-50 p-6 rounded-xl text-left grid grid-cols-2 gap-4 text-sm border border-slate-100">
-                    <div>
-                       <span className="block text-xs font-bold text-slate-400 uppercase">Province</span>
-                       <span className="font-bold text-slate-800">{formData.province}</span>
-                    </div>
-                    <div>
-                       <span className="block text-xs font-bold text-slate-400 uppercase">City</span>
-                       <span className="font-bold text-slate-800">{formData.city}</span>
-                    </div>
-                    <div>
-                       <span className="block text-xs font-bold text-slate-400 uppercase">Barangay</span>
-                       <span className="font-bold text-slate-800">{formData.barangay}</span>
-                    </div>
-                    <div>
-                       <span className="block text-xs font-bold text-slate-400 uppercase">Plan</span>
-                       <span className="font-bold text-blue-600">{plan.name}</span>
-                    </div>
+                    <div><span className="block text-xs font-bold text-slate-400 uppercase">Province</span><span className="font-bold text-slate-800">{formData.province}</span></div>
+                    <div><span className="block text-xs font-bold text-slate-400 uppercase">City</span><span className="font-bold text-slate-800">{formData.city}</span></div>
+                    <div><span className="block text-xs font-bold text-slate-400 uppercase">Barangay</span><span className="font-bold text-slate-800">{formData.barangay}</span></div>
+                    <div><span className="block text-xs font-bold text-slate-400 uppercase">Plan</span><span className="font-bold text-blue-600">{plan.name}</span></div>
                  </div>
-                 
-                 <div className="flex gap-3 justify-center">
-                    <button onClick={() => setStep(4)} className="px-6 py-2 border-2 border-red-600 text-red-600 font-bold rounded-full hover:bg-red-50">EDIT ADDRESS</button>
-                 </div>
+                 <div className="flex gap-3 justify-center"><button onClick={() => setStep(4)} className="px-6 py-2 border-2 border-red-600 text-red-600 font-bold rounded-full hover:bg-red-50">EDIT ADDRESS</button></div>
               </div>
             )}
-
-            {/* STEP 4: Detailed Form */}
             {step === 4 && (
               <div className="space-y-6">
-                 <div className="text-center mb-6">
-                    <h3 className="text-xl font-bold text-red-600">Finalize Address Details</h3>
-                    <p className="text-sm text-slate-500">Click any of the fields below to make changes.</p>
-                 </div>
-
+                 <div className="text-center mb-6"><h3 className="text-xl font-bold text-red-600">Finalize Address Details</h3><p className="text-sm text-slate-500">Click any of the fields below to make changes.</p></div>
                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                       <label className="text-xs font-bold text-red-600">* Province</label>
-                       <input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.province} readOnly />
-                    </div>
-                    <div>
-                       <label className="text-xs font-bold text-red-600">* City</label>
-                       <input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.city} readOnly />
-                    </div>
-                    <div className="col-span-2">
-                       <label className="text-xs font-bold text-red-600">* Barangay</label>
-                       <input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.barangay} readOnly />
-                    </div>
-                    
-                    <div>
-                       <label className="text-xs font-bold text-slate-500">Subdivision</label>
-                       <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Search..." value={formData.subdivision} onChange={e => setFormData({...formData, subdivision: e.target.value})} />
-                    </div>
-                    <div>
-                       <label className="text-xs font-bold text-red-600">* Street</label>
-                       <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Search..." value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} />
-                    </div>
-                    
-                    <div className="col-span-2">
-                       <label className="text-xs font-bold text-slate-500">Building</label>
-                       <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Type in your building" value={formData.building} onChange={e => setFormData({...formData, building: e.target.value})} />
-                    </div>
-
-                    <div>
-                       <label className="text-xs font-bold text-slate-500">House No.</label>
-                       <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 123" value={formData.houseNo} onChange={e => setFormData({...formData, houseNo: e.target.value})} />
-                    </div>
-                    <div>
-                       <label className="text-xs font-bold text-slate-500">Block</label>
-                       <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 5" value={formData.block} onChange={e => setFormData({...formData, block: e.target.value})} />
-                    </div>
-                    <div>
-                       <label className="text-xs font-bold text-slate-500">Lot</label>
-                       <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 10" value={formData.lot} onChange={e => setFormData({...formData, lot: e.target.value})} />
-                    </div>
-                    
-                    <div className="col-span-2">
-                       <label className="text-xs font-bold text-slate-500">Landmark</label>
-                       <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. Near the Chapel" value={formData.landmark} onChange={e => setFormData({...formData, landmark: e.target.value})} />
-                    </div>
+                    <div><label className="text-xs font-bold text-red-600">* Province</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.province} readOnly /></div>
+                    <div><label className="text-xs font-bold text-red-600">* City</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.city} readOnly /></div>
+                    <div className="col-span-2"><label className="text-xs font-bold text-red-600">* Barangay</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.barangay} readOnly /></div>
+                    <div><label className="text-xs font-bold text-slate-500">Subdivision</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Search..." value={formData.subdivision} onChange={e => setFormData({...formData, subdivision: e.target.value})} /></div>
+                    <div><label className="text-xs font-bold text-red-600">* Street</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Search..." value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} /></div>
+                    <div className="col-span-2"><label className="text-xs font-bold text-slate-500">Building</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Type in your building" value={formData.building} onChange={e => setFormData({...formData, building: e.target.value})} /></div>
+                    <div><label className="text-xs font-bold text-slate-500">House No.</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 123" value={formData.houseNo} onChange={e => setFormData({...formData, houseNo: e.target.value})} /></div>
+                    <div><label className="text-xs font-bold text-slate-500">Block</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 5" value={formData.block} onChange={e => setFormData({...formData, block: e.target.value})} /></div>
+                    <div><label className="text-xs font-bold text-slate-500">Lot</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 10" value={formData.lot} onChange={e => setFormData({...formData, lot: e.target.value})} /></div>
+                    <div className="col-span-2"><label className="text-xs font-bold text-slate-500">Landmark</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. Near the Chapel" value={formData.landmark} onChange={e => setFormData({...formData, landmark: e.target.value})} /></div>
                  </div>
               </div>
             )}
-
         </div>
-
-        {/* Footer Actions */}
         <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-white">
-           {step > 1 && (
-              <button onClick={handleBack} className="px-8 py-3 border border-red-600 text-red-600 font-bold rounded-full hover:bg-red-50 transition-colors">
-                 BACK
-              </button>
-           )}
-           
-           {step < 4 ? (
-              <button onClick={handleNext} className="px-8 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200">
-                 {step === 3 ? 'CONTINUE' : step === 1 ? 'CHECK SERVICEABILITY' : 'NEXT'}
-              </button>
-           ) : (
-              <button onClick={() => onSubmit(formData)} className="px-8 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200">
-                 SUBMIT APPLICATION
-              </button>
-           )}
+           {step > 1 && (<button onClick={handleBack} className="px-8 py-3 border border-red-600 text-red-600 font-bold rounded-full hover:bg-red-50 transition-colors">BACK</button>)}
+           {step < 4 ? (<button onClick={handleNext} className="px-8 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200">{step === 3 ? 'CONTINUE' : step === 1 ? 'CHECK SERVICEABILITY' : 'NEXT'}</button>) : (<button onClick={() => onSubmit(formData)} className="px-8 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200">SUBMIT APPLICATION</button>)}
         </div>
-
       </div>
     </div>
   );
 };
 
-const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssign, isTechnician, onTechUpdate, isAdmin, onForceComplete }) => {
+const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssign, isTechnician, onTechUpdate, isAdmin, onForceComplete, inventory, onAssignDevice }) => {
+  const [showAssignDevice, setShowAssignDevice] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState('');
+
   const steps = [
     { label: 'Submission', icon: <Check size={16} /> },
     { label: 'Evaluation', icon: <ClipboardList size={16} /> },
@@ -366,6 +386,12 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
 
   const actionLabel = getActionLabel();
 
+  const handleAssignSubmit = () => {
+      if(!selectedDevice) return;
+      onAssignDevice(selectedDevice, repair.userId);
+      setShowAssignDevice(false);
+  };
+
   return (
     <div className={`bg-white rounded-2xl shadow-sm border ${isCompleted ? 'border-green-200 bg-green-50/30' : 'border-slate-200'} p-6 mb-6 animate-in fade-in slide-in-from-bottom-4`}>
       <div className="flex justify-between items-start mb-4">
@@ -380,166 +406,64 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
                <div>
                   <h3 className="text-lg font-bold text-slate-800">{repair.type || 'Service Repair'}</h3>
                   <p className="text-sm text-slate-500 font-mono">#{repair.requestId}</p>
-                  {!isSubscriber && repair.assignedTechName && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit mt-1">
-                          <HardHat size={10}/> Tech: {repair.assignedTechName}
-                      </span>
-                  )}
+                  {!isSubscriber && repair.assignedTechName && (<span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit mt-1"><HardHat size={10}/> Tech: {repair.assignedTechName}</span>)}
                </div>
             </div>
          </div>
-         {isCompleted && repair.completedDate && (
-             <div className="text-right">
-                <p className="text-xs font-bold text-slate-400 uppercase">Completed On</p>
-                <p className="text-sm font-bold text-slate-700">{new Date(repair.completedDate).toLocaleDateString()}</p>
-             </div>
-         )}
+         {isCompleted && repair.completedDate && (<div className="text-right"><p className="text-xs font-bold text-slate-400 uppercase">Completed On</p><p className="text-sm font-bold text-slate-700">{new Date(repair.completedDate).toLocaleDateString()}</p></div>)}
       </div>
-
       {(!isSubscriber) && (
          <div className="mb-6 bg-slate-50 p-3 rounded-lg border border-slate-200">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div>
-                     <p className="text-xs font-bold text-slate-400 uppercase">Customer</p>
-                     <p className="text-sm font-bold text-slate-800 flex items-center gap-1">
-                        <User size={14}/> {repair.username}
-                     </p>
-                 </div>
-                 <div>
-                     <p className="text-xs font-bold text-slate-400 uppercase">Service Address</p>
-                     <p className="text-sm text-slate-700 flex items-center gap-1">
-                        <MapPin size={14} className="text-red-500"/> {repair.address || "No address provided"}
-                     </p>
-                 </div>
+                 <div><p className="text-xs font-bold text-slate-400 uppercase">Customer</p><p className="text-sm font-bold text-slate-800 flex items-center gap-1"><User size={14}/> {repair.username}</p></div>
+                 <div><p className="text-xs font-bold text-slate-400 uppercase">Service Address</p><p className="text-sm text-slate-700 flex items-center gap-1"><MapPin size={14} className="text-red-500"/> {repair.address || "No address provided"}</p></div>
              </div>
-             <div className="mt-3 pt-3 border-t border-slate-200">
-                 <p className="text-xs font-bold text-slate-400 uppercase">Details</p>
-                 <p className="text-sm text-slate-700 italic">"{repair.notes}"</p>
-             </div>
+             <div className="mt-3 pt-3 border-t border-slate-200"><p className="text-xs font-bold text-slate-400 uppercase">Details</p><p className="text-sm text-slate-700 italic">"{repair.notes}"</p></div>
          </div>
       )}
-
       {!isCompleted && (
         <>
-          {isSubscriber && (
-             <p className="text-sm text-slate-600 mb-4 border-b border-slate-100 pb-4">
-                 Requests are usually processed within 24 hours.
-             </p>
-          )}
-
-          {/* Stepper UI */}
+          {isSubscriber && (<p className="text-sm text-slate-600 mb-4 border-b border-slate-100 pb-4">Requests are usually processed within 24 hours.</p>)}
           <div className="w-full overflow-x-auto pb-4">
             <div className="relative flex justify-between items-center min-w-[600px] px-2"> 
                <div className="absolute top-4 left-0 w-full h-1 bg-slate-100 -z-10 rounded-full"></div>
-               <div 
-                  className="absolute top-4 left-0 h-1 bg-red-600 -z-0 rounded-full transition-all duration-500"
-                  style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}
-               ></div>
+               <div className="absolute top-4 left-0 h-1 bg-red-600 -z-0 rounded-full transition-all duration-500" style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}></div>
                {steps.map((step, index) => {
                   const isStepCompleted = index <= currentStepIndex;
                   return (
                      <div key={index} className="flex flex-col items-center gap-2 relative group">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
-                           isStepCompleted 
-                              ? 'bg-red-600 border-red-600 text-white' 
-                              : 'bg-white border-slate-200 text-slate-300'
-                        }`}>
-                           {isStepCompleted ? <Check size={16} /> : step.icon} 
-                        </div>
-                        <span className={`text-[10px] font-bold text-center w-24 absolute -bottom-8 transition-colors ${
-                           isStepCompleted ? 'text-slate-800' : 'text-slate-400'
-                        }`}>
-                           {step.label}
-                        </span>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isStepCompleted ? 'bg-red-600 border-red-600 text-white' : 'bg-white border-slate-200 text-slate-300'}`}>{isStepCompleted ? <Check size={16} /> : step.icon}</div>
+                        <span className={`text-[10px] font-bold text-center w-24 absolute -bottom-8 transition-colors ${isStepCompleted ? 'text-slate-800' : 'text-slate-400'}`}>{step.label}</span>
                      </div>
                   )
                })}
             </div>
           </div>
-          
           <div className="mt-10 p-4 bg-slate-50 rounded-xl border border-slate-100 flex flex-col gap-2">
              <div className="flex gap-3">
                 <div className="text-slate-400 mt-0.5"><Megaphone size={18} /></div>
                 <div className="text-sm text-slate-600 w-full">
                    <p className="font-bold text-slate-700 mb-1">Status Update</p>
                    {repair.technicianNote || "Waiting for initial evaluation."}
-                   
-                   {/* ADMIN: Assign Technician */}
-                   {!isSubscriber && !isTechnician && technicians && (
-                       <div className="mt-4 border-t border-slate-200 pt-3">
-                           <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Assign Technician</label>
-                           <select 
-                             className="w-full border border-slate-300 rounded px-2 py-1 text-sm"
-                             value={repair.assignedTechId || ''}
-                             onChange={(e) => onAssign(repair.id, e.target.value)}
-                           >
-                               <option value="">-- Select Technician --</option>
-                               {technicians.map(t => (
-                                   <option key={t.id} value={t.uid}>{t.username}</option>
-                               ))}
-                           </select>
-                       </div>
-                   )}
+                   {!isSubscriber && !isTechnician && technicians && (<div className="mt-4 border-t border-slate-200 pt-3"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Assign Technician</label><select className="w-full border border-slate-300 rounded px-2 py-1 text-sm" value={repair.assignedTechId || ''} onChange={(e) => onAssign(repair.id, e.target.value)}><option value="">-- Select Technician --</option>{technicians.map(t => (<option key={t.id} value={t.uid}>{t.username}</option>))}</select></div>)}
                 </div>
              </div>
-
-             {/* TECHNICIAN & ADMIN ACTION */}
              {(isTechnician || isAdmin) && currentStepIndex < 3 && ( 
-                 <div className="mt-2 flex justify-end border-t border-slate-200 pt-3 gap-2">
-                    {isAdmin && (
-                        <button 
-                            onClick={() => onForceComplete(repair.id)}
-                            className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"
-                        >
-                            <CheckSquare size={16} /> Force Complete
-                        </button>
-                    )}
-                    <button 
-                        onClick={() => onTechUpdate(repair.id, currentStepIndex)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"
-                    >
-                        {actionLabel.icon} {actionLabel.text}
-                    </button>
+                 <div className="mt-2 border-t border-slate-200 pt-3">
+                    {isTechnician && !showAssignDevice && (<div className="flex justify-between mb-2"><button onClick={() => setShowAssignDevice(true)} className="text-xs font-bold text-blue-600 flex items-center gap-1 hover:underline"><Router size={14}/> Assign Equipment</button></div>)}
+                    {showAssignDevice && (<div className="bg-white border border-slate-300 rounded-lg p-3 mb-3"><p className="text-xs font-bold text-slate-500 uppercase mb-2">Select Equipment from Inventory</p><select className="w-full border p-2 rounded text-sm mb-2" value={selectedDevice} onChange={(e) => setSelectedDevice(e.target.value)}><option value="">-- Select Device --</option>{inventory && inventory.length > 0 ? inventory.map(item => (<option key={item.id} value={item.id}>{item.brand} {item.model} (SN: {item.serialNumber})</option>)) : <option disabled>No available inventory</option>}</select><div className="flex gap-2 justify-end"><button onClick={() => setShowAssignDevice(false)} className="text-xs font-bold text-slate-500">Cancel</button><button onClick={handleAssignSubmit} className="bg-green-600 text-white text-xs font-bold px-3 py-1 rounded">Confirm Assignment</button></div></div>)}
+                    <div className="flex justify-end gap-2">
+                        {isAdmin && (<button onClick={() => onForceComplete(repair.id)} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"><CheckSquare size={16} /> Force Complete</button>)}
+                        <button onClick={() => onTechUpdate(repair.id, currentStepIndex)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors">{actionLabel.icon} {actionLabel.text}</button>
+                    </div>
                  </div>
              )}
-             
-             {/* ADMIN WAITING MESSAGE */}
-             {isAdmin && currentStepIndex === 3 && (
-                 <div className="mt-2 flex justify-end border-t border-slate-200 pt-3">
-                      <span className="text-xs text-slate-500 font-bold bg-slate-100 px-3 py-1 rounded-full">Waiting for Customer Confirmation</span>
-                      <button 
-                            onClick={() => onForceComplete(repair.id)}
-                            className="ml-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1 rounded-lg font-bold text-xs shadow-sm flex items-center gap-1 transition-colors"
-                        >
-                            Override
-                        </button>
-                 </div>
-             )}
-
-             {/* CUSTOMER CONFIRMATION */}
-             {isSubscriber && currentStepIndex === 3 && (
-                 <div className="mt-2 flex justify-end border-t border-slate-200 pt-3">
-                     <div className="flex flex-col items-end gap-2">
-                        <p className="text-xs text-slate-500">Technician marked this as resolved. Please confirm.</p>
-                        <button 
-                           onClick={() => onConfirm(repair.id)}
-                           className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"
-                        >
-                           <CheckCircle2 size={16} /> Confirm Resolution
-                        </button>
-                     </div>
-                 </div>
-             )}
+             {isAdmin && currentStepIndex === 3 && (<div className="mt-2 flex justify-end border-t border-slate-200 pt-3"><span className="text-xs text-slate-500 font-bold bg-slate-100 px-3 py-1 rounded-full">Waiting for Customer Confirmation</span><button onClick={() => onForceComplete(repair.id)} className="ml-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1 rounded-lg font-bold text-xs shadow-sm flex items-center gap-1 transition-colors">Override</button></div>)}
+             {isSubscriber && currentStepIndex === 3 && (<div className="mt-2 flex justify-end border-t border-slate-200 pt-3"><div className="flex flex-col items-end gap-2"><p className="text-xs text-slate-500">Technician marked this as resolved. Please confirm.</p><button onClick={() => onConfirm(repair.id)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"><CheckCircle2 size={16} /> Confirm Resolution</button></div></div>)}
           </div>
         </>
       )}
-      
-      {isCompleted && (
-          <div className="mt-4 p-3 bg-white rounded-lg border border-green-100 flex items-center gap-3">
-              <CheckCircle2 className="text-green-600" size={20} />
-              <p className="text-sm text-green-800">This request has been completed.</p>
-          </div>
-      )}
+      {isCompleted && (<div className="mt-4 p-3 bg-white rounded-lg border border-green-100 flex items-center gap-3"><CheckCircle2 className="text-green-600" size={20} /><p className="text-sm text-green-800">This request has been completed.</p></div>)}
     </div>
   );
 };
@@ -583,18 +507,9 @@ const Layout = ({ children, user, onLogout }) => {
       <main className="flex-grow w-full px-4 sm:px-6 lg:px-8 py-6">{children}</main>
       <footer className="bg-slate-900 text-slate-300 py-8 border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-2">
-                <div className="bg-blue-600 p-1.5 rounded-lg"><Wifi className="h-5 w-5 text-white" /></div>
-                <span className="font-bold text-white tracking-tight">SwiftNet<span className="text-blue-400">ISP</span></span>
-            </div>
-            <div className="text-sm flex gap-6">
-                <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-                <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
-                <a href="#" className="hover:text-white transition-colors">Contact Support</a>
-            </div>
-            <div className="text-xs text-slate-500">
-                &copy; {new Date().getFullYear()} SwiftNet ISP. All rights reserved.
-            </div>
+            <div className="flex items-center gap-2"><div className="bg-blue-600 p-1.5 rounded-lg"><Wifi className="h-5 w-5 text-white" /></div><span className="font-bold text-white tracking-tight">SwiftNet<span className="text-blue-400">ISP</span></span></div>
+            <div className="text-sm flex gap-6"><a href="#" className="hover:text-white transition-colors">Privacy Policy</a><a href="#" className="hover:text-white transition-colors">Terms of Service</a><a href="#" className="hover:text-white transition-colors">Contact Support</a></div>
+            <div className="text-xs text-slate-500">&copy; {new Date().getFullYear()} SwiftNet ISP. All rights reserved.</div>
         </div>
       </footer>
     </div>
@@ -685,7 +600,7 @@ const Login = ({ onLogin }) => {
 };
 
 // 3. Subscriber Dashboard
-const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair }) => {
+const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair, userInventory, payments }) => {
   const [activeTab, setActiveTab] = useState('overview'); 
   const [showQR, setShowQR] = useState(false);
   const [refNumber, setRefNumber] = useState('');
@@ -700,7 +615,10 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   const [updatingCreds, setUpdatingCreds] = useState(false);
   const [followUpText, setFollowUpText] = useState('');
   const [followingUpTo, setFollowingUpTo] = useState(null);
-  const [selectedPlanForApp, setSelectedPlanForApp] = useState(null); // To track application wizard
+  const [selectedPlanForApp, setSelectedPlanForApp] = useState(null);
+  
+  // New State for Invoice
+  const [showInvoice, setShowInvoice] = useState(null);
 
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
@@ -725,7 +643,6 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
 
   // --- APPLICANT VIEW ---
   if (userData.status === 'applicant' || userData.accountNumber === 'PENDING') {
-      
       const handleWizardSubmit = async (addressData) => {
          try {
             const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
@@ -734,7 +651,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { 
                 plan: selectedPlanForApp.name,
                 address: fullAddress,
-                addressDetails: addressData // Save full details
+                addressDetails: addressData 
             });
             
             await sendSystemEmail(userData.email, 'Plan Application', `Application #${ticketId} for ${selectedPlanForApp.name} received.`);
@@ -767,54 +684,24 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
            )}
            <div className="mt-12 text-center"><button onClick={() => signOut(getAuth(app))} className="text-slate-400 hover:text-slate-600 text-sm underline">Sign Out</button></div>
            
-           {selectedPlanForApp && (
-               <ApplicationWizard 
-                  plan={selectedPlanForApp} 
-                  onClose={() => setSelectedPlanForApp(null)} 
-                  onSubmit={handleWizardSubmit}
-               />
-           )}
+           {selectedPlanForApp && (<ApplicationWizard plan={selectedPlanForApp} onClose={() => setSelectedPlanForApp(null)} onSubmit={handleWizardSubmit} />)}
         </div>
       );
   }
 
   // ... (Dashboard handlers) ...
-  const handlePaymentSubmit = async (e) => { e.preventDefault(); setSubmitting(true); await onPay(userData.id, refNumber, userData.username); setSubmitting(false); setShowQR(false); setRefNumber(''); };
+  const handlePaymentSubmit = async (e) => { 
+      e.preventDefault(); 
+      setSubmitting(true); 
+      await onPay(userData.id, refNumber, userData.username, userData.balance); // Passed Balance 
+      setSubmitting(false); 
+      setShowQR(false); 
+      setRefNumber(''); 
+  };
   const handleCreateTicket = async (e) => { if(e) e.preventDefault(); if (!newTicket.subject || !newTicket.message) return; setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: newTicket.subject, message: newTicket.message, status: 'open', adminReply: '', date: new Date().toISOString() }); setNewTicket({ subject: '', message: '' }); alert(`Ticket #${ticketId} submitted successfully!`); setActiveTab('support'); } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } setTicketLoading(false); };
   const handleFollowUpTicket = async (ticketId, originalMessage) => { if(!followUpText) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId); const timestamp = new Date().toLocaleString(); const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`; await updateDoc(docRef, { message: newMessage, status: 'open', date: new Date().toISOString() }); setFollowingUpTo(null); setFollowUpText(''); alert("Follow-up sent successfully!"); } catch(e) { console.error(e); alert("Failed to send follow-up"); } };
   const handleRequestRepair = async (e) => { e.preventDefault(); if(!repairNote) return; try { const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0'); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: randomId, userId: userData.uid, username: userData.username, address: userData.address || "No address provided", type: 'Service Repair - Internet', notes: repairNote, status: 'Submission', stepIndex: 0, technicianNote: 'Waiting for initial evaluation.', dateFiled: new Date().toISOString() }); setRepairNote(''); setShowRepairModal(false); alert("Repair request filed successfully!"); } catch(e) { console.error(e); alert("Failed to request repair."); } };
-  
-  // UPDATED: Handle Apply Plan to include plan details in ticket
-  const handleApplyPlan = (planName) => { 
-      if(confirm(`Apply for ${planName}?`)) { 
-          const msg = `Requesting plan change.\n\nCurrent: ${userData.plan}\nNew: ${planName}`; 
-          const submitPlanTicket = async () => { 
-              setTicketLoading(true); 
-              try { 
-                  const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
-                  await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { 
-                      ticketId, 
-                      userId: userData.uid, 
-                      username: userData.username, 
-                      subject: 'Plan Change Request', 
-                      message: msg, 
-                      status: 'open', 
-                      adminReply: '', 
-                      date: new Date().toISOString(),
-                      isPlanChange: true, // Flag for Admin
-                      targetPlan: planName // Target Plan for Admin to approve
-                  }); 
-                  alert(`Application submitted! Ticket #${ticketId}.`); 
-                  setActiveTab('support'); 
-              } catch(e) { 
-                  alert("Failed."); 
-              } 
-              setTicketLoading(false); 
-          }; 
-          submitPlanTicket(); 
-      } 
-  };
-
+  const handleApplyPlan = (planName) => { if(confirm(`Apply for ${planName}?`)) { const msg = `Requesting plan change.\n\nCurrent: ${userData.plan}\nNew: ${planName}`; const submitPlanTicket = async () => { setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'Plan Change Request', message: msg, status: 'open', adminReply: '', date: new Date().toISOString(), isPlanChange: true, targetPlan: planName }); alert(`Application submitted! Ticket #${ticketId}.`); setActiveTab('support'); } catch(e) { alert("Failed."); } setTicketLoading(false); }; submitPlanTicket(); } };
   const handleUpdatePassword = async (e) => { e.preventDefault(); if (managePass.length < 6) return alert("Min 6 chars."); setUpdatingCreds(true); try { await updatePassword(auth.currentUser, managePass); setManagePass(''); alert("Password updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
   const handleUpdateEmail = async (e) => { e.preventDefault(); if (!manageEmail) return; setUpdatingCreds(true); try { await updateEmail(auth.currentUser, manageEmail); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { email: manageEmail }); setManageEmail(''); alert("Email updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
 
@@ -824,9 +711,9 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
-        {['overview', 'repairs', 'plans', 'speedtest', 'support', 'settings'].map(tab => (
+        {['overview', 'billing', 'repairs', 'plans', 'speedtest', 'support', 'settings'].map(tab => (
            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
+              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'billing' ? <><CreditCard size={16}/> Billing</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
            </button>
         ))}
       </div>
@@ -849,26 +736,30 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
               <div><p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Total Balance</p><p className="text-xl font-bold text-slate-800">₱{userData.balance?.toFixed(2)}</p></div>
             </div>
           </div>
+          
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden h-fit">
-              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                <h3 className="font-bold text-slate-800">Billing Overview</h3>
-                {userData.balance > 0 && <span className="text-[10px] uppercase font-bold bg-red-100 text-red-600 px-3 py-1 rounded-full">Payment Due</span>}
-              </div>
-              <div className="p-8 space-y-6">
-                <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Account No.</span><span className="font-mono font-medium text-slate-700">{userData.accountNumber}</span></div>
-                <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Due Date</span><span className={`font-medium ${isOverdue ? 'text-red-600' : 'text-slate-700'}`}>{new Date(userData.dueDate).toLocaleDateString()}</span></div>
-                <div className="flex justify-between items-center pt-2"><span className="text-slate-800 font-bold text-lg">Total Due</span><span className="text-blue-700 font-bold text-3xl">₱{userData.balance?.toFixed(2)}</span></div>
-                {userData.balance > 0 ? (
-                  <button onClick={() => setShowQR(true)} className="w-full mt-4 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center space-x-2 shadow-lg shadow-blue-200 transition-all"><Smartphone size={20} /><span>Pay with QR Code</span></button>
-                ) : <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center justify-center text-green-700 space-x-2"><CheckCircle size={20} /><span className="font-medium">No payment due. You are all set!</span></div>}
-              </div>
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Router size={18} className="text-blue-600"/> My Equipment</h3>
+                  <div className="space-y-3">
+                      {userInventory && userInventory.length > 0 ? userInventory.map(item => (
+                          <div key={item.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-200">
+                              <div className="flex items-center gap-3">
+                                  <div className="bg-white p-2 rounded-lg border border-slate-100"><Server size={16} className="text-slate-500"/></div>
+                                  <div>
+                                      <p className="text-sm font-bold text-slate-800">{item.brand} {item.model}</p>
+                                      <p className="text-xs text-slate-500 font-mono">{item.serialNumber}</p>
+                                  </div>
+                              </div>
+                              <span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded">Active</span>
+                          </div>
+                      )) : <p className="text-sm text-slate-400 text-center py-4">No equipment assigned.</p>}
+                  </div>
             </div>
+
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit">
               <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-slate-800">System Notifications</h3><button onClick={() => setActiveTab('support')} className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">Report Issue <ArrowRight size={14} /></button></div>
               <div className="space-y-4">
                 {userData.status === 'disconnected' && (<div className="bg-red-50 border-l-4 border-red-500 p-5 rounded-r-xl"><div className="flex items-start"><AlertCircle className="text-red-500 mt-0.5 mr-3" size={20} /><div><h4 className="font-bold text-red-700">Service Disconnected</h4><p className="text-sm text-red-600 mt-1">Your internet service is suspended.</p></div></div></div>)}
-                {/* Mapping Combined Alerts */}
                 {allAlerts && allAlerts.length > 0 ? allAlerts.map((ann) => (
                   <div key={ann.id} className={`flex items-start p-4 rounded-xl border ${ann.isPublic ? 'bg-slate-50 border-transparent' : 'bg-blue-50 border-blue-100'}`}>
                     <div className={`p-2.5 rounded-full mr-4 flex-shrink-0 ${getBgColor(ann.type)}`}>{getIcon(ann.type)}</div>
@@ -886,6 +777,61 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
             </div>
           </div>
         </>
+      )}
+
+      {activeTab === 'billing' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden h-fit">
+              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                <h3 className="font-bold text-slate-800">Billing Overview</h3>
+                {userData.balance > 0 && <span className="text-[10px] uppercase font-bold bg-red-100 text-red-600 px-3 py-1 rounded-full">Payment Due</span>}
+              </div>
+              <div className="p-8 space-y-6">
+                <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Account No.</span><span className="font-mono font-medium text-slate-700">{userData.accountNumber}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Due Date</span><span className={`font-medium ${isOverdue ? 'text-red-600' : 'text-slate-700'}`}>{new Date(userData.dueDate).toLocaleDateString()}</span></div>
+                <div className="flex justify-between items-center pt-2"><span className="text-slate-800 font-bold text-lg">Total Due</span><span className="text-blue-700 font-bold text-3xl">₱{userData.balance?.toFixed(2)}</span></div>
+                {userData.balance > 0 ? (
+                  <button onClick={() => setShowQR(true)} className="w-full mt-4 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center space-x-2 shadow-lg shadow-blue-200 transition-all"><Smartphone size={20} /><span>Pay with QR Code</span></button>
+                ) : <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center justify-center text-green-700 space-x-2"><CheckCircle size={20} /><span className="font-medium">No payment due. You are all set!</span></div>}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden h-fit">
+               <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
+                  <h3 className="font-bold text-slate-800">Payment History</h3>
+               </div>
+               <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-50 text-slate-500">
+                          <tr>
+                              <th className="p-4">Date</th>
+                              <th className="p-4">Ref #</th>
+                              <th className="p-4">Amount</th>
+                              <th className="p-4">Status</th>
+                              <th className="p-4">Invoice</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                          {payments && payments.length > 0 ? payments.map(p => (
+                              <tr key={p.id} className="hover:bg-slate-50">
+                                  <td className="p-4">{new Date(p.date).toLocaleDateString()}</td>
+                                  <td className="p-4 font-mono text-slate-600">{p.refNumber}</td>
+                                  <td className="p-4 font-bold text-slate-700">₱{p.amount ? parseFloat(p.amount).toFixed(2) : '0.00'}</td>
+                                  <td className="p-4">
+                                      <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${p.status === 'verified' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{p.status}</span>
+                                  </td>
+                                  <td className="p-4">
+                                      {p.status === 'verified' ? (
+                                          <button onClick={() => setShowInvoice(p)} className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-xs font-bold"><Download size={14}/> PDF</button>
+                                      ) : <span className="text-slate-300 text-xs">-</span>}
+                                  </td>
+                              </tr>
+                          )) : <tr><td colSpan="5" className="p-6 text-center text-slate-400">No payments found.</td></tr>}
+                      </tbody>
+                  </table>
+               </div>
+            </div>
+          </div>
       )}
 
       {activeTab === 'repairs' && (
@@ -932,17 +878,24 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       <div className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 mb-4">Payment posting will reflect once the admin verifies your payment. Your reference number provided should match on the payment they received.</div>
       <div className="w-full text-left"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reference Number</label><form onSubmit={handlePaymentSubmit} className="flex gap-3"><input type="text" required placeholder="e.g. Ref-123456" className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium" value={refNumber} onChange={(e) => setRefNumber(e.target.value)} /><button type="submit" disabled={submitting} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200">{submitting ? '...' : 'Verify'}</button></form></div></div></div></div>)}
       {showRepairModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-red-600 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center gap-2"><Hammer size={20} /> Request Service Repair</h3><button onClick={() => setShowRepairModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><div className="p-6"><p className="text-slate-600 text-sm mb-4">Please describe the issue.</p><textarea className="w-full border border-slate-300 rounded-lg p-3 h-32" value={repairNote} onChange={(e) => setRepairNote(e.target.value)}></textarea><div className="mt-4 flex justify-end gap-2"><button onClick={() => setShowRepairModal(false)} className="px-4 py-2 text-slate-500 font-bold">Cancel</button><button onClick={handleRequestRepair} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700">Submit</button></div></div></div></div>)}
+      
+      {showInvoice && (
+          <InvoiceModal 
+              invoice={showInvoice}
+              userData={userData}
+              onClose={() => setShowInvoice(null)}
+          />
+      )}
     </div>
   );
 };
 
-// 4. Admin Dashboard
-const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
+// 4. Admin Dashboard (Unchanged from previous, but ensuring proper imports)
+const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs, inventory, onAddInventory, onDeleteInventory }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
-  // NEW: Add Technician Modal
   const [showAddTechModal, setShowAddTechModal] = useState(false); 
   const [newTech, setNewTech] = useState({ email: '', password: '', username: '' });
 
@@ -950,7 +903,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [showDateModal, setShowDateModal] = useState(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showAnnounceModal, setShowAnnounceModal] = useState(false);
-  const [showNotifyModal, setShowNotifyModal] = useState(false); // New Notification Modal
+  const [showNotifyModal, setShowNotifyModal] = useState(false); 
   
   const [adminNewPass, setAdminNewPass] = useState('');
   const [replyText, setReplyText] = useState('');
@@ -958,7 +911,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   
   const [plans, setPlans] = useState([]);
   const [newPlanName, setNewPlanName] = useState('');
-  const [technicians, setTechnicians] = useState([]); // Added state for technicians
+  const [technicians, setTechnicians] = useState([]);
 
   const [newUser, setNewUser] = useState({ email: '', password: '', username: '', accountNumber: '', plan: '' });
   const [newAdmin, setNewAdmin] = useState({ email: '', password: '', username: '' });
@@ -968,11 +921,11 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [newDueDate, setNewDueDate] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   
-  // NEW: Job Creation State
+  const [newInventory, setNewInventory] = useState({ brand: '', model: '', serialNumber: '' });
+
   const [showCreateJobModal, setShowCreateJobModal] = useState(false); 
   const [newJob, setNewJob] = useState({ targetUserId: '', type: 'New Installation', notes: '', assignedTechId: '' });
 
-  // ... (Existing useEffect and Handlers remain same) ...
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -985,7 +938,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
     return () => unsubscribe();
   }, []);
 
-  // Fetch Technicians for dropdown
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), where('role', '==', 'technician'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -1001,7 +953,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const handleAddSubscriber = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "Secondary"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newUser.email, newUser.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newUser.username, email: newUser.email, accountNumber: newUser.accountNumber, plan: newUser.plan || (plans[0] ? plans[0].name : 'Basic'), balance: 0, status: 'active', role: 'subscriber', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddModal(false); alert("Success"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
   const handleAddAdmin = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "SecondaryAdmin"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newAdmin.email, newAdmin.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newAdmin.username, email: newAdmin.email, role: 'admin', accountNumber: 'ADMIN', plan: 'N/A', balance: 0, status: 'active', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddAdminModal(false); alert("Admin created"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
   
-  // ADDED: Handle Add Technician
   const handleAddTechnician = async (e) => {
     e.preventDefault();
     setIsCreatingUser(true);
@@ -1034,7 +985,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const handlePostAnnouncement = async (e) => { e.preventDefault(); if(!newAnnouncement.title) return; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), { ...newAnnouncement, date: new Date().toISOString() }); setShowAnnounceModal(false); };
   const handleDeleteAnnouncement = async (id) => { if(confirm("Delete?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION, id)); };
   
-  // FIX: Ensure date update is handled correctly and visibility issue
   const handleUpdateDueDate = async (e) => { 
       e.preventDefault(); 
       if (!showDateModal || !newDueDate) return;
@@ -1051,7 +1001,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
 
   const handleReplyTicket = async (ticketId) => { if(!replyText) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId), { adminReply: replyText, status: 'resolved' }); setReplyingTo(null); setReplyText(''); } catch(e) { alert("Failed"); } };
   
-  // Handle Admin Repair Updates: Blocks completion until customer confirms
   const handleUpdateRepairStatus = async (repairId, currentStep) => { 
       if (currentStep === 3) {
           alert("Waiting for customer confirmation. You cannot force complete this step.");
@@ -1069,7 +1018,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       } 
   };
 
-  // NEW: Handle Force Complete
   const handleForceComplete = async (repairId) => {
       if (!confirm("Force complete this repair? This bypasses customer confirmation.")) return;
       try {
@@ -1083,16 +1031,12 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       } catch(e) { console.error(e); alert("Failed to force complete."); }
   };
 
-  // UPDATED: Handle Plan Change Approval
   const handleApprovePlanChange = async (ticket) => {
       if(!confirm(`Approve plan change to ${ticket.targetPlan} for ${ticket.username}?`)) return;
       try {
-          // Update User Plan
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.userId), {
               plan: ticket.targetPlan
           });
-          
-          // Close Ticket
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), {
               status: 'resolved',
               adminReply: `Plan change to ${ticket.targetPlan} approved and updated.`
@@ -1110,7 +1054,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const handleDeleteSubscriber = async (id) => { if (confirm("Delete subscriber?")) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id)); alert("Deleted."); } catch (e) { alert("Failed."); } } };
   const handleVerifyPayment = async (paymentId, userId) => { if (!confirm("Verify payment?")) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION, paymentId), { status: 'verified', verifiedAt: new Date().toISOString() }); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { balance: 0, status: 'active', lastPaymentDate: new Date().toISOString() }); alert("Verified!"); } catch (e) { alert("Failed."); } };
 
-  // Admin: Assign Tech Logic
   const handleAssignTech = async (repairId, techUid) => {
       if(!techUid) return;
       const tech = technicians.find(t => t.uid === techUid);
@@ -1124,19 +1067,14 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       } catch(e) { console.error(e); }
   };
 
-  // NEW: Admin Manual Job Creation Logic
   const handleAdminCreateJob = async (e) => {
       e.preventDefault();
       if(!newJob.targetUserId || !newJob.notes) return alert("Select user and add details.");
-      
       const targetUser = subscribers.find(u => u.id === newJob.targetUserId);
       const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0');
-      
-      // If tech is assigned, start at Step 1 (Evaluation/Assigned), else Step 0 (Submission)
       const startStep = newJob.assignedTechId ? 1 : 0;
       const startStatus = newJob.assignedTechId ? 'Evaluation' : 'Submission';
       const assignedTechName = newJob.assignedTechId ? technicians.find(t => t.uid === newJob.assignedTechId)?.username : null;
-
       try {
           await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), {
               requestId: randomId,
@@ -1161,6 +1099,12 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       }
   };
 
+  const handleInventorySubmit = (e) => {
+      e.preventDefault();
+      onAddInventory(newInventory);
+      setNewInventory({ brand: '', model: '', serialNumber: '' });
+  };
+
   const filteredSubscribers = subscribers.filter(sub => (sub.username?.toLowerCase().includes(searchTerm.toLowerCase()) || sub.accountNumber?.includes(searchTerm)));
   const activeRepairs = (repairs || []).filter(r => r.status !== 'Completed');
   const historyRepairs = (repairs || []).filter(r => r.status === 'Completed');
@@ -1168,8 +1112,10 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit flex space-x-1 overflow-x-auto max-w-full mx-auto md:mx-0">
-         {['subscribers', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>{tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab}</button>
+         {['subscribers', 'repairs', 'inventory', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
+              {tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'inventory' ? <><Box size={16}/> Inventory</> : tab}
+            </button>
          ))}
       </div>
 
@@ -1183,7 +1129,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                <button onClick={() => setShowAnnounceModal(true)} className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-sm"><Megaphone size={18} /> Alert</button>
                <button onClick={() => setShowPasswordModal(true)} className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-sm"><Lock size={18} /> Pass</button>
                
-               {/* New Button for Adding Tech */}
                <button onClick={() => setShowAddTechModal(true)} className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-lg shadow-orange-200"><HardHat size={18} /> Add Tech</button>
                
                <button onClick={() => setShowAddAdminModal(true)} className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-lg shadow-slate-300"><UserPlus size={18} /> Add Admin</button>
@@ -1272,6 +1217,59 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
        {activeTab === 'plans' && <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 className="font-bold mb-4">Manage Plans</h3><div className="space-y-2">{plans.map(p=><div key={p.id} className="flex justify-between items-center border-b pb-2"><span>{p.name}</span><button onClick={()=>handleDeletePlan(p.id)} className="text-red-500"><Trash2 size={14}/></button></div>)}</div><form className="mt-4 flex gap-2" onSubmit={handleAddPlan}><input className="border p-2 rounded text-sm" placeholder="New Plan" value={newPlanName} onChange={e=>setNewPlanName(e.target.value)}/><button className="bg-blue-600 text-white px-4 py-2 rounded text-sm">Add</button></form></div>}
        {activeTab === 'payments' && <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 className="font-bold mb-4">Payments</h3><div className="space-y-2">{payments.map(p=><div key={p.id} className="flex justify-between border-b pb-2"><span>{p.username}</span><span className="font-mono text-blue-600">{p.refNumber}</span><span className="text-xs text-slate-400">{new Date(p.date).toLocaleDateString()}</span><span className={`px-2 py-1 rounded text-xs font-bold uppercase ${p.status === 'verified' ? 'bg-green-200 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{p.status || 'pending'}</span>{p.status !== 'verified' && (<button onClick={() => handleVerifyPayment(p.id, p.userId)} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-blue-700 transition-colors">Verify</button>)}</div>)}</div></div>}
        {activeTab === 'speedtest' && <SpeedTest />}
+       
+       {/* NEW: Inventory Management Tab */}
+       {activeTab === 'inventory' && (
+           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+               <h3 className="font-bold mb-6 text-lg flex items-center gap-2"><Box size={20}/> Inventory Management</h3>
+               
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                   <div className="md:col-span-2">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-slate-50 text-slate-500">
+                                    <tr>
+                                        <th className="p-3">Brand</th>
+                                        <th className="p-3">Model</th>
+                                        <th className="p-3">Serial Number</th>
+                                        <th className="p-3">Status</th>
+                                        <th className="p-3 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {inventory && inventory.length > 0 ? inventory.map(item => (
+                                        <tr key={item.id}>
+                                            <td className="p-3">{item.brand}</td>
+                                            <td className="p-3">{item.model}</td>
+                                            <td className="p-3 font-mono">{item.serialNumber}</td>
+                                            <td className="p-3">
+                                                <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${item.status === 'Available' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                    {item.status}
+                                                </span>
+                                            </td>
+                                            <td className="p-3 text-right">
+                                                <button onClick={() => onDeleteInventory(item.id)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50"><Trash2 size={16}/></button>
+                                            </td>
+                                        </tr>
+                                    )) : <tr><td colSpan="5" className="p-4 text-center text-slate-400">No inventory items.</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+                   </div>
+                   <div>
+                       <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                           <h4 className="font-bold text-sm text-slate-700 mb-3">Add New Item</h4>
+                           <form onSubmit={handleInventorySubmit} className="space-y-3">
+                               <input className="w-full border p-2 rounded text-sm" placeholder="Brand (e.g. Huawei)" value={newInventory.brand} onChange={e => setNewInventory({...newInventory, brand: e.target.value})} required/>
+                               <input className="w-full border p-2 rounded text-sm" placeholder="Model (e.g. HG8145V5)" value={newInventory.model} onChange={e => setNewInventory({...newInventory, model: e.target.value})} required/>
+                               <input className="w-full border p-2 rounded text-sm" placeholder="Serial Number" value={newInventory.serialNumber} onChange={e => setNewInventory({...newInventory, serialNumber: e.target.value})} required/>
+                               <button className="w-full bg-blue-600 text-white py-2 rounded text-sm font-bold hover:bg-blue-700">Add Item</button>
+                           </form>
+                       </div>
+                   </div>
+               </div>
+           </div>
+       )}
 
        {/* Modals */}
        {/* NEW: Create Job Modal */}
@@ -1318,59 +1316,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
        {showAddTechModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><div className="bg-orange-600 p-5 flex justify-between items-center -m-6 mb-6"><h3 className="text-white font-bold flex items-center gap-2"><HardHat size={18} /> Add New Technician</h3><button onClick={() => setShowAddTechModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><form onSubmit={handleAddTechnician} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tech Name</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.username} onChange={(e) => setNewTech({...newTech, username: e.target.value})} placeholder="Technician Name" /></div><div className="border-t border-slate-100 pt-2"></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.email} onChange={(e) => setNewTech({...newTech, email: e.target.value})} /></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-mono" value={newTech.password} onChange={(e) => setNewTech({...newTech, password: e.target.value})} /></div><button type="submit" disabled={isCreatingUser} className="w-full py-2.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700">{isCreatingUser ? 'Creating...' : 'Create Technician Account'}</button></form></div></div>)}
        {showAddAdminModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><h3 className="font-bold mb-4">Add Admin</h3><form onSubmit={handleAddAdmin} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Name" value={newAdmin.username} onChange={e=>setNewAdmin({...newAdmin, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newAdmin.email} onChange={e=>setNewAdmin({...newAdmin, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newAdmin.password} onChange={e=>setNewAdmin({...newAdmin, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddAdminModal(false)} className="text-slate-500">Cancel</button><button className="bg-slate-800 text-white px-4 py-2 rounded">Create</button></div></form></div></div>)}
        {showAddModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Add Subscriber</h3><form onSubmit={handleAddSubscriber} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Username" value={newUser.username} onChange={e=>setNewUser({...newUser, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Account #" value={newUser.accountNumber} onChange={e=>setNewUser({...newUser, accountNumber: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newUser.email} onChange={e=>setNewUser({...newUser, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newUser.password} onChange={e=>setNewUser({...newUser, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddModal(false)} className="text-slate-500">Cancel</button><button className="bg-blue-600 text-white px-4 py-2 rounded">Add</button></div></form></div></div>)}
-       
-       {/* UPDATED: Announcement Management Modal */}
-       {showAnnounceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
-            <h3 className="font-bold mb-4 text-lg text-slate-800 flex items-center gap-2"><Megaphone size={20}/> Manage Announcements</h3>
-            
-            {/* Post New */}
-            <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100 flex-shrink-0">
-              <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Post New</h4>
-              <input 
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mb-2 outline-none focus:border-blue-500 bg-white" 
-                placeholder="Title" 
-                value={newAnnouncement.title} 
-                onChange={e=>setNewAnnouncement({...newAnnouncement, title: e.target.value})}
-              />
-              <textarea 
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mb-2 outline-none focus:border-blue-500 resize-none h-20 bg-white" 
-                placeholder="Message" 
-                value={newAnnouncement.message} 
-                onChange={e=>setNewAnnouncement({...newAnnouncement, message: e.target.value})}
-              ></textarea>
-              <div className="flex justify-end">
-                <button onClick={handlePostAnnouncement} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors">Post Announcement</button>
-              </div>
-            </div>
-
-            {/* Previous List */}
-            <div className="flex-1 overflow-y-auto pr-1">
-              <h4 className="text-xs font-bold text-slate-500 uppercase mb-2 sticky top-0 bg-white py-1 z-10">Previous Announcements</h4>
-              <div className="space-y-3 pb-2">
-                {announcements && announcements.length > 0 ? announcements.map(ann => (
-                  <div key={ann.id} className="flex justify-between items-start p-3 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors">
-                    <div>
-                      <p className="font-bold text-sm text-slate-800">{ann.title}</p>
-                      <p className="text-xs text-slate-500 mt-1">{ann.message}</p>
-                      <p className="text-[10px] text-slate-400 mt-1">{new Date(ann.date).toLocaleDateString()}</p>
-                    </div>
-                    <button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-slate-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-colors ml-2">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                )) : <div className="text-center text-slate-400 text-sm py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">No active announcements.</div>}
-              </div>
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end flex-shrink-0">
-              <button onClick={()=>setShowAnnounceModal(false)} className="text-slate-500 font-bold text-sm hover:text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50">Close</button>
-            </div>
-          </div>
-        </div>
-       )}
-
+       {showAnnounceModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Post Announcement</h3><input className="w-full border p-2 rounded mb-2" placeholder="Title" value={newAnnouncement.title} onChange={e=>setNewAnnouncement({...newAnnouncement, title: e.target.value})}/><textarea className="w-full border p-2 rounded mb-2" placeholder="Message" value={newAnnouncement.message} onChange={e=>setNewAnnouncement({...newAnnouncement, message: e.target.value})}></textarea><div className="flex justify-end gap-2"><button onClick={()=>setShowAnnounceModal(false)} className="text-slate-500">Cancel</button><button onClick={handlePostAnnouncement} className="bg-blue-600 text-white px-4 py-2 rounded">Post</button></div></div></div>)}
        {showPasswordModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Change Password</h3><input className="w-full border p-2 rounded mb-4" type="password" placeholder="New Password" value={adminNewPass} onChange={e=>setAdminNewPass(e.target.value)}/><div className="flex justify-end gap-2"><button onClick={()=>setShowPasswordModal(false)} className="text-slate-500">Cancel</button><button onClick={handleChangePassword} className="bg-blue-600 text-white px-4 py-2 rounded">Update</button></div></div></div>)}
        {showDateModal && (
          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
@@ -1396,7 +1342,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
 };
 
 // 5. New Technician Dashboard (Unchanged)
-const TechnicianDashboard = ({ repairs, onTechUpdate }) => {
+const TechnicianDashboard = ({ repairs, onTechUpdate, inventory, onAssignDevice }) => {
     const activeTechRepairs = (repairs || []).filter(r => r.status === 'Evaluation' || r.status === 'Processing');
     const historyTechRepairs = (repairs || []).filter(r => r.status === 'Completed');
     return (
@@ -1409,7 +1355,15 @@ const TechnicianDashboard = ({ repairs, onTechUpdate }) => {
             </div>
             <div className="space-y-4">
                {activeTechRepairs.length > 0 ? activeTechRepairs.map(repair => (
-                   <RepairStatusCard key={repair.id} repair={repair} isSubscriber={false} isTechnician={true} onTechUpdate={onTechUpdate} />
+                   <RepairStatusCard 
+                        key={repair.id} 
+                        repair={repair} 
+                        isSubscriber={false} 
+                        isTechnician={true} 
+                        onTechUpdate={onTechUpdate}
+                        inventory={inventory}
+                        onAssignDevice={onAssignDevice}
+                    />
                )) : <div className="text-center py-20 bg-white rounded-2xl border border-slate-200"><CheckCircle2 size={48} className="mx-auto text-green-300 mb-3" /><p className="text-slate-500">All active repairs completed!</p></div>}
             </div>
             {historyTechRepairs.length > 0 && (
@@ -1437,6 +1391,10 @@ export default function App() {
   const [tickets, setTickets] = useState([]);
   const [repairs, setRepairs] = useState([]);
   const [notifications, setNotifications] = useState([]); 
+  // Inventory States
+  const [inventory, setInventory] = useState([]);
+  const [availableInventory, setAvailableInventory] = useState([]);
+  const [userInventory, setUserInventory] = useState([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -1492,6 +1450,7 @@ export default function App() {
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), orderBy('date', 'desc')), s => setPayments(s.docs.map(d => ({id: d.id, ...d.data()}))));
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), orderBy('dateFiled', 'desc')), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()}))));
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), orderBy('date', 'desc')), s => setTickets(s.docs.map(d => ({id: d.id, ...d.data()}))));
+       onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', INVENTORY_COLLECTION), s => setInventory(s.docs.map(d => ({id: d.id, ...d.data()}))));
     } 
     else if (user.role === 'technician') {
         const q = query(
@@ -1502,6 +1461,8 @@ export default function App() {
             const allAssigned = s.docs.map(d => ({id: d.id, ...d.data()}));
             setRepairs(allAssigned); 
         });
+        // Techs need to see Available inventory
+        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', INVENTORY_COLLECTION), where('status', '==', 'Available')), s => setAvailableInventory(s.docs.map(d => ({id: d.id, ...d.data()}))));
     }
     else {
        onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.uid), s => setMySubscriberData({id: s.id, ...s.data()}));
@@ -1510,16 +1471,29 @@ export default function App() {
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', NOTIFICATIONS_COLLECTION), where('userId', '==', user.uid)), s => {
            setNotifications(s.docs.map(d => ({id: d.id, ...d.data()})));
        });
+       // Fetch payments for subscriber
+       onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), where('userId', '==', user.uid)), s => {
+           setPayments(s.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b)=>new Date(b.date)-new Date(a.date)));
+       });
+       // Users see their assigned inventory
+       onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', INVENTORY_COLLECTION), where('assignedTo', '==', user.uid)), s => setUserInventory(s.docs.map(d => ({id: d.id, ...d.data()}))));
     }
     onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), orderBy('date', 'desc')), s => setAnnouncements(s.docs.map(d => ({id: d.id, ...d.data()}))));
   }, [user]);
 
   const handleLogout = async () => await signOut(auth);
 
-  const handlePayment = async (id, refNumber) => {
+  const handlePayment = async (id, refNumber, username, amount) => { // Added Amount
     if (!refNumber) return;
     try {
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), { userId: id, username: user.displayName || user.email, refNumber, date: new Date().toISOString(), status: 'submitted' });
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), { 
+          userId: id, 
+          username: username || user.email, 
+          refNumber, 
+          date: new Date().toISOString(), 
+          status: 'submitted',
+          amount: amount || 0 // Store amount for invoice
+      });
       alert(`Payment Submitted for Verification! Ref: ${refNumber}`);
     } catch (e) { alert("Payment failed."); }
   };
@@ -1542,17 +1516,73 @@ export default function App() {
       } catch(e) { console.error(e); alert("Failed to confirm."); }
   };
 
+  // --- Inventory Handlers ---
+  const handleAddInventory = async (item) => {
+      try {
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', INVENTORY_COLLECTION), {
+              ...item,
+              status: 'Available',
+              assignedTo: null,
+              dateAdded: new Date().toISOString()
+          });
+          alert("Item added to inventory.");
+      } catch(e) { console.error(e); alert("Failed to add item."); }
+  };
+
+  const handleDeleteInventory = async (id) => {
+      if(!confirm("Delete this item?")) return;
+      try {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', INVENTORY_COLLECTION, id));
+      } catch(e) { console.error(e); }
+  };
+
+  const handleAssignDevice = async (inventoryId, userId) => {
+      if(!inventoryId || !userId) return;
+      try {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', INVENTORY_COLLECTION, inventoryId), {
+              status: 'Assigned',
+              assignedTo: userId,
+              dateAssigned: new Date().toISOString()
+          });
+          alert("Device successfully assigned to customer!");
+      } catch(e) { console.error(e); alert("Assignment failed."); }
+  };
+
   if (loading) return <div className="min-h-screen flex items-center justify-center text-blue-600">Loading SwiftNet...</div>;
   if (!user) return <Login onLogin={() => {}} />;
 
   return (
     <Layout user={user} onLogout={handleLogout}>
       {user.role === 'admin' ? (
-        <AdminDashboard subscribers={subscribers} announcements={announcements} payments={payments} tickets={tickets} repairs={repairs} />
+        <AdminDashboard 
+            subscribers={subscribers} 
+            announcements={announcements} 
+            payments={payments} 
+            tickets={tickets} 
+            repairs={repairs} 
+            inventory={inventory}
+            onAddInventory={handleAddInventory}
+            onDeleteInventory={handleDeleteInventory}
+        />
       ) : user.role === 'technician' ? (
-        <TechnicianDashboard repairs={repairs} onTechUpdate={handleTechUpdateStatus} />
+        <TechnicianDashboard 
+            repairs={repairs} 
+            onTechUpdate={handleTechUpdateStatus} 
+            inventory={availableInventory}
+            onAssignDevice={handleAssignDevice}
+        />
       ) : (
-        <SubscriberDashboard userData={mySubscriberData || {}} onPay={handlePayment} announcements={announcements} notifications={notifications} tickets={tickets} repairs={repairs} onConfirmRepair={handleConfirmRepair} />
+        <SubscriberDashboard 
+            userData={mySubscriberData || {}} 
+            onPay={handlePayment} 
+            announcements={announcements} 
+            notifications={notifications} 
+            tickets={tickets} 
+            repairs={repairs} 
+            onConfirmRepair={handleConfirmRepair} 
+            userInventory={userInventory}
+            payments={payments}
+        />
       )}
     </Layout>
   );
