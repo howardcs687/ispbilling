@@ -96,7 +96,8 @@ import {
   BarChart3,
   TrendingUp,
   PieChart,
-  Target
+  Target,
+  DollarSign
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -131,7 +132,6 @@ const REPAIRS_COLLECTION = 'isp_repairs_v1';
 const NOTIFICATIONS_COLLECTION = 'isp_notifications_v1';
 const INVENTORY_COLLECTION = 'isp_inventory_v1'; 
 const LOGS_COLLECTION = 'isp_audit_logs_v1'; 
-const REFERRALS_COLLECTION = 'isp_referrals_v1'; // NEW Collection for permission-safe querying
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
 // --- Helper Functions ---
@@ -141,7 +141,7 @@ const sendSystemEmail = async (to, subject, htmlContent) => {
 };
 
 const generateReferralCode = (name) => {
-    const prefix = (name || 'USER').substring(0, 4).toUpperCase().replace(/[^A-Z]/g, 'USER');
+    const prefix = name.substring(0, 4).toUpperCase().replace(/[^A-Z]/g, 'USER');
     const suffix = Math.floor(1000 + Math.random() * 9000);
     return `${prefix}-${suffix}`;
 };
@@ -583,7 +583,7 @@ const Login = ({ onLogin }) => {
            balance: 0,
            address: '', 
            dueDate: new Date().toISOString(),
-           myReferralCode: myCode 
+           myReferralCode: myCode
          });
       } else {
          await signInWithEmailAndPassword(auth, email, password);
@@ -636,7 +636,7 @@ const Login = ({ onLogin }) => {
   );
 };
 
-// 3. Subscriber Dashboard (Updated with Referrals Tab)
+// 3. Subscriber Dashboard (Unchanged except for referral prop being passed)
 const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair, userInventory, payments }) => {
   const [activeTab, setActiveTab] = useState('overview'); 
   const [showQR, setShowQR] = useState(false);
@@ -666,20 +666,18 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
     return () => unsubscribe();
   }, []);
 
-  // Fetch Referrals - NEW SAFE QUERY
+  // Fetch Referrals
   useEffect(() => {
-      if(!userData.uid) return;
-      // Query the new referrals collection where I am the owner (userId matches my ID)
-      const q = query(collection(db, 'artifacts', appId, 'public', 'data', REFERRALS_COLLECTION), where('userId', '==', userData.uid));
+      if(!userData.myReferralCode) return;
+      const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), where('usedReferralCode', '==', userData.myReferralCode));
       const unsubscribe = onSnapshot(q, (snapshot) => {
           setReferrals(snapshot.docs.map(doc => doc.data()));
       });
-      return () => unsubscribe();
-  }, [userData.uid]);
+      return () => unsubscribe;
+  }, [userData.myReferralCode]);
 
   if (!userData) return <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500"><div className="animate-spin mb-4"><RefreshCw /></div><p>Loading your account details...</p></div>;
 
-  // ... (Rest of the component remains the same)
   const isOverdue = userData.status === 'overdue' || userData.status === 'disconnected';
 
   const allAlerts = [
@@ -885,7 +883,6 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           </div>
       )}
 
-      {/* NEW: REFERRALS TAB */}
       {activeTab === 'referrals' && (
           <div className="space-y-6">
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl shadow-lg text-white p-8 flex flex-col md:flex-row items-center justify-between gap-6">
@@ -917,8 +914,8 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
                               <tbody className="divide-y divide-slate-100">
                                   {referrals.map((refUser, idx) => (
                                       <tr key={idx}>
-                                          <td className="p-3 font-medium text-slate-700">{refUser.refereeName}</td>
-                                          <td className="p-3 text-slate-500">{new Date(refUser.date).toLocaleDateString()}</td>
+                                          <td className="p-3 font-medium text-slate-700">{refUser.username}</td>
+                                          <td className="p-3 text-slate-500">{new Date(refUser.dueDate).toLocaleDateString()}</td>
                                           <td className="p-3"><span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded">₱500 Credit Applied</span></td>
                                       </tr>
                                   ))}
@@ -986,8 +983,8 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   );
 };
 
-// 4. Admin Dashboard (Updated with Logs)
-const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs, inventory, onAddInventory, onDeleteInventory, logAction }) => { // Added logAction prop
+// 4. Admin Dashboard (Updated with Analytics Tab)
+const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs, inventory, onAddInventory, onDeleteInventory, logAction }) => { 
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -1008,7 +1005,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [plans, setPlans] = useState([]);
   const [newPlanName, setNewPlanName] = useState('');
   const [technicians, setTechnicians] = useState([]);
-  const [logs, setLogs] = useState([]); // Logs State
+  const [logs, setLogs] = useState([]); 
 
   const [newUser, setNewUser] = useState({ email: '', password: '', username: '', accountNumber: '', plan: '' });
   const [newAdmin, setNewAdmin] = useState({ email: '', password: '', username: '' });
@@ -1023,13 +1020,31 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [showCreateJobModal, setShowCreateJobModal] = useState(false); 
   const [newJob, setNewJob] = useState({ targetUserId: '', type: 'New Installation', notes: '', assignedTechId: '' });
 
+  // Analytics Logic
+  const calculateAnalytics = () => {
+      const totalUsers = subscribers.length;
+      const activeUsers = subscribers.filter(s => s.status === 'active').length;
+      const overdueUsers = subscribers.filter(s => s.status === 'overdue').length;
+      const disconnectedUsers = subscribers.filter(s => s.status === 'disconnected').length;
+
+      // Estimated MRR (Assuming avg plan is 1500 for demo purposes as plan prices aren't in db yet)
+      const estimatedMRR = activeUsers * 1500; 
+      const collectionRate = totalUsers > 0 ? ((activeUsers / totalUsers) * 100).toFixed(1) : 0;
+      const churnRate = totalUsers > 0 ? ((disconnectedUsers / totalUsers) * 100).toFixed(1) : 0;
+
+      return { totalUsers, activeUsers, overdueUsers, disconnectedUsers, estimatedMRR, collectionRate, churnRate };
+  };
+
+  const analyticsData = calculateAnalytics();
+
+
   // Fetch Logs
   useEffect(() => {
       if(activeTab === 'logs') {
           const q = query(collection(db, 'artifacts', appId, 'public', 'data', LOGS_COLLECTION), orderBy('timestamp', 'desc'));
           const unsubscribe = onSnapshot(q, (snapshot) => {
               setLogs(snapshot.docs.map(doc => doc.data()));
-          });
+          }, (error) => console.error("Logs fetch error", error));
           return () => unsubscribe();
       }
   }, [activeTab]);
@@ -1042,7 +1057,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
          ['Fiber 100Mbps', 'Fiber 300Mbps'].forEach(async n => await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION), { name: n }));
       }
       setPlans(fetchedPlans);
-    });
+    }, (error) => console.error("Plans fetch error", error));
     return () => unsubscribe();
   }, []);
 
@@ -1050,7 +1065,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), where('role', '==', 'technician'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
         setTechnicians(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (error) => console.error("Techs fetch error", error));
     return () => unsubscribe();
   }, []);
 
@@ -1058,7 +1073,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const handleStatusChange = async (userId, newStatus) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { status: newStatus }); logAction('Status Change', `Changed user ${userId} status to ${newStatus}`); } catch (e) { console.error(e); } };
   const handleAddBill = async (userId, currentBalance) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { balance: currentBalance + 50, status: (currentBalance + 50) > 0 ? 'overdue' : 'active', dueDate: new Date().toISOString() }); logAction('Billing', `Added bill to user ${userId}`); } catch (e) { console.error(e); } };
   const handleChangePassword = async (e) => { e.preventDefault(); if (adminNewPass.length < 6) return alert("Min 6 chars"); try { await updatePassword(auth.currentUser, adminNewPass); alert("Success"); setShowPasswordModal(false); } catch (e) { alert(e.message); } };
-  const handleAddSubscriber = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "Secondary"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newUser.email, newUser.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newUser.username, email: newUser.email, accountNumber: newUser.accountNumber, plan: newUser.plan || (plans[0] ? plans[0].name : 'Basic'), balance: 0, status: 'active', role: 'subscriber', dueDate: new Date().toISOString(), myReferralCode: generateReferralCode(newUser.username) }); await deleteApp(secondaryApp); setShowAddModal(false); logAction('User Creation', `Created subscriber ${newUser.username}`); alert("Success"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
+  const handleAddSubscriber = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "Secondary"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newUser.email, newUser.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newUser.username, email: newUser.email, accountNumber: newUser.accountNumber, plan: newUser.plan || (plans[0] ? plans[0].name : 'Basic'), balance: 0, status: 'active', role: 'subscriber', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddModal(false); logAction('User Creation', `Created subscriber ${newUser.username}`); alert("Success"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
   const handleAddAdmin = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "SecondaryAdmin"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newAdmin.email, newAdmin.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newAdmin.username, email: newAdmin.email, role: 'admin', accountNumber: 'ADMIN', plan: 'N/A', balance: 0, status: 'active', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddAdminModal(false); logAction('User Creation', `Created admin ${newAdmin.username}`); alert("Admin created"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
   
   const handleAddTechnician = async (e) => {
@@ -1159,83 +1174,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       }
   };
 
-  // UPDATED: Admin Approval Logic with Referrals
-  const handleApproveApplication = async (ticket) => { 
-      const amountStr = prompt("Enter initial balance/installation fee for this user:", "1500"); 
-      if (amountStr === null) return; 
-      let amount = parseFloat(amountStr); 
-      if (isNaN(amount)) { alert("Invalid amount. Please enter a number."); return; } 
-      
-      const newAccountNo = Math.floor(Math.random() * 1000000).toString(); 
-      const planName = ticket.targetPlan; 
-      
-      try { 
-          // 1. Handle Referral Logic
-          if (ticket.referralCode) {
-              const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), where('myReferralCode', '==', ticket.referralCode));
-              const querySnapshot = await getDocs(q);
-              
-              if (!querySnapshot.empty) {
-                  const referrer = querySnapshot.docs[0];
-                  const referrerData = referrer.data();
-                  
-                  // Credit Referrer 500
-                  await updateDoc(referrer.ref, {
-                      balance: (referrerData.balance || 0) - 500
-                  });
-                  
-                  // Create Referral Record for Referrer (owned by referrerId)
-                  await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REFERRALS_COLLECTION), {
-                      userId: referrerData.uid, // OWNER
-                      refereeName: ticket.username,
-                      date: new Date().toISOString(),
-                      reward: 500,
-                      status: 'Completed'
-                  });
-                  
-                  // Notify Referrer
-                  await addDoc(collection(db, 'artifacts', appId, 'public', 'data', NOTIFICATIONS_COLLECTION), {
-                      userId: referrerData.uid,
-                      title: 'Referral Reward!',
-                      message: `You earned ₱500 credit for referring ${ticket.username}!`,
-                      date: new Date().toISOString(),
-                      type: 'success',
-                      read: false
-                  });
-
-                  // Credit New User 500 (Discount on installation/first bill)
-                  amount = amount - 500;
-                  alert(`Referral Code Valid! Applied ₱500 discount. New Initial Balance: ₱${amount}`);
-              } else {
-                  alert("Referral code not found. Proceeding without discount.");
-              }
-          }
-
-          // 2. Update New User Status
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.targetUserId), { 
-              status: 'active', 
-              accountNumber: newAccountNo, 
-              plan: planName, 
-              balance: amount, 
-              dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-              usedReferralCode: ticket.referralCode || null,
-              myReferralCode: generateReferralCode(ticket.username) // Ensure new users get a code
-          }); 
-          
-          // 3. Close Ticket
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), { 
-              status: 'resolved', 
-              adminReply: `Approved! Account Number: ${newAccountNo}. Initial Balance: ₱${amount}. Please proceed to payment.` 
-          }); 
-          
-          logAction('Application', `Approved new subscriber ${ticket.username} (#${newAccountNo})`); 
-          alert(`Application Approved! Assigned Account #${newAccountNo}`); 
-      } catch(e) { 
-          console.error(e);
-          alert("Failed to approve."); 
-      } 
-  };
-
+  const handleApproveApplication = async (ticket) => { const amountStr = prompt("Enter initial balance/installation fee for this user:", "1500"); if (amountStr === null) return; const amount = parseFloat(amountStr); if (isNaN(amount)) { alert("Invalid amount. Please enter a number."); return; } const newAccountNo = Math.floor(Math.random() * 1000000).toString(); const planName = ticket.targetPlan; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.targetUserId), { status: 'active', accountNumber: newAccountNo, plan: planName, balance: amount, dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() }); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), { status: 'resolved', adminReply: `Approved! Account Number: ${newAccountNo}. Initial Balance: ₱${amount}. Please proceed to payment.` }); logAction('Application', `Approved new subscriber ${ticket.username} (#${newAccountNo})`); alert(`Application Approved! Assigned Account #${newAccountNo} with balance ₱${amount}`); } catch(e) { alert("Failed to approve."); } };
   const handleOpenNotify = (sub) => { setNotifyData({ targetId: sub.id, targetName: sub.username, title: '', message: '' }); setShowNotifyModal(true); };
   const handleSendNotification = async (e) => { e.preventDefault(); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', NOTIFICATIONS_COLLECTION), { userId: notifyData.targetId, title: notifyData.title, message: notifyData.message, date: new Date().toISOString(), type: 'info', read: false }); setShowNotifyModal(false); alert("Sent!"); } catch (e) { alert("Failed."); } };
   const handleDeleteSubscriber = async (id) => { if (confirm("Delete subscriber?")) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id)); logAction('User Deletion', `Deleted user ${id}`); alert("Deleted."); } catch (e) { alert("Failed."); } } };
@@ -1301,14 +1240,96 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit flex space-x-1 overflow-x-auto max-w-full mx-auto md:mx-0">
-         {['subscribers', 'repairs', 'inventory', 'logs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
+         {['subscribers', 'analytics', 'repairs', 'inventory', 'logs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-              {tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'inventory' ? <><Box size={16}/> Inventory</> : tab === 'logs' ? <><FileClock size={16}/> Logs</> : tab}
+              {tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'analytics' ? <><BarChart3 size={16}/> Analytics</> : tab === 'inventory' ? <><Box size={16}/> Inventory</> : tab === 'logs' ? <><FileClock size={16}/> Logs</> : tab}
             </button>
          ))}
       </div>
 
       {activeTab === 'speedtest' && <SpeedTest />}
+
+      {/* NEW: Analytics Tab */}
+      {activeTab === 'analytics' && (
+          <div className="space-y-6">
+              {/* Metrics Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                      <div className="flex justify-between items-start">
+                          <div>
+                              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Monthly Revenue (Est.)</p>
+                              <h3 className="text-3xl font-bold text-slate-800 mt-2">₱{analyticsData.estimatedMRR.toLocaleString()}</h3>
+                              <p className="text-xs text-green-600 flex items-center gap-1 mt-1 font-bold"><TrendingUp size={14}/> Based on Active Plans</p>
+                          </div>
+                          <div className="bg-green-50 p-3 rounded-xl text-green-600"><DollarSign size={24}/></div>
+                      </div>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                      <div className="flex justify-between items-start">
+                          <div>
+                              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Collection Rate</p>
+                              <h3 className="text-3xl font-bold text-slate-800 mt-2">{analyticsData.collectionRate}%</h3>
+                              <p className="text-xs text-blue-600 flex items-center gap-1 mt-1 font-bold"><PieChart size={14}/> of Total User Base</p>
+                          </div>
+                          <div className="bg-blue-50 p-3 rounded-xl text-blue-600"><Target size={24}/></div>
+                      </div>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                      <div className="flex justify-between items-start">
+                          <div>
+                              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Churn Rate</p>
+                              <h3 className="text-3xl font-bold text-slate-800 mt-2">{analyticsData.churnRate}%</h3>
+                              <p className="text-xs text-red-600 flex items-center gap-1 mt-1 font-bold"><UserX size={14}/> Disconnected Users</p>
+                          </div>
+                          <div className="bg-red-50 p-3 rounded-xl text-red-600"><Activity size={24}/></div>
+                      </div>
+                  </div>
+              </div>
+
+              {/* Visual Charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                      <h3 className="font-bold text-slate-800 mb-6">Subscriber Distribution</h3>
+                      <div className="flex items-end justify-around h-64 w-full gap-4">
+                          <div className="flex flex-col items-center w-full h-full justify-end">
+                              <div className="w-full max-w-[60px] bg-green-500 rounded-t-lg transition-all duration-1000" style={{height: `${(analyticsData.activeUsers / (analyticsData.totalUsers || 1)) * 100}%`}}></div>
+                              <p className="text-xs font-bold text-slate-500 mt-2">Active ({analyticsData.activeUsers})</p>
+                          </div>
+                          <div className="flex flex-col items-center w-full h-full justify-end">
+                              <div className="w-full max-w-[60px] bg-yellow-400 rounded-t-lg transition-all duration-1000" style={{height: `${(analyticsData.overdueUsers / (analyticsData.totalUsers || 1)) * 100}%`}}></div>
+                              <p className="text-xs font-bold text-slate-500 mt-2">Overdue ({analyticsData.overdueUsers})</p>
+                          </div>
+                          <div className="flex flex-col items-center w-full h-full justify-end">
+                              <div className="w-full max-w-[60px] bg-red-500 rounded-t-lg transition-all duration-1000" style={{height: `${(analyticsData.disconnectedUsers / (analyticsData.totalUsers || 1)) * 100}%`}}></div>
+                              <p className="text-xs font-bold text-slate-500 mt-2">Offline ({analyticsData.disconnectedUsers})</p>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                      <h3 className="font-bold text-slate-800 mb-4">Plan Popularity</h3>
+                      <div className="space-y-4">
+                          {plans && plans.map((plan, idx) => {
+                              const count = subscribers.filter(s => s.plan === plan.name).length;
+                              const percentage = (count / (analyticsData.totalUsers || 1)) * 100;
+                              return (
+                                  <div key={idx}>
+                                      <div className="flex justify-between text-sm mb-1">
+                                          <span className="font-medium text-slate-700">{plan.name}</span>
+                                          <span className="font-bold text-slate-900">{count} Users</span>
+                                      </div>
+                                      <div className="w-full bg-slate-100 rounded-full h-2">
+                                          <div className="bg-blue-600 h-2 rounded-full" style={{width: `${percentage}%`}}></div>
+                                      </div>
+                                  </div>
+                              )
+                          })}
+                          {plans.length === 0 && <p className="text-slate-400 text-sm">No plan data available.</p>}
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* NEW: LOGS TAB */}
       {activeTab === 'logs' && (
@@ -1574,7 +1595,15 @@ const TechnicianDashboard = ({ repairs, onTechUpdate, inventory, onAssignDevice 
             </div>
             <div className="space-y-4">
                {activeTechRepairs.length > 0 ? activeTechRepairs.map(repair => (
-                   <RepairStatusCard key={repair.id} repair={repair} isSubscriber={false} isTechnician={true} onTechUpdate={onTechUpdate} />
+                   <RepairStatusCard 
+                        key={repair.id} 
+                        repair={repair} 
+                        isSubscriber={false} 
+                        isTechnician={true} 
+                        onTechUpdate={onTechUpdate}
+                        inventory={inventory}
+                        onAssignDevice={onAssignDevice}
+                    />
                )) : <div className="text-center py-20 bg-white rounded-2xl border border-slate-200"><CheckCircle2 size={48} className="mx-auto text-green-300 mb-3" /><p className="text-slate-500">All active repairs completed!</p></div>}
             </div>
             {historyTechRepairs.length > 0 && (
@@ -1616,17 +1645,10 @@ export default function App() {
         
         if (docSnap.exists()) {
           firestoreData = { id: docSnap.id, ...docSnap.data() };
-          // BACKFILL REFERRAL CODE IF MISSING
-          if (!firestoreData.myReferralCode && firestoreData.role === 'subscriber') {
-              const code = generateReferralCode(firestoreData.username || firestoreData.email.split('@')[0]);
-              await updateDoc(docRef, { myReferralCode: code });
-              firestoreData.myReferralCode = code;
-          }
         } else {
           // AUTO RE-CREATE FOR DELETED USERS
           if (currentUser.email !== ADMIN_EMAIL) {
              console.log("User profile missing. Re-initializing as applicant.");
-             const code = generateReferralCode(currentUser.displayName || currentUser.email.split('@')[0]);
              firestoreData = {
                 uid: currentUser.uid,
                 username: currentUser.displayName || currentUser.email.split('@')[0],
@@ -1636,8 +1658,7 @@ export default function App() {
                 accountNumber: 'PENDING', 
                 plan: null,
                 balance: 0,
-                dueDate: new Date().toISOString(),
-                myReferralCode: code
+                dueDate: new Date().toISOString()
              };
              await setDoc(docRef, firestoreData);
           }
@@ -1660,6 +1681,20 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Helper for Logging
+  const logAction = async (action, details) => {
+      if (!user) return;
+      try {
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', LOGS_COLLECTION), {
+              adminId: user.uid,
+              adminName: user.username || user.email,
+              action,
+              details,
+              timestamp: new Date().toISOString()
+          });
+      } catch (e) { console.error("Log error", e); }
+  };
 
   // Data Subscriptions
   useEffect(() => {
@@ -1702,7 +1737,7 @@ export default function App() {
 
   const handleLogout = async () => await signOut(auth);
 
-  const handlePayment = async (id, refNumber, username, amount) => { // Added Amount
+  const handlePayment = async (id, refNumber, username, amount) => { 
     if (!refNumber) return;
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), { 
@@ -1711,20 +1746,38 @@ export default function App() {
           refNumber, 
           date: new Date().toISOString(), 
           status: 'submitted',
-          amount: amount || 0 // Store amount for invoice
+          amount: amount || 0 
       });
       alert(`Payment Submitted for Verification! Ref: ${refNumber}`);
     } catch (e) { alert("Payment failed."); }
   };
 
-  const handleTechUpdateStatus = async (repairId, currentStep) => {
+  const handleTechUpdateStatus = async (repairId, currentStep, scheduledDate = null) => {
       let nextStatus = '';
       let nextStepIndex = currentStep + 1;
       let note = '';
-      if (currentStep === 1) { nextStatus = 'Processing'; note = 'Technician has started repairs.'; } 
+      let extraFields = {};
+
+      if (currentStep === 1) { 
+          nextStatus = 'Processing'; 
+          note = 'Technician has scheduled a visit/started repairs.';
+          if (scheduledDate) {
+              extraFields.scheduledDate = scheduledDate; 
+          }
+      } 
       else if (currentStep === 2) { nextStatus = 'Customer Confirmation'; note = 'Repairs completed. Pending customer verification.'; } 
       else { return; }
-      try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId); await updateDoc(docRef, { stepIndex: nextStepIndex, status: nextStatus, technicianNote: note }); } catch (e) { console.error(e); alert("Update failed."); }
+      
+      try { 
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId); 
+          await updateDoc(docRef, { 
+              stepIndex: nextStepIndex, 
+              status: nextStatus, 
+              technicianNote: note,
+              ...extraFields
+          }); 
+          if(scheduledDate) logAction('Scheduling', `Repair ${repairId} scheduled for ${scheduledDate}`);
+      } catch (e) { console.error(e); alert("Update failed."); }
   };
 
   const handleConfirmRepair = async (repairId) => {
@@ -1782,6 +1835,7 @@ export default function App() {
             inventory={inventory}
             onAddInventory={handleAddInventory}
             onDeleteInventory={handleDeleteInventory}
+            logAction={logAction}
         />
       ) : user.role === 'technician' ? (
         <TechnicianDashboard 
