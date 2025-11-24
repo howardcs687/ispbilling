@@ -83,7 +83,7 @@ import {
   CheckSquare,
   Briefcase,
   Phone,
-  Edit // FIXED: Added missing Edit icon import
+  Edit 
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -420,8 +420,73 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   }
 
   const handlePaymentSubmit = async (e) => { e.preventDefault(); setSubmitting(true); await onPay(userData.id, refNumber, userData.username); setSubmitting(false); setShowQR(false); setRefNumber(''); };
-  const handleCreateTicket = async (e) => { if(e) e.preventDefault(); if (!newTicket.subject) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { userId: userData.uid, username: userData.username, subject: newTicket.subject, message: newTicket.message, status: 'open', date: new Date().toISOString() }); alert("Ticket created!"); setNewTicket({subject:'',message:''}); setActiveTab('support'); } catch(e) { console.error(e); } };
+  const handleCreateTicket = async (e) => { 
+      if(e) e.preventDefault(); 
+      if (!newTicket.subject || !newTicket.message) return; 
+      setTicketLoading(true); 
+      try { 
+          // Handle Plan Change Request Special Logic
+          if (newTicket.subject === 'Plan Change Request') {
+              // This is purely a text request for admin review. 
+              // Admin approval will directly update the user's plan field.
+              // The UI below will listen to userData.plan changes.
+          }
+          const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { 
+              ticketId,
+              userId: userData.uid, 
+              username: userData.username, 
+              subject: newTicket.subject, 
+              message: newTicket.message, 
+              status: 'open', 
+              adminReply: '', 
+              date: new Date().toISOString() 
+          }); 
+          setNewTicket({ subject: '', message: '' }); 
+          alert("Request submitted successfully!"); 
+          setActiveTab('support'); 
+      } catch (error) { 
+          console.error("Error creating ticket", error); 
+          alert("Failed to submit request."); 
+      } 
+      setTicketLoading(false); 
+  };
   const handleRequestRepair = async (e) => { e.preventDefault(); if(!repairNote) return; try { const rid = Math.floor(Math.random()*1000000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: rid, userId: userData.uid, username: userData.username, address: userData.address, type: 'Service Repair', notes: repairNote, status: 'Submission', stepIndex: 0, dateFiled: new Date().toISOString() }); setShowRepairModal(false); setRepairNote(''); alert("Repair requested!"); } catch(e) { console.error(e); } };
+  
+  // NEW: Handle Plan Change Request from User Side
+  const handleRequestPlanChange = (newPlanName) => {
+      if(confirm(`Do you want to submit a request to change your plan to ${newPlanName}?`)) {
+          const msg = `I would like to request a change of plan.\n\nCurrent Plan: ${userData.plan}\nRequested Plan: ${newPlanName}`;
+          // Use existing ticket logic
+          setNewTicket({ subject: 'Plan Change Request', message: msg });
+          // Trigger submission logic immediately (simulating form submit)
+          const fakeEvent = { preventDefault: () => {} };
+          // We need to call the async function but state updates are async. 
+          // Better approach: call API directly here.
+          const submitPlanTicket = async () => {
+             setTicketLoading(true);
+             try {
+                 const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString();
+                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+                    ticketId,
+                    userId: userData.uid,
+                    username: userData.username,
+                    subject: 'Plan Change Request',
+                    message: msg,
+                    status: 'open',
+                    adminReply: '',
+                    date: new Date().toISOString()
+                 });
+                 alert(`Plan change request submitted! Ticket #${ticketId}`);
+                 setActiveTab('support');
+             } catch(e) {
+                 alert("Failed to submit request.");
+             }
+             setTicketLoading(false);
+          };
+          submitPlanTicket();
+      }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in">
@@ -444,7 +509,27 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
             </div>
          </div>
       )}
-      {activeTab === 'plans' && <div className="grid grid-cols-3 gap-4">{availablePlans.map(p => <div key={p.id} className="bg-white p-4 rounded shadow text-center"><h4 className="font-bold">{p.name}</h4><span className="text-xs text-slate-500">Fiber Internet</span></div>)}</div>}
+      {activeTab === 'plans' && (
+          <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                  <h3 className="text-xl font-bold text-slate-800">Available Plans</h3>
+                  <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-bold">Current: {userData.plan}</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {availablePlans.map(p => (
+                      <div key={p.id} className={`bg-white p-6 rounded-xl shadow border text-center hover:shadow-lg transition-all ${userData.plan === p.name ? 'border-blue-500 ring-2 ring-blue-200' : ''}`}>
+                          <h3 className="text-xl font-bold text-blue-900">{p.name}</h3>
+                          <div className="my-4 text-slate-500 text-sm">Unlimited Fiber Internet</div>
+                          {userData.plan === p.name ? (
+                              <button disabled className="mt-2 w-full bg-slate-100 text-slate-400 py-2.5 rounded-lg font-bold cursor-not-allowed">Current Plan</button>
+                          ) : (
+                              <button onClick={() => handleRequestPlanChange(p.name)} className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-bold transition-colors">Request Upgrade/Change</button>
+                          )}
+                      </div>
+                  ))}
+              </div>
+          </div>
+      )}
       {activeTab === 'support' && <div className="bg-white p-6 rounded-xl"><h3 className="font-bold mb-4">Support</h3><button onClick={() => {setNewTicket({subject:'Help',message:''}); handleCreateTicket();}} className="bg-blue-600 text-white px-4 py-2 rounded">Quick Ticket</button></div>}
       {activeTab === 'settings' && <div className="text-center p-10 text-slate-400">Settings Section</div>}
 
@@ -509,7 +594,45 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   }, []);
 
   // Handlers
-  const handleChangePlan = async (userId, newPlan) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { plan: newPlan }); alert("Plan updated!"); setShowChangePlanModal(null); } catch(e) { console.error(e); } };
+  // NEW: Approving a plan change request (Ticket) now updates the user document directly
+  // The ticket list maps below, and for Plan Change Requests, the admin reply/resolve should trigger this update if approved.
+  // However, simpler flow: Admin edits user plan directly in User Management tab as per previous request removal.
+  // BUT user requested automatic update on approval. 
+  // So, let's add logic to "Approve" plan change tickets in the Ticket Tab.
+  
+  const handleApprovePlanChange = async (ticket) => {
+      // Parse the plan name from the message or ticket data. 
+      // Since we saved it in the message text in handleRequestPlanChange, it's unstructured.
+      // Better approach: The previous prompt asked to remove admin edit capability. 
+      // Now it asks for user request -> admin approve -> auto update.
+      // To do this reliably, we need to store targetPlan in the ticket like we did for new applications.
+      // I updated handleRequestPlanChange above to include targetPlan if possible, but it's just message.
+      // Let's rely on the Admin manually changing it via the user list (which was removed) OR re-add the edit button but call it "Process Request"?
+      // User specific: "this happens only if the admin approved their request".
+      
+      // Let's add a special "Approve Plan Change" button to tickets with subject "Plan Change Request".
+      // But we need to know WHICH plan. 
+      // I'll parse it from the message for now since I can't change the data structure easily without breaking old tickets.
+      // Message format: "Requesting plan change.... Requested Plan: {PlanName}"
+      
+      const match = ticket.message.match(/Requested Plan: (.+)/);
+      if (match && match[1]) {
+          const newPlan = match[1];
+          if(confirm(`Approve change to ${newPlan} for ${ticket.username}?`)) {
+              try {
+                  await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.userId), { plan: newPlan });
+                  await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), { 
+                      status: 'resolved', 
+                      adminReply: `Approved! Your plan has been updated to ${newPlan}.` 
+                  });
+                  alert("Plan updated successfully!");
+              } catch(e) { console.error(e); alert("Failed."); }
+          }
+      } else {
+          alert("Could not auto-detect plan from message. Please update manually.");
+      }
+  };
+
   const handleStatusChange = async (userId, newStatus) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { status: newStatus }); } catch (e) { console.error(e); } };
   const handleAddBill = async (userId, currentBalance) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { balance: currentBalance + 50, status: (currentBalance + 50) > 0 ? 'overdue' : 'active', dueDate: new Date().toISOString() }); } catch (e) { console.error(e); } };
   const handleChangePassword = async (e) => { e.preventDefault(); if (adminNewPass.length < 6) return alert("Min 6 chars"); try { await updatePassword(auth.currentUser, adminNewPass); alert("Success"); setShowPasswordModal(false); } catch (e) { alert(e.message); } };
@@ -556,24 +679,46 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                           {filteredSubscribers.map(sub => (
                               <tr key={sub.id} className="border-t">
                                   <td className="py-3">{sub.username}</td>
-                                  <td className="py-3 flex items-center gap-2">{sub.plan} <button onClick={() => setShowChangePlanModal(sub)} className="text-blue-500"><Edit size={14}/></button></td>
+                                  <td className="py-3">{sub.plan}</td>
                                   <td className="py-3">{sub.status}</td>
                                   <td className="py-3"><button onClick={() => handleDeleteSubscriber(sub.id)} className="text-red-500">Delete</button></td>
                               </tr>
                           ))}
                       </tbody>
                   </table>
-                  {showChangePlanModal && (
-                      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                          <div className="bg-white p-6 rounded-xl w-80">
-                              <h3 className="font-bold mb-4">Change Plan for {showChangePlanModal.username}</h3>
-                              {plans.map(p => <button key={p.id} onClick={() => handleChangePlan(showChangePlanModal.id, p.name)} className="block w-full text-left p-2 hover:bg-slate-100 border-b">{p.name}</button>)}
-                              <button onClick={() => setShowChangePlanModal(null)} className="mt-4 w-full text-slate-500">Cancel</button>
-                          </div>
-                      </div>
-                  )}
               </div>
           )}
+          
+          {/* Added "Approve Plan Change" Button in Tickets Tab */}
+          {activeTab === 'tickets' && (
+              <div className="space-y-4">
+                  <h2 className="text-xl font-bold">Support Tickets</h2>
+                  {tickets.map(ticket => (
+                      <div key={ticket.id} className="p-4 bg-white rounded shadow">
+                          <div className="flex justify-between">
+                              <b>{ticket.subject}</b>
+                              <span className="text-xs bg-gray-100 px-2 py-1 rounded">{ticket.status}</span>
+                          </div>
+                          <p className="text-sm my-2">{ticket.message}</p>
+                          {/* Special Action for Plan Change Requests */}
+                          {ticket.subject === 'Plan Change Request' && ticket.status === 'open' && (
+                              <button 
+                                onClick={() => handleApprovePlanChange(ticket)}
+                                className="bg-green-600 text-white text-xs px-3 py-1 rounded hover:bg-green-700 mb-2"
+                              >
+                                Approve Plan Change
+                              </button>
+                          )}
+                          {/* Reply Box */}
+                          <div className="mt-2 flex gap-2">
+                              <input className="border p-1 text-sm w-full" placeholder="Reply..." value={replyText} onChange={e=>setReplyText(e.target.value)}/>
+                              <button onClick={()=>handleReplyTicket(ticket.id)} className="bg-blue-600 text-white text-xs px-3 py-1 rounded">Reply</button>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          )}
+
           {activeTab === 'repairs' && <div className="bg-white p-6 rounded-xl"><h3>Repairs</h3>{repairs.map(r => <div key={r.id} className="border-b py-2">{r.type} - {r.status}</div>)}</div>}
           
           {/* ... (Re-adding other Admin Modals for completeness) ... */}
