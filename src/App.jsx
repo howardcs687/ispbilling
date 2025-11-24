@@ -131,6 +131,7 @@ const REPAIRS_COLLECTION = 'isp_repairs_v1';
 const NOTIFICATIONS_COLLECTION = 'isp_notifications_v1';
 const INVENTORY_COLLECTION = 'isp_inventory_v1'; 
 const LOGS_COLLECTION = 'isp_audit_logs_v1'; 
+const REFERRALS_COLLECTION = 'isp_referrals_v1'; // NEW Collection for permission-safe querying
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
 // --- Helper Functions ---
@@ -140,7 +141,7 @@ const sendSystemEmail = async (to, subject, htmlContent) => {
 };
 
 const generateReferralCode = (name) => {
-    const prefix = name.substring(0, 4).toUpperCase().replace(/[^A-Z]/g, 'USER');
+    const prefix = (name || 'USER').substring(0, 4).toUpperCase().replace(/[^A-Z]/g, 'USER');
     const suffix = Math.floor(1000 + Math.random() * 9000);
     return `${prefix}-${suffix}`;
 };
@@ -570,7 +571,6 @@ const Login = ({ onLogin }) => {
       if (isSignUp) {
          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
          const newUid = userCredential.user.uid;
-         // NEW: Generate referral code on signup
          const myCode = generateReferralCode(name || email.split('@')[0]);
          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), {
            uid: newUid,
@@ -583,7 +583,7 @@ const Login = ({ onLogin }) => {
            balance: 0,
            address: '', 
            dueDate: new Date().toISOString(),
-           myReferralCode: myCode // Save the code
+           myReferralCode: myCode 
          });
       } else {
          await signInWithEmailAndPassword(auth, email, password);
@@ -666,18 +666,20 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
     return () => unsubscribe();
   }, []);
 
-  // Fetch Referrals
+  // Fetch Referrals - NEW SAFE QUERY
   useEffect(() => {
-      if(!userData.myReferralCode) return;
-      const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), where('usedReferralCode', '==', userData.myReferralCode));
+      if(!userData.uid) return;
+      // Query the new referrals collection where I am the owner (userId matches my ID)
+      const q = query(collection(db, 'artifacts', appId, 'public', 'data', REFERRALS_COLLECTION), where('userId', '==', userData.uid));
       const unsubscribe = onSnapshot(q, (snapshot) => {
           setReferrals(snapshot.docs.map(doc => doc.data()));
       });
-      return () => unsubscribe;
-  }, [userData.myReferralCode]);
+      return () => unsubscribe();
+  }, [userData.uid]);
 
   if (!userData) return <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500"><div className="animate-spin mb-4"><RefreshCw /></div><p>Loading your account details...</p></div>;
 
+  // ... (Rest of the component remains the same)
   const isOverdue = userData.status === 'overdue' || userData.status === 'disconnected';
 
   const allAlerts = [
@@ -915,8 +917,8 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
                               <tbody className="divide-y divide-slate-100">
                                   {referrals.map((refUser, idx) => (
                                       <tr key={idx}>
-                                          <td className="p-3 font-medium text-slate-700">{refUser.username}</td>
-                                          <td className="p-3 text-slate-500">{new Date(refUser.dueDate).toLocaleDateString()}</td>
+                                          <td className="p-3 font-medium text-slate-700">{refUser.refereeName}</td>
+                                          <td className="p-3 text-slate-500">{new Date(refUser.date).toLocaleDateString()}</td>
                                           <td className="p-3"><span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded">₱500 Credit Applied</span></td>
                                       </tr>
                                   ))}
@@ -1056,7 +1058,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const handleStatusChange = async (userId, newStatus) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { status: newStatus }); logAction('Status Change', `Changed user ${userId} status to ${newStatus}`); } catch (e) { console.error(e); } };
   const handleAddBill = async (userId, currentBalance) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { balance: currentBalance + 50, status: (currentBalance + 50) > 0 ? 'overdue' : 'active', dueDate: new Date().toISOString() }); logAction('Billing', `Added bill to user ${userId}`); } catch (e) { console.error(e); } };
   const handleChangePassword = async (e) => { e.preventDefault(); if (adminNewPass.length < 6) return alert("Min 6 chars"); try { await updatePassword(auth.currentUser, adminNewPass); alert("Success"); setShowPasswordModal(false); } catch (e) { alert(e.message); } };
-  const handleAddSubscriber = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "Secondary"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newUser.email, newUser.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newUser.username, email: newUser.email, accountNumber: newUser.accountNumber, plan: newUser.plan || (plans[0] ? plans[0].name : 'Basic'), balance: 0, status: 'active', role: 'subscriber', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddModal(false); logAction('User Creation', `Created subscriber ${newUser.username}`); alert("Success"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
+  const handleAddSubscriber = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "Secondary"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newUser.email, newUser.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newUser.username, email: newUser.email, accountNumber: newUser.accountNumber, plan: newUser.plan || (plans[0] ? plans[0].name : 'Basic'), balance: 0, status: 'active', role: 'subscriber', dueDate: new Date().toISOString(), myReferralCode: generateReferralCode(newUser.username) }); await deleteApp(secondaryApp); setShowAddModal(false); logAction('User Creation', `Created subscriber ${newUser.username}`); alert("Success"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
   const handleAddAdmin = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "SecondaryAdmin"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newAdmin.email, newAdmin.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newAdmin.username, email: newAdmin.email, role: 'admin', accountNumber: 'ADMIN', plan: 'N/A', balance: 0, status: 'active', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddAdminModal(false); logAction('User Creation', `Created admin ${newAdmin.username}`); alert("Admin created"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
   
   const handleAddTechnician = async (e) => {
@@ -1182,6 +1184,15 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                       balance: (referrerData.balance || 0) - 500
                   });
                   
+                  // Create Referral Record for Referrer (owned by referrerId)
+                  await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REFERRALS_COLLECTION), {
+                      userId: referrerData.uid, // OWNER
+                      refereeName: ticket.username,
+                      date: new Date().toISOString(),
+                      reward: 500,
+                      status: 'Completed'
+                  });
+                  
                   // Notify Referrer
                   await addDoc(collection(db, 'artifacts', appId, 'public', 'data', NOTIFICATIONS_COLLECTION), {
                       userId: referrerData.uid,
@@ -1207,7 +1218,8 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
               plan: planName, 
               balance: amount, 
               dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-              usedReferralCode: ticket.referralCode || null // Save used code
+              usedReferralCode: ticket.referralCode || null,
+              myReferralCode: generateReferralCode(ticket.username) // Ensure new users get a code
           }); 
           
           // 3. Close Ticket
@@ -1604,10 +1616,17 @@ export default function App() {
         
         if (docSnap.exists()) {
           firestoreData = { id: docSnap.id, ...docSnap.data() };
+          // BACKFILL REFERRAL CODE IF MISSING
+          if (!firestoreData.myReferralCode && firestoreData.role === 'subscriber') {
+              const code = generateReferralCode(firestoreData.username || firestoreData.email.split('@')[0]);
+              await updateDoc(docRef, { myReferralCode: code });
+              firestoreData.myReferralCode = code;
+          }
         } else {
           // AUTO RE-CREATE FOR DELETED USERS
           if (currentUser.email !== ADMIN_EMAIL) {
              console.log("User profile missing. Re-initializing as applicant.");
+             const code = generateReferralCode(currentUser.displayName || currentUser.email.split('@')[0]);
              firestoreData = {
                 uid: currentUser.uid,
                 username: currentUser.displayName || currentUser.email.split('@')[0],
@@ -1617,7 +1636,8 @@ export default function App() {
                 accountNumber: 'PENDING', 
                 plan: null,
                 balance: 0,
-                dueDate: new Date().toISOString()
+                dueDate: new Date().toISOString(),
+                myReferralCode: code
              };
              await setDoc(docRef, firestoreData);
           }
