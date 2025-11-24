@@ -143,7 +143,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   
   // Logic needed for repairs/jobs
   const [showCreateJobModal, setShowCreateJobModal] = useState(false);
-  const [newJob, setNewJob] = useState({ targetUserId: '', type: 'New Installation', notes: '', assignedTechId: '' });
   
   // Handlers
   const handlePostOutage = async (e) => {
@@ -467,13 +466,33 @@ export default function App() {
   };
   const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
 
-  // Auth & Data Fetching
+  // --- Auth Initialization ---
   useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (error) {
+        console.error("Auth init failed:", error);
+      }
+    };
+    initAuth();
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        // Mock Roles for Demo
+        // Mock Roles for Demo (Preserved from previous logic)
+        // If we are already logged in via token or anon, we check if we "faked" a role locally
+        // But since onAuthStateChanged fires on reload, we need to default to something or allow the UI to set it.
+        // For the purpose of the "Login Screen" demo, we allow the UI to override the user object's visual properties
+        // while the underlying auth remains valid.
         const role = currentUser.email?.includes('admin') ? 'admin' : currentUser.email?.includes('tech') ? 'technician' : 'subscriber';
-        setUser({ ...currentUser, role, username: currentUser.email?.split('@')[0] });
+        
+        // If the user was set by the "Login" buttons below, we might want to keep that visual state
+        // But for initial load, we set basic info.
+        setUser(prev => prev ? prev : { ...currentUser, role, username: currentUser.email?.split('@')[0] });
       } else {
         setUser(null);
       }
@@ -482,66 +501,106 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // --- Data Fetching ---
   useEffect(() => {
     if (!user) return;
     
+    // Error handler for snapshots
+    const onError = (err) => console.error("Snapshot error:", err);
+
     // Global Listeners (Everyone sees announcements & outages)
-    onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), orderBy('date', 'desc')), s => setAnnouncements(s.docs.map(d => ({id: d.id, ...d.data()}))));
-    onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', OUTAGES_COLLECTION), orderBy('dateReported', 'desc')), s => setOutages(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    // NOTE: Added error callbacks to prevent crashes if permissions fail
+    const unsubAnnounce = onSnapshot(
+        query(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), orderBy('date', 'desc')), 
+        s => setAnnouncements(s.docs.map(d => ({id: d.id, ...d.data()}))),
+        onError
+    );
+    
+    const unsubOutages = onSnapshot(
+        query(collection(db, 'artifacts', appId, 'public', 'data', OUTAGES_COLLECTION), orderBy('dateReported', 'desc')), 
+        s => setOutages(s.docs.map(d => ({id: d.id, ...d.data()}))),
+        onError
+    );
+
+    let unsubSubs = () => {};
+    let unsubRepairs = () => {};
+    let unsubOrders = () => {};
+    let unsubLogs = () => {};
+    let unsubMyData = () => {};
 
     if (user.role === 'admin') {
-       onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), s => setSubscribers(s.docs.map(d => ({id: d.id, ...d.data()}))));
-       onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), orderBy('dateFiled', 'desc')), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()}))));
-       onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION), orderBy('date', 'desc')), s => setOrders(s.docs.map(d => ({id: d.id, ...d.data()}))));
-       onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', LOGS_COLLECTION), orderBy('date', 'desc')), s => setLogs(s.docs.map(d => ({id: d.id, ...d.data()}))));
+       unsubSubs = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), s => setSubscribers(s.docs.map(d => ({id: d.id, ...d.data()}))), onError);
+       unsubRepairs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), orderBy('dateFiled', 'desc')), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()}))), onError);
+       unsubOrders = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', ORDERS_COLLECTION), orderBy('date', 'desc')), s => setOrders(s.docs.map(d => ({id: d.id, ...d.data()}))), onError);
+       unsubLogs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', LOGS_COLLECTION), orderBy('date', 'desc')), s => setLogs(s.docs.map(d => ({id: d.id, ...d.data()}))), onError);
     } 
     else if (user.role === 'technician') {
-        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), where('assignedTechId', '==', user.uid)), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()}))));
+        unsubRepairs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), where('assignedTechId', '==', user.uid)), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()}))), onError);
     }
     else {
        // Subscriber Data
-       onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.uid), s => {
+       unsubMyData = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.uid), s => {
            if(s.exists()) setMySubscriberData({id: s.id, ...s.data()});
            else setMySubscriberData({id: 'temp', username: user.username, balance: 1499, status: 'active', address: '123 Fiber St.'}); // Fallback for new users
-       });
-       onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), where('userId', '==', user.uid)), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()}))));
+       }, onError);
+       unsubRepairs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), where('userId', '==', user.uid)), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()}))), onError);
     }
+
+    return () => {
+        unsubAnnounce();
+        unsubOutages();
+        unsubSubs();
+        unsubRepairs();
+        unsubOrders();
+        unsubLogs();
+        unsubMyData();
+    };
   }, [user]);
 
-  const handleLogin = async (role) => {
-      // Simulating login for different roles
-      await signInAnonymously(auth);
-      // In a real app, we'd use custom tokens or email/pass. 
-      // This is just to trigger the auth state change for the demo UI.
-      // We are hacking the user object in the useEffect above based on email, 
-      // but for anonymous auth, we might need a different trigger or just manual set for the demo.
-      // For this generated file, I'll rely on the user manually entering the "app" state.
+  // Mock Login Handler (Modified to keep existing auth but switch visual context)
+  const handleMockLogin = (role, email, username, uid) => {
+      // We don't actually sign out the Firebase user because that would kill the session token.
+      // Instead, we just update the local state to "pretend" to be this user for the demo.
+      // In a real app, this would be a real signInWithEmailAndPassword call.
+      setUser(prev => ({ ...prev, role, email, username, uid: uid || prev.uid }));
+  };
+
+  const handleLogout = async () => {
+      setUser(null); // Return to role selection screen
+      // We don't necessarily need to signOut(auth) if we want to keep the session alive for the next role selection,
+      // but strictly speaking, logout should clear it.
+      // For this demo, clearing the 'user' state triggers the selection screen.
   };
   
   // Helper to log actions
   const logAction = async (action, details) => {
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', LOGS_COLLECTION), {
-          date: new Date().toISOString(),
-          action,
-          details,
-          adminId: user.uid
-      });
+      try {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', LOGS_COLLECTION), {
+            date: new Date().toISOString(),
+            action,
+            details,
+            adminId: user.uid
+        });
+      } catch (e) { console.error("Log failed", e); }
   };
-
-  const handleLogout = async () => await signOut(auth);
   
   const handleTechUpdateStatus = async (id, status) => {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, id), { status });
-      showToast(`Job marked as ${status}`);
+      try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, id), { status });
+        showToast(`Job marked as ${status}`);
+      } catch (e) { showToast("Update failed", "error"); }
   };
 
   const handleConfirmRepair = async (id) => {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, id), { status: 'Confirmed' });
-      showToast("Repair confirmed!");
+      try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, id), { status: 'Confirmed' });
+        showToast("Repair confirmed!");
+      } catch (e) { showToast("Confirm failed", "error"); }
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-blue-600 animate-pulse font-bold">Loading SwiftNet Portal...</div>;
 
+  // Login Screen / Role Selector
   if (!user) return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
           <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
@@ -549,9 +608,9 @@ export default function App() {
               <h1 className="text-2xl font-bold text-slate-900 mb-2">Welcome to SwiftNet</h1>
               <p className="text-slate-500 mb-8">Select a portal to continue</p>
               <div className="space-y-3">
-                  <button onClick={() => { signInAnonymously(auth).then(() => setUser({uid: 'admin1', email: 'admin@swift.net', role: 'admin', username: 'Admin'})); }} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all">Admin Portal</button>
-                  <button onClick={() => { signInAnonymously(auth).then(() => setUser({uid: 'tech1', email: 'tech@swift.net', role: 'technician', username: 'Tech Dave'})); }} className="w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition-all">Technician Portal</button>
-                  <button onClick={() => { signInAnonymously(auth).then(() => setUser({uid: 'user1', email: 'user@swift.net', role: 'subscriber', username: 'Alex User'})); }} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-all">Subscriber Portal</button>
+                  <button onClick={() => handleMockLogin('admin', 'admin@swift.net', 'Admin', 'admin_uid_1')} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all">Admin Portal</button>
+                  <button onClick={() => handleMockLogin('technician', 'tech@swift.net', 'Tech Dave', 'tech_uid_1')} className="w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition-all">Technician Portal</button>
+                  <button onClick={() => handleMockLogin('subscriber', 'user@swift.net', 'Alex User', 'user_uid_1')} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-all">Subscriber Portal</button>
               </div>
           </div>
       </div>
