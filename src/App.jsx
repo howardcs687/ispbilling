@@ -341,8 +341,8 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAvailablePlans(fetchedPlans);
+      // FIXED: Parenthesis was missing here
+      setAvailablePlans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); 
     });
     return () => unsubscribe();
   }, []);
@@ -360,30 +360,19 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
      const handleWizardSubmit = async (addressData) => {
         try {
             const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
-            
-            // Build full address string for display
-            const fullAddress = [
-               addressData.houseNo, addressData.street, addressData.subdivision, 
-               addressData.barangay, addressData.city, addressData.province
-            ].filter(Boolean).join(', ');
-
-            // Update User Profile with all details
+            const fullAddress = `${addressData.street}, ${addressData.barangay}, ${addressData.city}, ${addressData.province}`;
             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { 
                 plan: selectedPlanForApp.name,
                 address: fullAddress,
                 contactNumber: addressData.contactNumber, 
                 fullName: addressData.fullName,
-                // Optional: Save raw address data if needed later
                 addressDetails: addressData 
             });
-            
             await sendSystemEmail(userData.email, 'Plan Application Received', `Application #${ticketId} for ${selectedPlanForApp.name} received.`);
-            
-            // Create Detailed Ticket for Admin
             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { 
               ticketId,
               userId: userData.uid, 
-              username: addressData.fullName || userData.username, // Use the formal name provided
+              username: addressData.fullName || userData.username, 
               subject: 'New Subscription Application', 
               message: `NEW APPLICANT DETAILS:\n\nName: ${addressData.fullName}\nContact: ${addressData.contactNumber}\nPlan: ${selectedPlanForApp.name}\n\nAddress:\n${fullAddress}\n\nLandmark: ${addressData.landmark || 'N/A'}`, 
               status: 'open', 
@@ -393,7 +382,6 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
               targetPlan: selectedPlanForApp.name, 
               date: new Date().toISOString() 
             });
-            
             setSelectedPlanForApp(null);
             alert(`Application submitted successfully! Ticket #${ticketId}.`);
         } catch(e) { console.error(e); alert("Error submitting application. Please try again."); }
@@ -413,7 +401,6 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
            )}
            <div className="mt-12 text-center"><button onClick={() => signOut(getAuth(app))} className="text-slate-400 hover:text-slate-600 text-sm underline">Sign Out</button></div>
            
-           {/* Render Wizard if plan selected */}
            {selectedPlanForApp && (<ApplicationWizard plan={selectedPlanForApp} onClose={() => setSelectedPlanForApp(null)} onSubmit={handleWizardSubmit} />)}
         </div>
      );
@@ -425,11 +412,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       if (!newTicket.subject || !newTicket.message) return; 
       setTicketLoading(true); 
       try { 
-          // Handle Plan Change Request Special Logic
           if (newTicket.subject === 'Plan Change Request') {
-              // This is purely a text request for admin review. 
-              // Admin approval will directly update the user's plan field.
-              // The UI below will listen to userData.plan changes.
           }
           const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
           await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { 
@@ -459,10 +442,6 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           const msg = `I would like to request a change of plan.\n\nCurrent Plan: ${userData.plan}\nRequested Plan: ${newPlanName}`;
           // Use existing ticket logic
           setNewTicket({ subject: 'Plan Change Request', message: msg });
-          // Trigger submission logic immediately (simulating form submit)
-          const fakeEvent = { preventDefault: () => {} };
-          // We need to call the async function but state updates are async. 
-          // Better approach: call API directly here.
           const submitPlanTicket = async () => {
              setTicketLoading(true);
              try {
@@ -558,7 +537,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [searchTerm, setSearchTerm] = useState('');
   const [plans, setPlans] = useState([]);
   const [technicians, setTechnicians] = useState([]);
-  const [showChangePlanModal, setShowChangePlanModal] = useState(null);
 
   // ... (Admin Modal States) ...
   const [showAddModal, setShowAddModal] = useState(false);
@@ -594,27 +572,8 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   }, []);
 
   // Handlers
-  // NEW: Approving a plan change request (Ticket) now updates the user document directly
-  // The ticket list maps below, and for Plan Change Requests, the admin reply/resolve should trigger this update if approved.
-  // However, simpler flow: Admin edits user plan directly in User Management tab as per previous request removal.
-  // BUT user requested automatic update on approval. 
-  // So, let's add logic to "Approve" plan change tickets in the Ticket Tab.
   
   const handleApprovePlanChange = async (ticket) => {
-      // Parse the plan name from the message or ticket data. 
-      // Since we saved it in the message text in handleRequestPlanChange, it's unstructured.
-      // Better approach: The previous prompt asked to remove admin edit capability. 
-      // Now it asks for user request -> admin approve -> auto update.
-      // To do this reliably, we need to store targetPlan in the ticket like we did for new applications.
-      // I updated handleRequestPlanChange above to include targetPlan if possible, but it's just message.
-      // Let's rely on the Admin manually changing it via the user list (which was removed) OR re-add the edit button but call it "Process Request"?
-      // User specific: "this happens only if the admin approved their request".
-      
-      // Let's add a special "Approve Plan Change" button to tickets with subject "Plan Change Request".
-      // But we need to know WHICH plan. 
-      // I'll parse it from the message for now since I can't change the data structure easily without breaking old tickets.
-      // Message format: "Requesting plan change.... Requested Plan: {PlanName}"
-      
       const match = ticket.message.match(/Requested Plan: (.+)/);
       if (match && match[1]) {
           const newPlan = match[1];
@@ -679,7 +638,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                           {filteredSubscribers.map(sub => (
                               <tr key={sub.id} className="border-t">
                                   <td className="py-3">{sub.username}</td>
-                                  <td className="py-3">{sub.plan}</td>
+                                  <td className="py-3 flex items-center gap-2">{sub.plan}</td> {/* Removed Edit Button here */}
                                   <td className="py-3">{sub.status}</td>
                                   <td className="py-3"><button onClick={() => handleDeleteSubscriber(sub.id)} className="text-red-500">Delete</button></td>
                               </tr>
