@@ -81,7 +81,10 @@ import {
   History,
   MapPin,
   CheckSquare,
-  Briefcase
+  Briefcase,
+  Facebook,
+  Twitter,
+  Instagram
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -578,6 +581,22 @@ const Layout = ({ children, user, onLogout }) => {
         {isMenuOpen && user && <div className="md:hidden bg-indigo-900 px-4 py-4 space-y-2 border-t border-white/10"><button onClick={onLogout} className="flex items-center space-x-3 w-full px-4 py-3 bg-white/10 rounded-xl hover:bg-white/20 transition-colors"><LogOut size={18} /><span>Sign Out</span></button></div>}
       </nav>
       <main className="flex-grow w-full px-4 sm:px-6 lg:px-8 py-6">{children}</main>
+      <footer className="bg-slate-900 text-slate-300 py-8 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-2">
+                <div className="bg-blue-600 p-1.5 rounded-lg"><Wifi className="h-5 w-5 text-white" /></div>
+                <span className="font-bold text-white tracking-tight">SwiftNet<span className="text-blue-400">ISP</span></span>
+            </div>
+            <div className="text-sm flex gap-6">
+                <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
+                <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
+                <a href="#" className="hover:text-white transition-colors">Contact Support</a>
+            </div>
+            <div className="text-xs text-slate-500">
+                &copy; {new Date().getFullYear()} SwiftNet ISP. All rights reserved.
+            </div>
+        </div>
+      </footer>
     </div>
   );
 };
@@ -1299,7 +1318,59 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
        {showAddTechModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><div className="bg-orange-600 p-5 flex justify-between items-center -m-6 mb-6"><h3 className="text-white font-bold flex items-center gap-2"><HardHat size={18} /> Add New Technician</h3><button onClick={() => setShowAddTechModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><form onSubmit={handleAddTechnician} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tech Name</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.username} onChange={(e) => setNewTech({...newTech, username: e.target.value})} placeholder="Technician Name" /></div><div className="border-t border-slate-100 pt-2"></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.email} onChange={(e) => setNewTech({...newTech, email: e.target.value})} /></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-mono" value={newTech.password} onChange={(e) => setNewTech({...newTech, password: e.target.value})} /></div><button type="submit" disabled={isCreatingUser} className="w-full py-2.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700">{isCreatingUser ? 'Creating...' : 'Create Technician Account'}</button></form></div></div>)}
        {showAddAdminModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><h3 className="font-bold mb-4">Add Admin</h3><form onSubmit={handleAddAdmin} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Name" value={newAdmin.username} onChange={e=>setNewAdmin({...newAdmin, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newAdmin.email} onChange={e=>setNewAdmin({...newAdmin, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newAdmin.password} onChange={e=>setNewAdmin({...newAdmin, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddAdminModal(false)} className="text-slate-500">Cancel</button><button className="bg-slate-800 text-white px-4 py-2 rounded">Create</button></div></form></div></div>)}
        {showAddModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Add Subscriber</h3><form onSubmit={handleAddSubscriber} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Username" value={newUser.username} onChange={e=>setNewUser({...newUser, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Account #" value={newUser.accountNumber} onChange={e=>setNewUser({...newUser, accountNumber: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newUser.email} onChange={e=>setNewUser({...newUser, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newUser.password} onChange={e=>setNewUser({...newUser, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddModal(false)} className="text-slate-500">Cancel</button><button className="bg-blue-600 text-white px-4 py-2 rounded">Add</button></div></form></div></div>)}
-       {showAnnounceModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Post Announcement</h3><input className="w-full border p-2 rounded mb-2" placeholder="Title" value={newAnnouncement.title} onChange={e=>setNewAnnouncement({...newAnnouncement, title: e.target.value})}/><textarea className="w-full border p-2 rounded mb-2" placeholder="Message" value={newAnnouncement.message} onChange={e=>setNewAnnouncement({...newAnnouncement, message: e.target.value})}></textarea><div className="flex justify-end gap-2"><button onClick={()=>setShowAnnounceModal(false)} className="text-slate-500">Cancel</button><button onClick={handlePostAnnouncement} className="bg-blue-600 text-white px-4 py-2 rounded">Post</button></div></div></div>)}
+       
+       {/* UPDATED: Announcement Management Modal */}
+       {showAnnounceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
+            <h3 className="font-bold mb-4 text-lg text-slate-800 flex items-center gap-2"><Megaphone size={20}/> Manage Announcements</h3>
+            
+            {/* Post New */}
+            <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100 flex-shrink-0">
+              <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Post New</h4>
+              <input 
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mb-2 outline-none focus:border-blue-500 bg-white" 
+                placeholder="Title" 
+                value={newAnnouncement.title} 
+                onChange={e=>setNewAnnouncement({...newAnnouncement, title: e.target.value})}
+              />
+              <textarea 
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mb-2 outline-none focus:border-blue-500 resize-none h-20 bg-white" 
+                placeholder="Message" 
+                value={newAnnouncement.message} 
+                onChange={e=>setNewAnnouncement({...newAnnouncement, message: e.target.value})}
+              ></textarea>
+              <div className="flex justify-end">
+                <button onClick={handlePostAnnouncement} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors">Post Announcement</button>
+              </div>
+            </div>
+
+            {/* Previous List */}
+            <div className="flex-1 overflow-y-auto pr-1">
+              <h4 className="text-xs font-bold text-slate-500 uppercase mb-2 sticky top-0 bg-white py-1 z-10">Previous Announcements</h4>
+              <div className="space-y-3 pb-2">
+                {announcements && announcements.length > 0 ? announcements.map(ann => (
+                  <div key={ann.id} className="flex justify-between items-start p-3 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors">
+                    <div>
+                      <p className="font-bold text-sm text-slate-800">{ann.title}</p>
+                      <p className="text-xs text-slate-500 mt-1">{ann.message}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">{new Date(ann.date).toLocaleDateString()}</p>
+                    </div>
+                    <button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-slate-400 hover:text-red-600 p-1.5 rounded hover:bg-red-50 transition-colors ml-2">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )) : <div className="text-center text-slate-400 text-sm py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">No active announcements.</div>}
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end flex-shrink-0">
+              <button onClick={()=>setShowAnnounceModal(false)} className="text-slate-500 font-bold text-sm hover:text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50">Close</button>
+            </div>
+          </div>
+        </div>
+       )}
+
        {showPasswordModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Change Password</h3><input className="w-full border p-2 rounded mb-4" type="password" placeholder="New Password" value={adminNewPass} onChange={e=>setAdminNewPass(e.target.value)}/><div className="flex justify-end gap-2"><button onClick={()=>setShowPasswordModal(false)} className="text-slate-500">Cancel</button><button onClick={handleChangePassword} className="bg-blue-600 text-white px-4 py-2 rounded">Update</button></div></div></div>)}
        {showDateModal && (
          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
