@@ -77,7 +77,8 @@ import {
   MapPin,
   CheckSquare,
   Briefcase,
-  Star
+  Star,
+  Box 
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -614,284 +615,6 @@ const Login = ({ onLogin }) => {
   );
 };
 
-// 3. Subscriber Dashboard
-const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair, outages }) => {
-  const [activeTab, setActiveTab] = useState('overview'); 
-  const [showQR, setShowQR] = useState(false);
-  const [refNumber, setRefNumber] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [newTicket, setNewTicket] = useState({ subject: '', message: '' });
-  const [ticketLoading, setTicketLoading] = useState(false);
-  const [showRepairModal, setShowRepairModal] = useState(false);
-  const [repairNote, setRepairNote] = useState('');
-  const [availablePlans, setAvailablePlans] = useState([]);
-  const [manageEmail, setManageEmail] = useState('');
-  const [managePass, setManagePass] = useState('');
-  const [updatingCreds, setUpdatingCreds] = useState(false);
-  const [followUpText, setFollowUpText] = useState('');
-  const [followingUpTo, setFollowingUpTo] = useState(null);
-  const [selectedPlanForApp, setSelectedPlanForApp] = useState(null); 
-  const [selectedDoc, setSelectedDoc] = useState(null); 
-
-  const MOCK_DOCUMENTS = [
-    { id: 1, title: "Service Contract - Swift Fiber", date: "2023-01-15", type: "Contract", size: "1.2 MB", amount: '0.00' },
-    { id: 2, title: "Statement of Account - Oct 2023", date: "2023-10-01", type: "Invoice", size: "450 KB", amount: '1,500.00' },
-    { id: 3, title: "Statement of Account - Nov 2023", date: "2023-11-01", type: "Invoice", size: "480 KB", amount: '1,500.00' },
-  ];
-
-  useEffect(() => {
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAvailablePlans(fetchedPlans);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  if (!userData) return <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500"><div className="animate-spin mb-4"><RefreshCw /></div><p>Loading your account details...</p></div>;
-
-  const isOverdue = userData.status === 'overdue' || userData.status === 'disconnected';
-
-  const allAlerts = [
-    ...(announcements || []).map(a => ({ ...a, isPublic: true })),
-    ...(notifications || []).map(n => ({ ...n, isPublic: false }))
-  ].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-  const activeRepairs = (repairs || []).filter(r => r.status !== 'Completed');
-  const historyRepairs = (repairs || []).filter(r => r.status === 'Completed');
-  
-  // Filter active outages
-  const activeOutages = (outages || []).filter(o => o.status !== 'Resolved');
-  const hasOutage = activeOutages.length > 0;
-
-  if (userData.status === 'applicant' || userData.accountNumber === 'PENDING') {
-      // ... (Applicant View logic - Unchanged)
-      const handleWizardSubmit = async (addressData) => {
-         try {
-            const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
-            const fullAddress = `${addressData.street}, ${addressData.barangay}, ${addressData.city}, ${addressData.province}`;
-            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { plan: selectedPlanForApp.name, address: fullAddress, addressDetails: addressData });
-            await sendSystemEmail(userData.email, 'Plan Application', `Application #${ticketId} for ${selectedPlanForApp.name} received.`);
-            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'New Subscription Application', message: `Applicant ${userData.username} (${userData.email}) has applied for the ${selectedPlanForApp.name} plan.\nAddress: ${fullAddress}`, status: 'open', adminReply: '', isApplication: true, targetUserId: userData.uid, targetPlan: selectedPlanForApp.name, date: new Date().toISOString() });
-            setSelectedPlanForApp(null);
-            alert(`Application submitted! Ticket #${ticketId}.`);
-        } catch(e) { console.error(e); alert("Error submitting application"); }
-      };
-      return (
-        <div className="w-full py-12 animate-in fade-in">
-           <div className="text-center mb-12"><h1 className="text-3xl font-bold text-slate-800 mb-2">Welcome to SwiftNet!</h1><p className="text-slate-500">To get started, please select an internet plan below.</p></div>
-           {userData.plan ? (
-              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-r-xl max-w-xl mx-auto shadow-sm"><div className="flex items-center gap-4"><Hourglass size={32} className="text-yellow-600" /><div><h3 className="text-lg font-bold text-yellow-800">Application Pending</h3><p className="text-yellow-700">You have applied for the <strong>{userData.plan}</strong>. An administrator will review your request.</p></div></div></div>
-           ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map(plan => (<div key={plan.id} className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-xl font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Fiber Optic</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => setSelectedPlanForApp(plan)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Apply Now <ArrowRight size={16} /></button></div></div>))}{availablePlans.length === 0 && <p className="col-span-full text-center text-slate-400">No plans configured by admin yet.</p>}</div>
-           )}
-           <div className="mt-12 text-center"><button onClick={() => signOut(getAuth(app))} className="text-slate-400 hover:text-slate-600 text-sm underline">Sign Out</button></div>
-           {selectedPlanForApp && (<ApplicationWizard plan={selectedPlanForApp} onClose={() => setSelectedPlanForApp(null)} onSubmit={handleWizardSubmit} />)}
-        </div>
-      );
-  }
-
-  const handlePaymentSubmit = async (e) => { e.preventDefault(); setSubmitting(true); await onPay(userData.id, refNumber, userData.username); setSubmitting(false); setShowQR(false); setRefNumber(''); };
-  const handleCreateTicket = async (e) => { if(e) e.preventDefault(); if (!newTicket.subject || !newTicket.message) return; setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: newTicket.subject, message: newTicket.message, status: 'open', adminReply: '', date: new Date().toISOString() }); setNewTicket({ subject: '', message: '' }); alert(`Ticket #${ticketId} submitted successfully!`); setActiveTab('support'); } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } setTicketLoading(false); };
-  const handleFollowUpTicket = async (ticketId, originalMessage) => { if(!followUpText) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId); const timestamp = new Date().toLocaleString(); const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`; await updateDoc(docRef, { message: newMessage, status: 'open', date: new Date().toISOString() }); setFollowingUpTo(null); setFollowUpText(''); alert("Follow-up sent successfully!"); } catch(e) { console.error(e); alert("Failed to send follow-up"); } };
-  const handleRequestRepair = async (e) => { e.preventDefault(); if(!repairNote) return; try { const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0'); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: randomId, userId: userData.uid, username: userData.username, address: userData.address || "No address provided", type: 'Service Repair - Internet', notes: repairNote, status: 'Submission', stepIndex: 0, technicianNote: 'Waiting for initial evaluation.', dateFiled: new Date().toISOString() }); setRepairNote(''); setShowRepairModal(false); alert("Repair request filed successfully!"); } catch(e) { console.error(e); alert("Failed to request repair."); } };
-  const handleApplyPlan = (planName) => { if(confirm(`Apply for ${planName}?`)) { const msg = `Requesting plan change.\n\nCurrent: ${userData.plan}\nNew: ${planName}`; const submitPlanTicket = async () => { setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'Plan Change Request', message: msg, status: 'open', adminReply: '', date: new Date().toISOString(), isPlanChange: true, targetPlan: planName }); alert(`Application submitted! Ticket #${ticketId}.`); setActiveTab('support'); } catch(e) { alert("Failed."); } setTicketLoading(false); }; submitPlanTicket(); } };
-  const handleUpdatePassword = async (e) => { e.preventDefault(); if (managePass.length < 6) return alert("Min 6 chars."); setUpdatingCreds(true); try { await updatePassword(auth.currentUser, managePass); setManagePass(''); alert("Password updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
-  const handleUpdateEmail = async (e) => { e.preventDefault(); if (!manageEmail) return; setUpdatingCreds(true); try { await updateEmail(auth.currentUser, manageEmail); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { email: manageEmail }); setManageEmail(''); alert("Email updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
-  const getIcon = (type) => { switch(type) { case 'warning': return <AlertCircle size={18} />; case 'success': return <CheckCircle size={18} />; default: return <Megaphone size={18} />; } };
-  const getBgColor = (type) => { switch(type) { case 'warning': return 'bg-orange-50 text-orange-600'; case 'success': return 'bg-green-50 text-green-600'; default: return 'bg-blue-50 text-blue-600'; } };
-
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
-        {['overview', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
-           <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'documents' ? <><FileText size={16}/> Documents</> : tab === 'rewards' ? <><Star size={16}/> Rewards</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
-           </button>
-        ))}
-      </div>
-      {activeTab === 'speedtest' && <SpeedTest />}
-      {activeTab === 'overview' && (
-        <>
-          {/* NEW: Network Status Widget */}
-          {hasOutage ? (
-              <div className="bg-red-50 border-l-4 border-red-600 p-6 rounded-r-xl mb-6 shadow-sm animate-pulse">
-                  <div className="flex items-start gap-4">
-                      <div className="p-3 bg-red-100 rounded-full text-red-600"><AlertCircle size={28}/></div>
-                      <div>
-                          <h3 className="text-lg font-bold text-red-800">Service Interruption Detected</h3>
-                          <p className="text-sm text-red-700 mt-1">We are aware of a network issue affecting <strong>{activeOutages[0].area}</strong>.</p>
-                          <p className="text-sm font-bold text-red-800 mt-2">Status: {activeOutages[0].status} • {activeOutages[0].message}</p>
-                      </div>
-                  </div>
-              </div>
-          ) : (
-              <div className="bg-emerald-50 border-l-4 border-emerald-500 p-6 rounded-r-xl mb-6 shadow-sm">
-                  <div className="flex items-center gap-4">
-                      <div className="p-3 bg-emerald-100 rounded-full text-emerald-600"><Wifi size={28}/></div>
-                      <div>
-                          <h3 className="text-lg font-bold text-emerald-800">System Healthy</h3>
-                          <p className="text-sm text-emerald-700">Your connection is stable. No outages reported in your area.</p>
-                      </div>
-                  </div>
-              </div>
-          )}
-
-          {/* --- NEW: Data Consumption Card (Manual Input) --- */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-6">
-              <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Activity size={20} className="text-blue-600"/> Data Consumption</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="col-span-2">
-                      <div className="mb-4">
-                          <div className="flex justify-between mb-1">
-                              <span className="text-sm font-medium text-slate-700">Total Usage ({(userData.currentUsage?.download || 0) + (userData.currentUsage?.upload || 0)} GB)</span>
-                              <span className="text-xs font-bold text-slate-400">Cap: {userData.currentUsage?.limit || 1024} GB</span>
-                          </div>
-                          <div className="w-full bg-slate-100 rounded-full h-4">
-                              <div 
-                                  className="bg-blue-600 h-4 rounded-full transition-all duration-1000" 
-                                  style={{ width: `${Math.min((((userData.currentUsage?.download || 0) + (userData.currentUsage?.upload || 0)) / (userData.currentUsage?.limit || 1024)) * 100, 100)}%` }}
-                              ></div>
-                          </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                              <p className="text-xs font-bold text-slate-400 uppercase mb-1"><Download size={12} className="inline mr-1"/> Download</p>
-                              <p className="text-lg font-bold text-slate-800">{userData.currentUsage?.download || 0} <span className="text-xs font-normal text-slate-500">GB</span></p>
-                          </div>
-                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                              <p className="text-xs font-bold text-slate-400 uppercase mb-1"><Upload size={12} className="inline mr-1"/> Upload</p>
-                              <p className="text-lg font-bold text-slate-800">{userData.currentUsage?.upload || 0} <span className="text-xs font-normal text-slate-500">GB</span></p>
-                          </div>
-                      </div>
-                  </div>
-                  <div className="flex flex-col justify-center items-center text-center bg-blue-50 rounded-xl p-4 border border-blue-100">
-                      <p className="text-sm text-blue-800 mb-2">Your data resets in</p>
-                      <h4 className="text-3xl font-bold text-blue-600">5 <span className="text-sm font-normal">days</span></h4>
-                  </div>
-              </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 hover:shadow-lg transition-shadow duration-300">
-              <div className={`p-4 rounded-2xl ${userData.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}><Activity size={28} /></div>
-              <div><p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Service Status</p><p className={`text-xl font-bold capitalize ${userData.status === 'active' ? 'text-green-700' : 'text-red-700'}`}>{userData.status}</p></div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 hover:shadow-lg transition-shadow duration-300">
-              <div className="p-4 rounded-2xl bg-blue-50 text-blue-600"><Zap size={28} /></div>
-              <div><p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Current Plan</p><p className="text-xl font-bold text-slate-800">{userData.plan}</p></div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 hover:shadow-lg transition-shadow duration-300 sm:col-span-2 lg:col-span-1">
-              <div className="p-4 rounded-2xl bg-indigo-50 text-indigo-600"><CreditCard size={28} /></div>
-              <div><p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Total Balance</p><p className="text-xl font-bold text-slate-800">₱{userData.balance?.toFixed(2)}</p></div>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden h-fit">
-              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center"><h3 className="font-bold text-slate-800">Billing Overview</h3>{userData.balance > 0 && <span className="text-[10px] uppercase font-bold bg-red-100 text-red-600 px-3 py-1 rounded-full">Payment Due</span>}</div>
-              <div className="p-8 space-y-6">
-                <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Account No.</span><span className="font-mono font-medium text-slate-700">{userData.accountNumber}</span></div>
-                <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Due Date</span><span className={`font-medium ${isOverdue ? 'text-red-600' : 'text-slate-700'}`}>{new Date(userData.dueDate).toLocaleDateString()}</span></div>
-                <div className="flex justify-between items-center pt-2"><span className="text-slate-800 font-bold text-lg">Total Due</span><span className="text-blue-700 font-bold text-3xl">₱{userData.balance?.toFixed(2)}</span></div>
-                {userData.balance > 0 ? (<button onClick={() => setShowQR(true)} className="w-full mt-4 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center space-x-2 shadow-lg shadow-blue-200 transition-all"><Smartphone size={20} /><span>Pay with QR Code</span></button>) : <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center justify-center text-green-700 space-x-2"><CheckCircle size={20} /><span className="font-medium">No payment due. You are all set!</span></div>}
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit">
-              <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-slate-800">System Notifications</h3><button onClick={() => setActiveTab('support')} className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">Report Issue <ArrowRight size={14} /></button></div>
-              <div className="space-y-4">
-                {userData.status === 'disconnected' && (<div className="bg-red-50 border-l-4 border-red-500 p-5 rounded-r-xl"><div className="flex items-start"><AlertCircle className="text-red-500 mt-0.5 mr-3" size={20} /><div><h4 className="font-bold text-red-700">Service Disconnected</h4><p className="text-sm text-red-600 mt-1">Your internet service is suspended.</p></div></div></div>)}
-                {allAlerts && allAlerts.length > 0 ? allAlerts.map((ann) => (<div key={ann.id} className={`flex items-start p-4 rounded-xl border ${ann.isPublic ? 'bg-slate-50 border-transparent' : 'bg-blue-50 border-blue-100'}`}><div className={`p-2.5 rounded-full mr-4 flex-shrink-0 ${getBgColor(ann.type)}`}>{getIcon(ann.type)}</div><div><div className="flex items-center gap-2"><p className="font-bold text-sm text-slate-700">{ann.title}</p>{!ann.isPublic && <span className="text-[9px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded font-bold uppercase">Private</span>}</div><p className="text-xs text-slate-500 mt-0.5">{ann.message}</p><p className="text-[10px] text-slate-400 mt-1">{new Date(ann.date).toLocaleDateString()}</p></div></div>)) : <div className="flex items-center justify-center p-4 bg-slate-50 rounded-xl text-slate-400 text-sm">No new announcements.</div>}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-      {activeTab === 'repairs' && (
-         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-               <div><h2 className="text-2xl font-bold text-slate-800">Repair Requests</h2><p className="text-sm text-slate-500">Track status.</p></div>
-               <button onClick={() => setShowRepairModal(true)} className="bg-red-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-red-700 shadow-lg flex items-center gap-2"><Hammer size={18} /> Request Repair</button>
-            </div>
-            <div className="space-y-4">
-               <h3 className="text-sm font-bold text-slate-500 uppercase">Active Requests</h3>
-               {activeRepairs && activeRepairs.length > 0 ? activeRepairs.map(repair => (<RepairStatusCard key={repair.id} repair={repair} isSubscriber={true} onConfirm={onConfirmRepair} />)) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400 text-sm">No active repairs.</div>}
-            </div>
-            {historyRepairs.length > 0 && (<div className="pt-8 mt-8 border-t border-slate-200"><h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><Clock size={18}/> Repair History</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{historyRepairs.map(repair => (<RepairStatusCard key={repair.id} repair={repair} isSubscriber={true} />))}</div></div>)}
-         </div>
-      )}
-      {activeTab === 'documents' && (
-          <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                  <div><h2 className="text-2xl font-bold text-slate-800">My Documents</h2><p className="text-sm text-slate-500">View and download your contracts and statements.</p></div>
-              </div>
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="divide-y divide-slate-100">
-                      {MOCK_DOCUMENTS.map(doc => (
-                          <div key={doc.id} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                              <div className="flex items-center gap-4"><div className="bg-blue-50 p-3 rounded-xl text-blue-600"><FileText size={24} /></div><div><h4 className="font-bold text-slate-800">{doc.title}</h4><p className="text-xs text-slate-500 mt-1 flex items-center gap-2"><span>{doc.type}</span> • <span>{doc.date}</span> • <span>{doc.size}</span></p></div></div>
-                              <button onClick={() => setSelectedDoc(doc)} className="flex items-center gap-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-4 py-2 rounded-lg font-bold text-sm transition-colors"><Eye size={18} /><span className="hidden sm:inline">View Invoice</span></button>
-                          </div>
-                      ))}
-                  </div>
-              </div>
-          </div>
-      )}
-      {activeTab === 'rewards' && (
-          <div className="space-y-6">
-              <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-2xl p-8 text-white relative overflow-hidden shadow-lg">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-16 -mt-16"></div>
-                  <div className="relative z-10">
-                      <div className="flex items-center gap-3 mb-2">
-                          <Star size={32} className="text-white" />
-                          <h2 className="text-3xl font-bold">SwiftPoints</h2>
-                      </div>
-                      <p className="text-yellow-100 font-medium text-lg">Your Balance: <span className="text-4xl font-bold text-white ml-2">{userData.points || 0}</span> pts</p>
-                      <p className="text-sm mt-4 text-yellow-50 opacity-90">Earn 50 points for every verified payment!</p>
-                  </div>
-              </div>
-              <h3 className="text-xl font-bold text-slate-800">Redeem Rewards</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col">
-                      <div className="bg-blue-50 w-12 h-12 rounded-lg flex items-center justify-center text-blue-600 mb-4"><Zap size={24}/></div>
-                      <h4 className="font-bold text-slate-800 text-lg">24h Speed Boost</h4>
-                      <p className="text-sm text-slate-500 mb-4 flex-grow">Get an extra 50Mbps for 24 hours. Perfect for gaming or large downloads.</p>
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
-                          <span className="font-bold text-slate-800">150 pts</span>
-                          <button className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50" disabled={(userData.points || 0) < 150}>Redeem</button>
-                      </div>
-                  </div>
-                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col">
-                      <div className="bg-green-50 w-12 h-12 rounded-lg flex items-center justify-center text-green-600 mb-4"><span className="text-2xl font-bold font-sans">₱</span></div>
-                      <h4 className="font-bold text-slate-800 text-lg">₱50 Bill Rebate</h4>
-                      <p className="text-sm text-slate-500 mb-4 flex-grow">Deduct ₱50 from your next billing statement instantly.</p>
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
-                          <span className="font-bold text-slate-800">200 pts</span>
-                          <button className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50" disabled={(userData.points || 0) < 200}>Redeem</button>
-                      </div>
-                  </div>
-                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col opacity-60">
-                      <div className="bg-slate-100 w-12 h-12 rounded-lg flex items-center justify-center text-slate-500 mb-4"><Smartphone size={24}/></div>
-                      <h4 className="font-bold text-slate-800 text-lg">Raffle Entry</h4>
-                      <p className="text-sm text-slate-500 mb-4 flex-grow">Win a new iPhone 15! Draw date: Dec 31, 2023.</p>
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
-                          <span className="font-bold text-slate-800">50 pts</span>
-                          <button className="bg-slate-300 text-white px-4 py-2 rounded-lg text-sm font-bold cursor-not-allowed">Coming Soon</button>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {activeTab === 'plans' && (<div className="space-y-6"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-slate-800">Available Internet Plans</h2><span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">Current: {userData.plan}</span></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map((plan) => (<div key={plan.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-lg font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => handleApplyPlan(plan.name)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Request Change <ArrowRight size={16} /></button></div></div>))}</div></div>)}
-      {activeTab === 'support' && (<div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-1 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><MessageSquare size={20} className="text-blue-600"/> Create New Ticket</h3><form onSubmit={handleCreateTicket} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-white" value={newTicket.subject} onChange={(e) => setNewTicket({...newTicket, subject: e.target.value})}><option value="">Select...</option><option value="No Internet">No Internet</option><option value="Billing">Billing</option><option value="Other">Other</option></select></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Message</label><textarea required className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none h-32 resize-none" value={newTicket.message} onChange={(e) => setNewTicket({...newTicket, message: e.target.value})}></textarea></div><button type="submit" disabled={ticketLoading} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">{ticketLoading ? 'Submitting...' : 'Submit Ticket'}</button></form></div><div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-2 h-fit"><h3 className="font-bold text-slate-800 mb-4">My Ticket History</h3><div className="space-y-4 max-h-[600px] overflow-y-auto">{tickets && tickets.length > 0 ? tickets.map(ticket => (<div key={ticket.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50"><div className="flex justify-between items-start mb-2"><h4 className="font-bold text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject}</h4><span className="text-[10px] font-bold uppercase bg-yellow-100 text-yellow-700 px-2 py-1 rounded">{ticket.status}</span></div><p className="text-sm text-slate-600 mb-3">{ticket.message}</p>{ticket.adminReply && <div className="bg-white border-l-4 border-blue-500 p-3 rounded-r-lg mt-3"><p className="text-xs font-bold text-blue-600 mb-1">Admin Response:</p><p className="text-sm text-slate-700">{ticket.adminReply}</p></div>}<div className="mt-3 pt-2 border-t border-slate-100">{followingUpTo === ticket.id ? (<div className="mt-2"><textarea className="w-full border p-2 text-sm" rows="2" value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setFollowingUpTo(null)} className="text-xs font-bold px-3">Cancel</button><button onClick={() => handleFollowUpTicket(ticket.id, ticket.message)} className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded">Send</button></div></div>) : (<button onClick={() => setFollowingUpTo(ticket.id)} className="text-blue-600 text-xs font-bold flex items-center gap-1 mt-1"><MessageCircle size={14} /> Add Note</button>)}</div></div>)) : <p className="text-center text-slate-400">No tickets found.</p>}</div></div></div>)}
-      {activeTab === 'settings' && (<div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Lock size={20} className="text-blue-600"/> Change Password</h3><form onSubmit={handleUpdatePassword} className="space-y-4"><input type="password" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={managePass} onChange={(e) => setManagePass(e.target.value)} placeholder="New password" /><button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">{updatingCreds ? 'Updating...' : 'Update'}</button></form></div><div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Mail size={20} className="text-blue-600"/> Update Email</h3><form onSubmit={handleUpdateEmail} className="space-y-4"><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={manageEmail} onChange={(e) => setManageEmail(e.target.value)} placeholder="new@email.com" /><button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900">{updatingCreds ? 'Updating...' : 'Update'}</button></form></div></div>)}
-      {showQR && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"><div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center space-x-2"><CreditCard size={20} /><span>Scan to Pay</span></h3><button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full"><X size={20} /></button></div><div className="p-8 flex flex-col items-center text-center"><p className="text-slate-600 text-sm mb-6">Scan the QR code with your banking app to pay <span className="font-bold text-slate-900 block text-2xl mt-2">₱{userData.balance.toFixed(2)}</span></p><div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8"><img src="/qr-code.png" alt="Payment QR" className="w-48 h-48 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/200x200?text=QR+Image+Missing"; }} /></div><div className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 mb-4">Payment posting will reflect once the admin verifies your payment. Your reference number provided should match on the payment they received.</div><div className="w-full text-left"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reference Number</label><form onSubmit={handlePaymentSubmit} className="flex gap-3"><input type="text" required placeholder="e.g. Ref-123456" className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium" value={refNumber} onChange={(e) => setRefNumber(e.target.value)} /><button type="submit" disabled={submitting} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200">{submitting ? '...' : 'Verify'}</button></form></div></div></div></div>)}
-      {showRepairModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-red-600 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center gap-2"><Hammer size={20} /> Request Service Repair</h3><button onClick={() => setShowRepairModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><div className="p-6"><p className="text-slate-600 text-sm mb-4">Please describe the issue.</p><textarea className="w-full border border-slate-300 rounded-lg p-3 h-32" value={repairNote} onChange={(e) => setRepairNote(e.target.value)}></textarea><div className="mt-4 flex justify-end gap-2"><button onClick={() => setShowRepairModal(false)} className="px-4 py-2 text-slate-500 font-bold">Cancel</button><button onClick={handleRequestRepair} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700">Submit</button></div></div></div></div>)}
-      <InvoiceModal doc={selectedDoc} user={userData} onClose={() => setSelectedDoc(null)} />
-    </div>
-  );
-}
-
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -904,6 +627,10 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showAnnounceModal, setShowAnnounceModal] = useState(false);
   const [showNotifyModal, setShowNotifyModal] = useState(false); 
+  // NEW: Usage Modal State
+  const [showUsageModal, setShowUsageModal] = useState(null);
+  const [usageInputs, setUsageInputs] = useState({ download: 0, upload: 0 });
+
   const [adminNewPass, setAdminNewPass] = useState('');
   const [replyText, setReplyText] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
@@ -957,6 +684,27 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const handlePostAnnouncement = async (e) => { e.preventDefault(); if(!newAnnouncement.title) return; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), { ...newAnnouncement, date: new Date().toISOString() }); setShowAnnounceModal(false); };
   const handleDeleteAnnouncement = async (id) => { if(confirm("Delete?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION, id)); };
   const handleUpdateDueDate = async (e) => { e.preventDefault(); if (!showDateModal || !newDueDate) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, showDateModal.id); await updateDoc(docRef, { dueDate: new Date(newDueDate).toISOString() }); alert("Due date updated successfully!"); setShowDateModal(null); } catch(e) { console.error(e); alert("Failed to update date: " + e.message); } };
+  
+  // NEW: Handle Update Usage
+  const handleUpdateUsage = async (e) => {
+    e.preventDefault();
+    if (!showUsageModal) return;
+    try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, showUsageModal.id), {
+            currentUsage: {
+                download: parseFloat(usageInputs.download),
+                upload: parseFloat(usageInputs.upload),
+                limit: 1024 // Default 1TB limit
+            }
+        });
+        alert("Usage updated!");
+        setShowUsageModal(null);
+    } catch (e) {
+        console.error(e);
+        alert("Failed to update usage.");
+    }
+  };
+
   const handleReplyTicket = async (ticketId) => { if(!replyText) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId), { adminReply: replyText, status: 'resolved' }); setReplyingTo(null); setReplyText(''); } catch(e) { alert("Failed"); } };
   const handleUpdateRepairStatus = async (repairId, currentStep) => { if (currentStep === 3) { alert("Waiting for customer confirmation. You cannot force complete this step."); return; } const newStep = currentStep < 4 ? currentStep + 1 : 4; const statusLabels = ['Submission', 'Evaluation', 'Processing', 'Customer Confirmation', 'Completed']; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId), { stepIndex: newStep, status: statusLabels[newStep] }); } catch(e) { console.error(e); } };
   const handleForceComplete = async (repairId) => { if (!confirm("Force complete this repair? This bypasses customer confirmation.")) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId); await updateDoc(docRef, { stepIndex: 4, status: 'Completed', completedDate: new Date().toISOString() }); alert("Repair marked as completed by Admin."); } catch(e) { console.error(e); alert("Failed to force complete."); } };
@@ -1048,7 +796,25 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                       <td className="px-6 py-4 font-bold text-yellow-600 flex items-center gap-1"><Star size={12}/> {sub.points || 0}</td>
                       <td className="px-6 py-4 text-slate-600 group relative"><div className="flex items-center gap-2">{new Date(sub.dueDate).toLocaleDateString()}<button onClick={() => { setShowDateModal(sub); setNewDueDate(new Date(sub.dueDate).toISOString().split('T')[0]); }} className="opacity-0 group-hover:opacity-100 text-blue-600 hover:bg-blue-100 p-1.5 rounded-md transition-all"><Calendar size={14} /></button></div></td>
                       <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold capitalize ${sub.status === 'active' ? 'bg-green-100 text-green-700' : sub.status === 'disconnected' ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'}`}>{sub.status}</span></td>
-                      <td className="px-6 py-4 text-right space-x-2 flex justify-end items-center">{sub.role !== 'admin' && sub.role !== 'technician' && (<><button onClick={() => handleOpenNotify(sub)} className="text-slate-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md transition-colors" title="Send Notification"><Bell size={16} /></button><button onClick={() => handleAddBill(sub.id, sub.balance)} className="text-blue-600 hover:text-blue-900 text-xs font-bold border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">+ Bill</button>{sub.status === 'active' ? <button onClick={() => handleStatusChange(sub.id, 'disconnected')} className="text-red-600 hover:text-red-900 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">Cut</button> : <button onClick={() => handleStatusChange(sub.id, 'active')} className="text-green-600 hover:text-green-900 text-xs font-bold border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors">Restore</button>}<button onClick={() => handleDeleteSubscriber(sub.id)} className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md transition-colors ml-2" title="Delete User"><UserX size={16} /></button></>)}</td>
+                      <td className="px-6 py-4 text-right space-x-2 flex justify-end items-center">
+                        {sub.role !== 'admin' && sub.role !== 'technician' && (
+                          <>
+                            <button onClick={() => {
+                                setShowUsageModal(sub);
+                                setUsageInputs({
+                                    download: sub.currentUsage?.download || 0,
+                                    upload: sub.currentUsage?.upload || 0
+                                });
+                            }} className="text-slate-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md transition-colors" title="Update Usage">
+                                <Activity size={16} />
+                            </button>
+                            <button onClick={() => handleOpenNotify(sub)} className="text-slate-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md transition-colors" title="Send Notification"><Bell size={16} /></button>
+                            <button onClick={() => handleAddBill(sub.id, sub.balance)} className="text-blue-600 hover:text-blue-900 text-xs font-bold border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">+ Bill</button>
+                            {sub.status === 'active' ? <button onClick={() => handleStatusChange(sub.id, 'disconnected')} className="text-red-600 hover:text-red-900 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">Cut</button> : <button onClick={() => handleStatusChange(sub.id, 'active')} className="text-green-600 hover:text-green-900 text-xs font-bold border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors">Restore</button>}
+                            <button onClick={() => handleDeleteSubscriber(sub.id)} className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md transition-colors ml-2" title="Delete User"><UserX size={16} /></button>
+                          </>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1135,6 +901,27 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
           </div>
         </div>
        )}
+       {showUsageModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden p-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2"><Activity size={18} /> Update Data Usage</h3>
+                        <button onClick={() => setShowUsageModal(null)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                    </div>
+                    <form onSubmit={handleUpdateUsage} className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Download (GB)</label>
+                            <input type="number" className="w-full border p-2 rounded-lg text-sm" value={usageInputs.download} onChange={e => setUsageInputs({...usageInputs, download: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Upload (GB)</label>
+                            <input type="number" className="w-full border p-2 rounded-lg text-sm" value={usageInputs.upload} onChange={e => setUsageInputs({...usageInputs, upload: e.target.value})} />
+                        </div>
+                        <button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">Save Usage</button>
+                    </form>
+                </div>
+            </div>
+        )}
        {showAddTechModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><div className="bg-orange-600 p-5 flex justify-between items-center -m-6 mb-6"><h3 className="text-white font-bold flex items-center gap-2"><Wrench size={18} /> Add New Technician</h3><button onClick={() => setShowAddTechModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><form onSubmit={handleAddTechnician} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tech Name</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.username} onChange={(e) => setNewTech({...newTech, username: e.target.value})} placeholder="Technician Name" /></div><div className="border-t border-slate-100 pt-2"></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newTech.email} onChange={(e) => setNewTech({...newTech, email: e.target.value})} /></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label><input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-mono" value={newTech.password} onChange={(e) => setNewTech({...newTech, password: e.target.value})} /></div><button type="submit" disabled={isCreatingUser} className="w-full py-2.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700">{isCreatingUser ? 'Creating...' : 'Create Technician Account'}</button></form></div></div>)}
        {showAddAdminModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><h3 className="font-bold mb-4">Add Admin</h3><form onSubmit={handleAddAdmin} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Name" value={newAdmin.username} onChange={e=>setNewAdmin({...newAdmin, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newAdmin.email} onChange={e=>setNewAdmin({...newAdmin, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newAdmin.password} onChange={e=>setNewAdmin({...newAdmin, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddAdminModal(false)} className="text-slate-500">Cancel</button><button className="bg-slate-800 text-white px-4 py-2 rounded">Create</button></div></form></div></div>)}
        {showAddModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Add Subscriber</h3><form onSubmit={handleAddSubscriber} className="space-y-4"><input className="w-full border p-2 rounded" placeholder="Username" value={newUser.username} onChange={e=>setNewUser({...newUser, username: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Account #" value={newUser.accountNumber} onChange={e=>setNewUser({...newUser, accountNumber: e.target.value})}/><input className="w-full border p-2 rounded" placeholder="Email" value={newUser.email} onChange={e=>setNewUser({...newUser, email: e.target.value})}/><input className="w-full border p-2 rounded" type="password" placeholder="Password" value={newUser.password} onChange={e=>setNewUser({...newUser, password: e.target.value})}/><div className="flex justify-end gap-2"><button onClick={()=>setShowAddModal(false)} className="text-slate-500">Cancel</button><button className="bg-blue-600 text-white px-4 py-2 rounded">Add</button></div></form></div></div>)}
