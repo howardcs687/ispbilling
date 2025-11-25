@@ -55,7 +55,6 @@ import {
   Megaphone,
   MessageSquare,
   FileText,
-  Send,
   ArrowRight,
   Gauge,
   Download, 
@@ -72,18 +71,13 @@ import {
   Hourglass,
   HelpCircle,
   Bell,
-  Hash,
   UserX,
   Clock,
-  HardHat,
   PlayCircle,
-  History,
   MapPin,
   CheckSquare,
   Briefcase,
-  Signal,
-  Gift,
-  AlertTriangle
+  Star
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -125,7 +119,7 @@ const sendSystemEmail = async (to, subject, htmlContent) => {
   return true;
 };
 
-// --- COMPONENTS (Ordered bottom-up to avoid hoisting issues) ---
+// --- COMPONENTS ---
 
 const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
   const [step, setStep] = useState(1);
@@ -334,7 +328,7 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
                   <p className="text-sm text-slate-500 font-mono">#{repair.requestId}</p>
                   {!isSubscriber && repair.assignedTechName && (
                       <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit mt-1">
-                          <HardHat size={10}/> Tech: {repair.assignedTechName}
+                          <Wrench size={10}/> Tech: {repair.assignedTechName}
                       </span>
                   )}
                </div>
@@ -520,7 +514,7 @@ const Layout = ({ children, user, onLogout }) => {
               <div className="hidden md:flex items-center space-x-4">
                 <div className="flex items-center space-x-3 px-4 py-1.5 bg-white/10 rounded-full text-sm border border-white/10 backdrop-blur-md">
                    {user.role === 'admin' ? <Shield size={14} className="text-yellow-300" /> : 
-                    user.role === 'technician' ? <HardHat size={14} className="text-orange-300" /> : 
+                    user.role === 'technician' ? <Wrench size={14} className="text-orange-300" /> : 
                     <User size={14} className="text-blue-200" />}
                   <span className="font-medium tracking-wide">{user.displayName || user.email}</span>
                 </div>
@@ -723,7 +717,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           {hasOutage ? (
               <div className="bg-red-50 border-l-4 border-red-600 p-6 rounded-r-xl mb-6 shadow-sm animate-pulse">
                   <div className="flex items-start gap-4">
-                      <div className="p-3 bg-red-100 rounded-full text-red-600"><AlertTriangle size={28}/></div>
+                      <div className="p-3 bg-red-100 rounded-full text-red-600"><AlertCircle size={28}/></div>
                       <div>
                           <h3 className="text-lg font-bold text-red-800">Service Interruption Detected</h3>
                           <p className="text-sm text-red-700 mt-1">We are aware of a network issue affecting <strong>{activeOutages[0].area}</strong>.</p>
@@ -734,7 +728,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           ) : (
               <div className="bg-emerald-50 border-l-4 border-emerald-500 p-6 rounded-r-xl mb-6 shadow-sm">
                   <div className="flex items-center gap-4">
-                      <div className="p-3 bg-emerald-100 rounded-full text-emerald-600"><Signal size={28}/></div>
+                      <div className="p-3 bg-emerald-100 rounded-full text-emerald-600"><Wifi size={28}/></div>
                       <div>
                           <h3 className="text-lg font-bold text-emerald-800">System Healthy</h3>
                           <p className="text-sm text-emerald-700">Your connection is stable. No outages reported in your area.</p>
@@ -742,6 +736,41 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
                   </div>
               </div>
           )}
+
+          {/* --- NEW: Data Consumption Card (Manual Input) --- */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-6">
+              <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Activity size={20} className="text-blue-600"/> Data Consumption</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="col-span-2">
+                      <div className="mb-4">
+                          <div className="flex justify-between mb-1">
+                              <span className="text-sm font-medium text-slate-700">Total Usage ({(userData.currentUsage?.download || 0) + (userData.currentUsage?.upload || 0)} GB)</span>
+                              <span className="text-xs font-bold text-slate-400">Cap: {userData.currentUsage?.limit || 1024} GB</span>
+                          </div>
+                          <div className="w-full bg-slate-100 rounded-full h-4">
+                              <div 
+                                  className="bg-blue-600 h-4 rounded-full transition-all duration-1000" 
+                                  style={{ width: `${Math.min((((userData.currentUsage?.download || 0) + (userData.currentUsage?.upload || 0)) / (userData.currentUsage?.limit || 1024)) * 100, 100)}%` }}
+                              ></div>
+                          </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                              <p className="text-xs font-bold text-slate-400 uppercase mb-1"><Download size={12} className="inline mr-1"/> Download</p>
+                              <p className="text-lg font-bold text-slate-800">{userData.currentUsage?.download || 0} <span className="text-xs font-normal text-slate-500">GB</span></p>
+                          </div>
+                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                              <p className="text-xs font-bold text-slate-400 uppercase mb-1"><Upload size={12} className="inline mr-1"/> Upload</p>
+                              <p className="text-lg font-bold text-slate-800">{userData.currentUsage?.upload || 0} <span className="text-xs font-normal text-slate-500">GB</span></p>
+                          </div>
+                      </div>
+                  </div>
+                  <div className="flex flex-col justify-center items-center text-center bg-blue-50 rounded-xl p-4 border border-blue-100">
+                      <p className="text-sm text-blue-800 mb-2">Your data resets in</p>
+                      <h4 className="text-3xl font-bold text-blue-600">5 <span className="text-sm font-normal">days</span></h4>
+                  </div>
+              </div>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 hover:shadow-lg transition-shadow duration-300">
@@ -813,7 +842,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
                   <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-16 -mt-16"></div>
                   <div className="relative z-10">
                       <div className="flex items-center gap-3 mb-2">
-                          <Gift size={32} className="text-white" />
+                          <Star size={32} className="text-white" />
                           <h2 className="text-3xl font-bold">SwiftPoints</h2>
                       </div>
                       <p className="text-yellow-100 font-medium text-lg">Your Balance: <span className="text-4xl font-bold text-white ml-2">{userData.points || 0}</span> pts</p>
