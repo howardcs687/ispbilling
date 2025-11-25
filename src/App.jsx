@@ -68,14 +68,12 @@ import {
   Wrench, 
   ClipboardList, 
   UserCheck, 
-  CheckCircle2, 
   Hammer,
   Hourglass,
   HelpCircle,
   Bell,
   Hash,
   UserX,
-  PhilippinePeso,
   Clock,
   HardHat,
   PlayCircle,
@@ -85,7 +83,6 @@ import {
   Briefcase,
   Signal,
   Gift,
-  Map,
   AlertTriangle
 } from 'lucide-react';
 
@@ -119,12 +116,11 @@ const PAYMENTS_COLLECTION = 'isp_payments_v1';
 const TICKETS_COLLECTION = 'isp_tickets_v1';
 const REPAIRS_COLLECTION = 'isp_repairs_v1'; 
 const NOTIFICATIONS_COLLECTION = 'isp_notifications_v1';
-const OUTAGES_COLLECTION = 'isp_outages_v1'; // NEW: For Network Status
+const OUTAGES_COLLECTION = 'isp_outages_v1'; 
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
 // --- Helper Functions ---
 const sendSystemEmail = async (to, subject, htmlContent) => {
-  // Simulated email sending
   console.log(`%c[SYSTEM EMAIL] To: ${to}\nSubject: ${subject}\nContent: ${htmlContent}`, 'color: blue; font-weight: bold;');
   return true;
 };
@@ -133,7 +129,7 @@ const sendSystemEmail = async (to, subject, htmlContent) => {
 
 const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
   const [step, setStep] = useState(1);
-  const [addressType, setAddressType] = useState('house'); // house | condo
+  const [addressType, setAddressType] = useState('house'); 
   const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState({
     province: 'CAGAYAN',
@@ -161,16 +157,12 @@ const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4 animate-in fade-in zoom-in-95 duration-200">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh]">
-        
-        {/* Header */}
         <div className="bg-red-600 p-6 text-white relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10"></div>
             <h2 className="text-2xl font-bold mb-1">Guiding you in every step</h2>
             <p className="text-red-100 text-sm">New Application - {plan.name}</p>
             <button onClick={onClose} className="absolute top-4 right-4 text-white/80 hover:text-white"><X size={24}/></button>
         </div>
-
-        {/* Progress Bar */}
         <div className="px-8 pt-6 pb-2">
            <div className="flex items-center justify-between mb-2">
               {steps.map((s) => (
@@ -179,170 +171,69 @@ const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
            </div>
            <p className="text-xs text-slate-400 text-right">Step {step} of 4</p>
         </div>
-
-        {/* Content Area */}
         <div className="p-8 overflow-y-auto flex-grow">
-            
-            {/* STEP 1: Address Search */}
             {step === 1 && (
               <div className="text-center space-y-6">
                  <h3 className="text-2xl font-bold text-red-600">Let's check your Address</h3>
                  <p className="text-slate-600">Type in your address and make sure to drop the pin to the closest location of your residence</p>
-                 
                  <div className="flex justify-center mb-6">
                     <div className="bg-slate-100 p-1 rounded-full inline-flex">
-                       <button 
-                         onClick={() => setAddressType('house')}
-                         className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${addressType === 'house' ? 'bg-red-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
-                       >HOUSE/APARTMENT</button>
-                       <button 
-                         onClick={() => setAddressType('condo')}
-                         className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${addressType === 'condo' ? 'bg-red-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
-                       >CONDOMINIUM</button>
+                       <button onClick={() => setAddressType('house')} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${addressType === 'house' ? 'bg-red-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>HOUSE/APARTMENT</button>
+                       <button onClick={() => setAddressType('condo')} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${addressType === 'condo' ? 'bg-red-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>CONDOMINIUM</button>
                     </div>
                  </div>
-
                  <div className="relative">
                     <Search className="absolute left-4 top-3.5 text-slate-400" size={20} />
-                    <input 
-                      type="text" 
-                      placeholder="Type in address..." 
-                      className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-full focus:ring-2 focus:ring-red-500 outline-none shadow-sm"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
+                    <input type="text" placeholder="Type in address..." className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-full focus:ring-2 focus:ring-red-500 outline-none shadow-sm" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                  </div>
               </div>
             )}
-
-            {/* STEP 2: Map Pin */}
             {step === 2 && (
               <div className="text-center space-y-4">
                  <h3 className="text-xl font-bold text-red-600">Pin Location</h3>
-                 <div className="bg-slate-100 rounded-full px-4 py-2 text-sm text-slate-700 font-medium inline-flex items-center gap-2">
-                    <Search size={14} /> {searchQuery || "Marede, Santa Ana, Cagayan"}
-                 </div>
+                 <div className="bg-slate-100 rounded-full px-4 py-2 text-sm text-slate-700 font-medium inline-flex items-center gap-2"><Search size={14} /> {searchQuery || "Marede, Santa Ana, Cagayan"}</div>
                  <p className="text-xs text-red-500 font-bold">Move the pin below to mark your exact location on the map.</p>
-                 
                  <div className="aspect-video bg-blue-50 rounded-xl border-2 border-slate-200 relative overflow-hidden group cursor-crosshair">
-                    {/* Mock Map Background */}
                     <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"></div>
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                       <MapPin size={48} className="text-red-600 drop-shadow-2xl animate-bounce" fill="currentColor" />
-                    </div>
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"><MapPin size={48} className="text-red-600 drop-shadow-2xl animate-bounce" fill="currentColor" /></div>
                  </div>
               </div>
             )}
-
-            {/* STEP 3: Review */}
             {step === 3 && (
               <div className="text-center space-y-6">
                  <h3 className="text-2xl font-bold text-red-600">Good News! SwiftNet is available in your area!</h3>
                  <p className="text-slate-600">Please review the address below to ensure all details are correct.</p>
-                 
                  <div className="bg-slate-50 p-6 rounded-xl text-left grid grid-cols-2 gap-4 text-sm border border-slate-100">
-                    <div>
-                       <span className="block text-xs font-bold text-slate-400 uppercase">Province</span>
-                       <span className="font-bold text-slate-800">{formData.province}</span>
-                    </div>
-                    <div>
-                       <span className="block text-xs font-bold text-slate-400 uppercase">City</span>
-                       <span className="font-bold text-slate-800">{formData.city}</span>
-                    </div>
-                    <div>
-                       <span className="block text-xs font-bold text-slate-400 uppercase">Barangay</span>
-                       <span className="font-bold text-slate-800">{formData.barangay}</span>
-                    </div>
-                    <div>
-                       <span className="block text-xs font-bold text-slate-400 uppercase">Plan</span>
-                       <span className="font-bold text-blue-600">{plan.name}</span>
-                    </div>
+                    <div><span className="block text-xs font-bold text-slate-400 uppercase">Province</span><span className="font-bold text-slate-800">{formData.province}</span></div>
+                    <div><span className="block text-xs font-bold text-slate-400 uppercase">City</span><span className="font-bold text-slate-800">{formData.city}</span></div>
+                    <div><span className="block text-xs font-bold text-slate-400 uppercase">Barangay</span><span className="font-bold text-slate-800">{formData.barangay}</span></div>
+                    <div><span className="block text-xs font-bold text-slate-400 uppercase">Plan</span><span className="font-bold text-blue-600">{plan.name}</span></div>
                  </div>
-                 
-                 <div className="flex gap-3 justify-center">
-                    <button onClick={() => setStep(4)} className="px-6 py-2 border-2 border-red-600 text-red-600 font-bold rounded-full hover:bg-red-50">EDIT ADDRESS</button>
-                 </div>
+                 <div className="flex gap-3 justify-center"><button onClick={() => setStep(4)} className="px-6 py-2 border-2 border-red-600 text-red-600 font-bold rounded-full hover:bg-red-50">EDIT ADDRESS</button></div>
               </div>
             )}
-
-            {/* STEP 4: Detailed Form */}
             {step === 4 && (
               <div className="space-y-6">
-                 <div className="text-center mb-6">
-                    <h3 className="text-xl font-bold text-red-600">Finalize Address Details</h3>
-                    <p className="text-sm text-slate-500">Click any of the fields below to make changes.</p>
-                 </div>
-
+                 <div className="text-center mb-6"><h3 className="text-xl font-bold text-red-600">Finalize Address Details</h3><p className="text-sm text-slate-500">Click any of the fields below to make changes.</p></div>
                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                       <label className="text-xs font-bold text-red-600">* Province</label>
-                       <input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.province} readOnly />
-                    </div>
-                    <div>
-                       <label className="text-xs font-bold text-red-600">* City</label>
-                       <input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.city} readOnly />
-                    </div>
-                    <div className="col-span-2">
-                       <label className="text-xs font-bold text-red-600">* Barangay</label>
-                       <input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.barangay} readOnly />
-                    </div>
-                    
-                    <div>
-                       <label className="text-xs font-bold text-slate-500">Subdivision</label>
-                       <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Search..." value={formData.subdivision} onChange={e => setFormData({...formData, subdivision: e.target.value})} />
-                    </div>
-                    <div>
-                       <label className="text-xs font-bold text-red-600">* Street</label>
-                       <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Search..." value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} />
-                    </div>
-                    
-                    <div className="col-span-2">
-                       <label className="text-xs font-bold text-slate-500">Building</label>
-                       <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Type in your building" value={formData.building} onChange={e => setFormData({...formData, building: e.target.value})} />
-                    </div>
-
-                    <div>
-                       <label className="text-xs font-bold text-slate-500">House No.</label>
-                       <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 123" value={formData.houseNo} onChange={e => setFormData({...formData, houseNo: e.target.value})} />
-                    </div>
-                    <div>
-                       <label className="text-xs font-bold text-slate-500">Block</label>
-                       <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 5" value={formData.block} onChange={e => setFormData({...formData, block: e.target.value})} />
-                    </div>
-                    <div>
-                       <label className="text-xs font-bold text-slate-500">Lot</label>
-                       <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 10" value={formData.lot} onChange={e => setFormData({...formData, lot: e.target.value})} />
-                    </div>
-                    
-                    <div className="col-span-2">
-                       <label className="text-xs font-bold text-slate-500">Landmark</label>
-                       <input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. Near the Chapel" value={formData.landmark} onChange={e => setFormData({...formData, landmark: e.target.value})} />
-                    </div>
+                    <div><label className="text-xs font-bold text-red-600">* Province</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.province} readOnly /></div>
+                    <div><label className="text-xs font-bold text-red-600">* City</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.city} readOnly /></div>
+                    <div className="col-span-2"><label className="text-xs font-bold text-red-600">* Barangay</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.barangay} readOnly /></div>
+                    <div><label className="text-xs font-bold text-slate-500">Subdivision</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Search..." value={formData.subdivision} onChange={e => setFormData({...formData, subdivision: e.target.value})} /></div>
+                    <div><label className="text-xs font-bold text-red-600">* Street</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Search..." value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} /></div>
+                    <div className="col-span-2"><label className="text-xs font-bold text-slate-500">Building</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Type in your building" value={formData.building} onChange={e => setFormData({...formData, building: e.target.value})} /></div>
+                    <div><label className="text-xs font-bold text-slate-500">House No.</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 123" value={formData.houseNo} onChange={e => setFormData({...formData, houseNo: e.target.value})} /></div>
+                    <div><label className="text-xs font-bold text-slate-500">Block</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 5" value={formData.block} onChange={e => setFormData({...formData, block: e.target.value})} /></div>
+                    <div><label className="text-xs font-bold text-slate-500">Lot</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 10" value={formData.lot} onChange={e => setFormData({...formData, lot: e.target.value})} /></div>
+                    <div className="col-span-2"><label className="text-xs font-bold text-slate-500">Landmark</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. Near the Chapel" value={formData.landmark} onChange={e => setFormData({...formData, landmark: e.target.value})} /></div>
                  </div>
               </div>
             )}
-
         </div>
-
-        {/* Footer Actions */}
         <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-white">
-           {step > 1 && (
-              <button onClick={handleBack} className="px-8 py-3 border border-red-600 text-red-600 font-bold rounded-full hover:bg-red-50 transition-colors">
-                 BACK
-              </button>
-           )}
-           
-           {step < 4 ? (
-              <button onClick={handleNext} className="px-8 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200">
-                 {step === 3 ? 'CONTINUE' : step === 1 ? 'CHECK SERVICEABILITY' : 'NEXT'}
-              </button>
-           ) : (
-              <button onClick={() => onSubmit(formData)} className="px-8 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200">
-                 SUBMIT APPLICATION
-              </button>
-           )}
+           {step > 1 && (<button onClick={handleBack} className="px-8 py-3 border border-red-600 text-red-600 font-bold rounded-full hover:bg-red-50 transition-colors">BACK</button>)}
+           {step < 4 ? (<button onClick={handleNext} className="px-8 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200">{step === 3 ? 'CONTINUE' : step === 1 ? 'CHECK SERVICEABILITY' : 'NEXT'}</button>) : (<button onClick={() => onSubmit(formData)} className="px-8 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200">SUBMIT APPLICATION</button>)}
         </div>
-
       </div>
     </div>
   );
@@ -398,7 +289,7 @@ const InvoiceModal = ({ doc, user, onClose }) => {
             <div className="bg-slate-50 p-6 rounded border border-slate-200 text-center text-xs text-slate-500">
                 <p className="font-bold mb-2">IMPORTANT REMINDER</p>
                 <p>Please pay on or before the due date to avoid service interruption. This document serves as your official Statement of Account. For check payments, please make payable to SwiftNet ISP Inc.</p>
-                <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center"><span>www.swiftnet-isp.com</span><span>Hotline: 171</span></div>
+                <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center"><span>https://www.jwreport.site/</span><span>Hotline: 0968-385-9759</span></div>
             </div>
         </div>
       </div>
@@ -412,7 +303,7 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
     { label: 'Evaluation', icon: <ClipboardList size={16} /> },
     { label: 'Processing', icon: <RefreshCw size={16} /> },
     { label: 'Customer Confirmation', icon: <UserCheck size={16} /> },
-    { label: 'Completed', icon: <CheckCircle2 size={16} /> }
+    { label: 'Completed', icon: <CheckCircle size={16} /> }
   ];
 
   const currentStepIndex = repair.stepIndex || 0;
@@ -421,7 +312,7 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
   const getActionLabel = () => {
       if (currentStepIndex === 0) return { text: "Start Evaluation", icon: <ClipboardList size={16} /> };
       if (currentStepIndex === 1) return { text: "Start Processing", icon: <PlayCircle size={16} /> };
-      if (currentStepIndex === 2) return { text: "Mark for Confirmation", icon: <CheckCircle2 size={16} /> };
+      if (currentStepIndex === 2) return { text: "Mark for Confirmation", icon: <CheckCircle size={16} /> };
       return { text: "Update Status", icon: <RefreshCw size={16} /> };
   };
 
@@ -586,7 +477,7 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
                            onClick={() => onConfirm(repair.id)}
                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors"
                         >
-                           <CheckCircle2 size={16} /> Confirm Resolution
+                           <CheckCircle size={16} /> Confirm Resolution
                         </button>
                      </div>
                  </div>
@@ -597,7 +488,7 @@ const RepairStatusCard = ({ repair, isSubscriber, onConfirm, technicians, onAssi
       
       {isCompleted && (
           <div className="mt-4 p-3 bg-white rounded-lg border border-green-100 flex items-center gap-3">
-              <CheckCircle2 className="text-green-600" size={20} />
+              <CheckCircle className="text-green-600" size={20} />
               <p className="text-sm text-green-800">This request has been completed.</p>
           </div>
       )}
@@ -941,7 +832,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
                       </div>
                   </div>
                   <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col">
-                      <div className="bg-green-50 w-12 h-12 rounded-lg flex items-center justify-center text-green-600 mb-4"><PhilippinePeso size={24}/></div>
+                      <div className="bg-green-50 w-12 h-12 rounded-lg flex items-center justify-center text-green-600 mb-4"><span className="text-2xl font-bold font-sans">₱</span></div>
                       <h4 className="font-bold text-slate-800 text-lg">₱50 Bill Rebate</h4>
                       <p className="text-sm text-slate-500 mb-4 flex-grow">Deduct ₱50 from your next billing statement instantly.</p>
                       <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
@@ -1240,7 +1131,7 @@ const TechnicianDashboard = ({ repairs, onTechUpdate }) => {
             <div className="space-y-4">
                {activeTechRepairs.length > 0 ? activeTechRepairs.map(repair => (
                    <RepairStatusCard key={repair.id} repair={repair} isSubscriber={false} isTechnician={true} onTechUpdate={onTechUpdate} />
-               )) : <div className="text-center py-20 bg-white rounded-2xl border border-slate-200"><CheckCircle2 size={48} className="mx-auto text-green-300 mb-3" /><p className="text-slate-500">All active repairs completed!</p></div>}
+               )) : <div className="text-center py-20 bg-white rounded-2xl border border-slate-200"><CheckCircle size={48} className="mx-auto text-green-300 mb-3" /><p className="text-slate-500">All active repairs completed!</p></div>}
             </div>
             {historyTechRepairs.length > 0 && (
                 <div className="pt-8 mt-8 border-t border-slate-200">
@@ -1266,8 +1157,7 @@ export default function App() {
   const [payments, setPayments] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [repairs, setRepairs] = useState([]);
-  const [notifications, setNotifications] = useState([]);
-  const [outages, setOutages] = useState([]);
+  const [notifications, setNotifications] = useState([]); 
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -1291,7 +1181,6 @@ export default function App() {
                 accountNumber: 'PENDING', 
                 plan: null,
                 balance: 0,
-                points: 0, // Initialize points
                 dueDate: new Date().toISOString()
              };
              await setDoc(docRef, firestoreData);
@@ -1319,11 +1208,6 @@ export default function App() {
   // Data Subscriptions
   useEffect(() => {
     if (!user) return;
-    
-    // Global listeners (Announcements & Outages)
-    onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), orderBy('date', 'desc')), s => setAnnouncements(s.docs.map(d => ({id: d.id, ...d.data()}))));
-    onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', OUTAGES_COLLECTION), orderBy('date', 'desc')), s => setOutages(s.docs.map(d => ({id: d.id, ...d.data()}))));
-
     if (user.role === 'admin') {
        onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), s => setSubscribers(s.docs.map(d => ({id: d.id, ...d.data()}))));
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), orderBy('date', 'desc')), s => setPayments(s.docs.map(d => ({id: d.id, ...d.data()}))));
@@ -1348,6 +1232,7 @@ export default function App() {
            setNotifications(s.docs.map(d => ({id: d.id, ...d.data()})));
        });
     }
+    onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), orderBy('date', 'desc')), s => setAnnouncements(s.docs.map(d => ({id: d.id, ...d.data()}))));
   }, [user]);
 
   const handleLogout = async () => await signOut(auth);
@@ -1388,7 +1273,7 @@ export default function App() {
       ) : user.role === 'technician' ? (
         <TechnicianDashboard repairs={repairs} onTechUpdate={handleTechUpdateStatus} />
       ) : (
-        <SubscriberDashboard userData={mySubscriberData || {}} onPay={handlePayment} announcements={announcements} notifications={notifications} tickets={tickets} repairs={repairs} onConfirmRepair={handleConfirmRepair} outages={outages} />
+        <SubscriberDashboard userData={mySubscriberData || {}} onPay={handlePayment} announcements={announcements} notifications={notifications} tickets={tickets} repairs={repairs} onConfirmRepair={handleConfirmRepair} />
       )}
     </Layout>
   );
