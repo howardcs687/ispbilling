@@ -30,6 +30,8 @@ import { 
   getDocs,
   increment 
 } from 'firebase/firestore';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import { 
   Wifi, 
   CreditCard, 
@@ -243,25 +245,60 @@ const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
 };
 
 const InvoiceModal = ({ doc, user, onClose }) => {
+  const [downloading, setDownloading] = useState(false);
+
   if (!doc) return null;
   const amountVal = parseFloat((doc.amount || '0').toString().replace(/,/g, ''));
   const vat = amountVal - (amountVal / 1.12);
   const baseAmount = amountVal - vat;
 
-  // Check if this is a Receipt (Green) or a Bill (Red)
   const isReceipt = doc.type === 'Receipt';
   const themeColor = isReceipt ? 'text-green-600' : 'text-red-600';
   const borderColor = isReceipt ? 'border-green-600' : 'border-red-600';
   const label = isReceipt ? 'Official Receipt' : 'Statement of Account';
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    const element = document.getElementById('printable-invoice');
+    
+    try {
+        // Wait a tiny bit to ensure render
+        await new Promise(r => setTimeout(r, 100));
+        
+        const canvas = await html2canvas(element, { 
+            scale: 2,
+            useCORS: true,
+            logging: false
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`${doc.title.replace(/\s+/g, '_')}.pdf`);
+    } catch (err) {
+        console.error("PDF Error:", err);
+        alert("Could not generate PDF. Please try again.");
+    }
+    setDownloading(false);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in duration-200">
       <div className="bg-white w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-none shadow-2xl flex flex-col">
         <div className="bg-slate-800 text-white p-4 flex justify-between items-center sticky top-0 z-10">
             <div className="flex items-center gap-3"><FileText size={20} /><span className="font-bold">{doc.title}</span></div>
-            <div className="flex items-center gap-3"><button className="text-slate-300 hover:text-white flex items-center gap-1 text-sm"><Download size={16} /> Download PDF</button><button onClick={onClose} className="text-slate-300 hover:text-white"><X size={24} /></button></div>
+            <div className="flex items-center gap-3">
+                <button onClick={handleDownload} disabled={downloading} className="text-slate-300 hover:text-white flex items-center gap-1 text-sm disabled:opacity-50">
+                    <Download size={16} /> {downloading ? 'Generating...' : 'Download PDF'}
+                </button>
+                <button onClick={onClose} className="text-slate-300 hover:text-white"><X size={24} /></button>
+            </div>
         </div>
-        <div className="p-8 md:p-12 text-slate-800 font-sans bg-white min-h-[800px] relative">
+        
+        <div id="printable-invoice" className="p-8 md:p-12 text-slate-800 font-sans bg-white min-h-[800px] relative">
             <div className={`flex justify-between items-start mb-8 border-b-4 ${borderColor} pb-6`}>
                 <div className="flex items-center gap-2">
                     <div className={`${isReceipt ? 'bg-green-600' : 'bg-red-600'} p-2 rounded`}><Wifi className="text-white" size={32} /></div>
@@ -270,7 +307,6 @@ const InvoiceModal = ({ doc, user, onClose }) => {
                 <div className="text-right"><h2 className="text-2xl font-bold uppercase text-slate-700">{label}</h2><p className="text-sm text-slate-500">{isReceipt ? 'Paid on:' : 'Statement Date:'} {new Date(doc.date).toLocaleDateString()}</p></div>
             </div>
             
-            {/* Stamp for Receipts */}
             {isReceipt && (
                 <div className="absolute top-40 right-12 border-4 border-green-600/20 text-green-600/20 font-black text-6xl uppercase -rotate-12 p-4 rounded-xl select-none pointer-events-none">
                     PAID
