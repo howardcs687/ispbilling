@@ -1006,7 +1006,7 @@ const AdminAnalytics = ({ subscribers, payments, tickets }) => {
   );
 };
 
-const ExpenseManager = ({ appId, db, subscribers }) => {
+const ExpenseManager = ({ appId, db, subscribers, payments }) => {
   const [expenses, setExpenses] = useState([]);
   const [newExpense, setNewExpense] = useState({ title: '', amount: '', category: 'Bandwidth' });
   const [isAdding, setIsAdding] = useState(false);
@@ -1309,7 +1309,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
             </button>
          ))}
       </div>
-      {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} />}
+      {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} payments={payments} />}
       {activeTab === 'speedtest' && <SpeedTest />}{activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} />}
       {activeTab === 'subscribers' && (
         <>
