@@ -1038,7 +1038,10 @@ const ExpenseManager = ({ appId, db, subscribers }) => {
   };
 
   // Mock total revenue calculation (Balance + 50k base) + Real Expenses
-  const totalRevenue = subscribers.reduce((acc, curr) => acc + (curr.balance || 0), 0) + 50000;
+  // This calculates actual money received from verified payments
+const totalRevenue = payments
+  .filter(p => p.status === 'verified')
+  .reduce((acc, curr) => acc + (parseFloat(curr.amount) || 1500), 0);
   const totalExpenses = expenses.reduce((acc, curr) => acc + curr.amount, 0);
   const netProfit = totalRevenue - totalExpenses;
 
