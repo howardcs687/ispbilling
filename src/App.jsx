@@ -693,14 +693,21 @@ const Login = ({ onLogin }) => {
      if (!recoveryEmail) return;
      setRecoveryLoading(true);
      try {
-        const usersRef = collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME);
-        const q = query(usersRef, where('email', '==', recoveryEmail));
-        const querySnapshot = await getDocs(q);
-        if (querySnapshot.empty) { alert("This email is not registered."); setRecoveryLoading(false); return; }
+        // FIX: Directly ask Auth to send email (Bypassing database permission check)
         await sendPasswordResetEmail(auth, recoveryEmail);
-        alert("Reset link sent!");
+        
+        alert("If this email is registered, you will receive a password reset link shortly.");
         setShowForgot(false);
-     } catch(e) { alert(e.message); }
+        setRecoveryEmail('');
+     } catch(e) { 
+        console.error(e);
+        // Even if user not found, Firebase might throw an error we can catch
+        if (e.code === 'auth/user-not-found') {
+            alert("This email is not registered in our system.");
+        } else {
+            alert("Error: " + e.message); 
+        }
+     }
      setRecoveryLoading(false);
   };
 
