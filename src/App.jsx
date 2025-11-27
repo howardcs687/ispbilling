@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAnalytics } from "firebase/analytics";
 import { 
@@ -32,6 +33,7 @@ import { 
 import { 
   Wifi, 
   CreditCard, 
+  DollarSign,
   User, 
   LogOut, 
   Shield, 
@@ -888,6 +890,78 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
     </div>
   );
 };
+const AdminAnalytics = ({ subscribers, payments, tickets }) => {
+  const activeUsers = subscribers.filter(s => s.status === 'active').length;
+  const inactiveUsers = subscribers.filter(s => s.status !== 'active').length;
+  const totalBalance = subscribers.reduce((acc, curr) => acc + (curr.balance || 0), 0);
+  const verifiedPayments = payments.filter(p => p.status === 'verified').length;
+  const pendingPayments = payments.filter(p => p.status !== 'verified').length;
+
+  const userStatusData = [
+    { name: 'Active', value: activeUsers },
+    { name: 'Inactive/Overdue', value: inactiveUsers },
+  ];
+  const COLORS = ['#16a34a', '#dc2626'];
+
+  const openTickets = tickets.filter(t => t.status === 'open').length;
+  const resolvedTickets = tickets.filter(t => t.status !== 'open').length;
+  const ticketData = [
+    { name: 'Support Tickets', Open: openTickets, Resolved: resolvedTickets },
+  ];
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-green-100 text-green-600 rounded-xl"><DollarSign size={24} /></div>
+                    <div><p className="text-sm text-slate-500 font-bold uppercase">Pending Collectibles</p><h3 className="text-2xl font-bold text-slate-800">₱{totalBalance.toLocaleString()}</h3></div>
+                </div>
+            </div>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-blue-100 text-blue-600 rounded-xl"><User size={24} /></div>
+                    <div><p className="text-sm text-slate-500 font-bold uppercase">Total Subscribers</p><h3 className="text-2xl font-bold text-slate-800">{subscribers.length}</h3></div>
+                </div>
+            </div>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-orange-100 text-orange-600 rounded-xl"><CreditCard size={24} /></div>
+                    <div><p className="text-sm text-slate-500 font-bold uppercase">Payments to Verify</p><h3 className="text-2xl font-bold text-slate-800">{pendingPayments}</h3></div>
+                </div>
+            </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-80">
+                <h3 className="font-bold text-slate-700 mb-4">Subscriber Health</h3>
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie data={userStatusData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                            {userStatusData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}
+                        </Pie>
+                        <RechartsTooltip />
+                        <Legend />
+                    </PieChart>
+                </ResponsiveContainer>
+            </div>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-80">
+                <h3 className="font-bold text-slate-700 mb-4">Support Ticket Status</h3>
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={ticketData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                        <YAxis axisLine={false} tickLine={false} />
+                        <RechartsTooltip cursor={{fill: 'transparent'}} />
+                        <Legend />
+                        <Bar dataKey="Open" fill="#facc15" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Resolved" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+    </div>
+  );
+};
 
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
@@ -1074,13 +1148,13 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit flex space-x-1 overflow-x-auto max-w-full mx-auto md:mx-0">
-         {['subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
+         {['analytics', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-                {tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
+                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
          ))}
       </div>
-      {activeTab === 'speedtest' && <SpeedTest />}
+      {activeTab === 'speedtest' && <SpeedTest />}{activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} />}
       {activeTab === 'subscribers' && (
         <>
            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
