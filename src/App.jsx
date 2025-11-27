@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, Tooltip } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAnalytics } from "firebase/analytics";
 import { 
@@ -87,7 +87,12 @@ import { 
   Briefcase,
   Signal,
   Gift,
-  AlertTriangle
+  AlertTriangle,
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  Trash2, 
+  Plus,
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -122,6 +127,7 @@ const REPAIRS_COLLECTION = 'isp_repairs_v1'; 
 const NOTIFICATIONS_COLLECTION = 'isp_notifications_v1';
 const OUTAGES_COLLECTION = 'isp_outages_v1'; 
 const INVOICES_COLLECTION = 'isp_invoices_v1';
+const EXPENSES_COLLECTION = 'isp_expenses_v1';
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
 // --- Helper Functions ---
@@ -668,77 +674,6 @@ const Login = ({ onLogin }) => {
 };
 
 // 3. Subscriber Dashboard
-const DataUsageWidget = ({ usageData, planName }) => {
-  // Use real data if available from MikroTik sync, otherwise defaults to 0
-  const totalDL = usageData?.download || 0;
-  const totalUL = usageData?.upload || 0;
-  const lastUpdate = usageData?.lastUpdated ? new Date(usageData.lastUpdated).toLocaleString() : 'Waiting for sync...';
-
-  // Mock data for the visual graph (Since MikroTik only gives totals, we simulate the curve for UI)
-  const graphData = [
-    { name: 'Mon', download: 45, upload: 12 },
-    { name: 'Tue', download: 52, upload: 15 },
-    { name: 'Wed', download: 38, upload: 8 },
-    { name: 'Thu', download: 65, upload: 20 },
-    { name: 'Fri', download: 48, upload: 10 },
-    { name: 'Sat', download: 85, upload: 35 },
-    { name: 'Sun', download: 90, upload: 40 },
-  ];
-
-  return (
-    <div className="space-y-6 animate-in fade-in">
-        <div className="flex flex-col md:flex-row gap-4">
-            {/* Total Download Card */}
-            <div className="flex-1 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg shadow-blue-200">
-                <div className="flex items-start justify-between">
-                    <div>
-                        <p className="text-blue-100 text-xs font-bold uppercase mb-1">Total Download</p>
-                        <h3 className="text-4xl font-bold">{totalDL.toFixed(2)} <span className="text-lg font-medium opacity-70">GB</span></h3>
-                    </div>
-                    <div className="bg-white/20 p-2 rounded-lg"><Download size={24} /></div>
-                </div>
-                <div className="mt-4 text-xs text-blue-200 bg-white/10 px-3 py-1 rounded-lg w-fit flex items-center gap-2">
-                    <RefreshCw size={10} className="animate-spin-slow" /> Last Synced: {lastUpdate}
-                </div>
-            </div>
-
-            {/* Total Upload Card */}
-            <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                 <div className="flex items-start justify-between">
-                    <div>
-                        <p className="text-slate-500 text-xs font-bold uppercase mb-1">Total Upload</p>
-                        <h3 className="text-4xl font-bold text-slate-800">{totalUL.toFixed(2)} <span className="text-lg font-medium text-slate-400">GB</span></h3>
-                    </div>
-                    <div className="bg-slate-100 text-slate-600 p-2 rounded-lg"><Upload size={24} /></div>
-                </div>
-                <div className="mt-4 text-sm text-slate-500">
-                    Current Plan: <span className="font-bold text-green-600 uppercase">{planName || 'Standard'}</span>
-                </div>
-            </div>
-        </div>
-
-        {/* The Graph */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-80 hidden md:block">
-            <h3 className="font-bold text-slate-700 mb-6">Usage Trend (Last 7 Days)</h3>
-            <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={graphData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                    <defs>
-                        <linearGradient id="colorDl" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
-                        </linearGradient>
-                    </defs>
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                    <YAxis axisLine={false} tickLine={false} />
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                    <Area type="monotone" dataKey="download" stroke="#2563eb" fillOpacity={1} fill="url(#colorDl)" strokeWidth={3} name="Download (GB)" />
-                </AreaChart>
-            </ResponsiveContainer>
-        </div>
-    </div>
-  );
-};
 const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair, outages }) => {
   const [activeTab, setActiveTab] = useState('overview'); 
   const [showQR, setShowQR] = useState(false);
@@ -838,20 +773,12 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
-        {['overview', 'usage', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
+        {['overview', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-              {tab === 'usage' ? <><Activity size={16}/> Usage</> : 
-               tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : 
-               tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : 
-               tab === 'plans' ? <><Globe size={16}/> Plans</> : 
-               tab === 'documents' ? <><FileText size={16}/> Documents</> : 
-               tab === 'rewards' ? <><Gift size={16}/> Rewards</> : 
-               tab === 'settings' ? <><UserCog size={16}/> Settings</> : 
-               tab}
-            </button>
+              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'documents' ? <><FileText size={16}/> Documents</> : tab === 'rewards' ? <><Gift size={16}/> Rewards</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
+           </button>
         ))}
       </div>
-      {activeTab === 'usage' && <DataUsageWidget usageData={userData.usageData} planName={userData.plan} />}  
       {activeTab === 'speedtest' && <SpeedTest />}
       {activeTab === 'overview' && (
         <>
@@ -1078,6 +1005,115 @@ const AdminAnalytics = ({ subscribers, payments, tickets }) => {
   );
 };
 
+const ExpenseManager = ({ appId, db, subscribers }) => {
+  const [expenses, setExpenses] = useState([]);
+  const [newExpense, setNewExpense] = useState({ title: '', amount: '', category: 'Bandwidth' });
+  const [isAdding, setIsAdding] = useState(false);
+
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', EXPENSES_COLLECTION), orderBy('date', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, [appId, db]);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (!newExpense.title || !newExpense.amount) return;
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', EXPENSES_COLLECTION), {
+      ...newExpense,
+      amount: parseFloat(newExpense.amount),
+      date: new Date().toISOString()
+    });
+    setNewExpense({ title: '', amount: '', category: 'Bandwidth' });
+    setIsAdding(false);
+  };
+
+  const handleDelete = async (id) => {
+    if(confirm("Delete this expense record?")) {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', EXPENSES_COLLECTION, id));
+    }
+  };
+
+  // Mock total revenue calculation (Balance + 50k base) + Real Expenses
+  const totalRevenue = subscribers.reduce((acc, curr) => acc + (curr.balance || 0), 0) + 50000;
+  const totalExpenses = expenses.reduce((acc, curr) => acc + curr.amount, 0);
+  const netProfit = totalRevenue - totalExpenses;
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-green-100 text-green-600 rounded-xl"><TrendingUp size={24} /></div>
+                    <div><p className="text-sm text-slate-500 font-bold uppercase">Total Revenue</p><h3 className="text-2xl font-bold text-slate-800">₱{totalRevenue.toLocaleString()}</h3></div>
+                </div>
+            </div>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-red-100 text-red-600 rounded-xl"><TrendingDown size={24} /></div>
+                    <div><p className="text-sm text-slate-500 font-bold uppercase">Total Expenses</p><h3 className="text-2xl font-bold text-slate-800">₱{totalExpenses.toLocaleString()}</h3></div>
+                </div>
+            </div>
+            <div className={`bg-white p-6 rounded-2xl shadow-sm border border-slate-200 ${netProfit >= 0 ? 'border-b-4 border-b-green-500' : 'border-b-4 border-b-red-500'}`}>
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-blue-100 text-blue-600 rounded-xl"><DollarSign size={24} /></div>
+                    <div><p className="text-sm text-slate-500 font-bold uppercase">Net Profit</p><h3 className={`text-2xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>₱{netProfit.toLocaleString()}</h3></div>
+                </div>
+            </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 className="font-bold text-slate-800">Expense Log</h3>
+                <button onClick={() => setIsAdding(!isAdding)} className="text-blue-600 font-bold text-sm flex items-center gap-2 hover:bg-blue-50 px-3 py-2 rounded-lg transition-colors">
+                    {isAdding ? 'Cancel' : <><Plus size={16}/> Add Expense</>}
+                </button>
+            </div>
+            
+            {isAdding && (
+                <form onSubmit={handleAdd} className="p-6 bg-slate-50 border-b border-slate-100 flex gap-4 items-end">
+                    <div className="flex-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase">Item Name</label>
+                        <input className="w-full border p-2 rounded text-sm" placeholder="e.g. Bandwidth Payment" value={newExpense.title} onChange={e => setNewExpense({...newExpense, title: e.target.value})} required />
+                    </div>
+                    <div className="w-40">
+                         <label className="text-xs font-bold text-slate-500 uppercase">Category</label>
+                         <select className="w-full border p-2 rounded text-sm" value={newExpense.category} onChange={e => setNewExpense({...newExpense, category: e.target.value})}>
+                            <option>Bandwidth</option><option>Salaries</option><option>Rent</option><option>Supplies</option><option>Utilities</option><option>Other</option>
+                         </select>
+                    </div>
+                    <div className="w-32">
+                        <label className="text-xs font-bold text-slate-500 uppercase">Cost (₱)</label>
+                        <input type="number" className="w-full border p-2 rounded text-sm" placeholder="0.00" value={newExpense.amount} onChange={e => setNewExpense({...newExpense, amount: e.target.value})} required />
+                    </div>
+                    <button className="bg-red-600 text-white px-6 py-2 rounded font-bold text-sm hover:bg-red-700">Record</button>
+                </form>
+            )}
+
+            <div className="divide-y divide-slate-100">
+                {expenses.length > 0 ? expenses.map(ex => (
+                    <div key={ex.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-red-50 p-2 rounded-lg text-red-500"><TrendingDown size={20}/></div>
+                            <div>
+                                <p className="font-bold text-slate-800">{ex.title}</p>
+                                <p className="text-xs text-slate-500">{ex.category} • {new Date(ex.date).toLocaleDateString()}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-6">
+                            <span className="font-bold text-red-600">- ₱{ex.amount.toLocaleString()}</span>
+                            <button onClick={() => handleDelete(ex.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={16}/></button>
+                        </div>
+                    </div>
+                )) : <p className="p-8 text-center text-slate-400">No expenses recorded yet.</p>}
+            </div>
+        </div>
+    </div>
+  );
+};
+
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -1263,12 +1299,13 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit flex space-x-1 overflow-x-auto max-w-full mx-auto md:mx-0">
-         {['analytics', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
+         {['analytics', 'expenses', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
+                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
          ))}
       </div>
+      {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} />}
       {activeTab === 'speedtest' && <SpeedTest />}{activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} />}
       {activeTab === 'subscribers' && (
         <>
