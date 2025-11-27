@@ -93,7 +93,9 @@ import {
   TrendingDown,
   Package,
   PlusCircle,
-  MinusCircle
+  MinusCircle,
+  Music,
+  Volume2,
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -562,116 +564,214 @@ const SpeedTest = () => {
   );
 };
 
+const BackgroundMusic = () => {
+  const [playing, setPlaying] = useState(false);
+  const [audio] = useState(new Audio('https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3'));
+
+  useEffect(() => {
+    audio.loop = true;
+    audio.volume = 0.3; 
+    return () => audio.pause();
+  }, [audio]);
+
+  const toggle = () => {
+    if (playing) audio.pause();
+    else audio.play().catch(e => console.log("Audio play failed (interaction needed first)"));
+    setPlaying(!playing);
+  };
+
+  return (
+    <button 
+      onClick={toggle}
+      className={`fixed bottom-6 left-6 z-50 flex items-center gap-3 px-4 py-3 rounded-full shadow-2xl backdrop-blur-md transition-all duration-500 ${playing ? 'bg-indigo-600/90 text-white w-40' : 'bg-white/80 text-slate-600 w-12 hover:w-40 overflow-hidden group'}`}
+    >
+      <div className={`flex-shrink-0 ${playing ? 'animate-spin-slow' : ''}`}>
+        {playing ? <Volume2 size={20} /> : <Music size={20} />}
+      </div>
+      <span className={`whitespace-nowrap text-xs font-bold tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${playing ? 'opacity-100' : ''}`}>
+        {playing ? 'Vibing...' : 'Play Music'}
+      </span>
+    </button>
+  );
+};
+
 const Layout = ({ children, user, onLogout }) => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-indigo-50 font-sans text-slate-800 flex flex-col">
-      <nav className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white shadow-lg sticky top-0 z-50 backdrop-blur-sm bg-opacity-95">
-        <div className="w-full px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-2"><div className="bg-white/10 p-2 rounded-lg"><Wifi className="h-6 w-6 text-blue-200" /></div><span className="font-bold text-xl tracking-tight text-white">SwiftNet<span className="text-blue-300">ISP</span></span></div>
-            {user && (
-              <div className="hidden md:flex items-center space-x-4">
-                <div className="flex items-center space-x-3 px-4 py-1.5 bg-white/10 rounded-full text-sm border border-white/10 backdrop-blur-md">
-                   {user.role === 'admin' ? <Shield size={14} className="text-yellow-300" /> : 
-                    user.role === 'technician' ? <HardHat size={14} className="text-orange-300" /> : 
-                    <User size={14} className="text-blue-200" />}
-                  <span className="font-medium tracking-wide">{user.displayName || user.email}</span>
-                </div>
-                <button onClick={onLogout} className="p-2 hover:bg-white/10 rounded-full transition-all duration-200 text-blue-100 hover:text-white" title="Logout"><LogOut size={20} /></button>
-              </div>
-            )}
-            {user && <div className="md:hidden"><button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 text-white hover:bg-white/10 rounded-lg transition-colors">{isMenuOpen ? <X /> : <Menu />}</button></div>}
-          </div>
-        </div>
-        {isMenuOpen && user && <div className="md:hidden bg-indigo-900 px-4 py-4 space-y-2 border-t border-white/10"><button onClick={onLogout} className="flex items-center space-x-3 w-full px-4 py-3 bg-white/10 rounded-xl hover:bg-white/20 transition-colors"><LogOut size={18} /><span>Sign Out</span></button></div>}
-      </nav>
-      <main className="flex-grow w-full px-4 sm:px-6 lg:px-8 py-6">{children}</main>
-    </div>
-  );
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  
+  return (
+    <div className="min-h-screen font-sans text-slate-800 flex flex-col relative overflow-x-hidden selection:bg-indigo-200 selection:text-indigo-900">
+      {/* Animated Background */}
+      <div className="fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-200 via-slate-100 to-indigo-100"></div>
+        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-purple-300/30 blur-[100px] animate-pulse"></div>
+        <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-blue-300/30 blur-[100px] animate-pulse delay-1000"></div>
+      </div>
+
+      <nav className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-white/20 shadow-sm">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-20">
+            <div className="flex items-center gap-3">
+                <div className="bg-gradient-to-tr from-blue-600 to-purple-600 p-2.5 rounded-xl shadow-lg shadow-blue-500/30">
+                    <Wifi className="h-6 w-6 text-white" />
+                </div>
+                <span className="font-black text-2xl tracking-tighter text-slate-800 bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600">
+                    SwiftNet<span className="text-indigo-600">ISP</span>
+                </span>
+            </div>
+            
+            {user && (
+              <div className="hidden md:flex items-center gap-4">
+                <div className="flex items-center gap-3 px-5 py-2 bg-slate-100/50 rounded-full border border-white/50 shadow-inner">
+                   {user.role === 'admin' ? <Shield size={16} className="text-indigo-600" /> : 
+                    user.role === 'technician' ? <HardHat size={16} className="text-orange-600" /> : 
+                    <User size={16} className="text-blue-600" />}
+                   <span className="font-bold text-sm text-slate-700">{user.displayName || user.email}</span>
+                </div>
+                <button onClick={onLogout} className="p-3 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-full transition-all duration-300 group">
+                    <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
+                </button>
+              </div>
+            )}
+            {user && <div className="md:hidden"><button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 text-slate-600"><Menu /></button></div>}
+          </div>
+        </div>
+      </nav>
+
+      <main className="flex-grow w-full px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        {children}
+      </main>
+      
+      <BackgroundMusic />
+    </div>
+  );
 };
 
 const Login = ({ onLogin }) => {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [showForgot, setShowForgot] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState(''); 
-  const [name, setName] = useState(''); 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [recoveryEmail, setRecoveryEmail] = useState('');
-  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState(''); 
+  const [name, setName] = useState(''); 
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      if (isSignUp) {
-         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-         const newUid = userCredential.user.uid;
-         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), {
-           uid: newUid,
-           username: name || email.split('@')[0],
-           email: email,
-           role: 'subscriber',
-           status: 'applicant', 
-           accountNumber: 'PENDING',
-           plan: null, 
-           balance: 0,
-           address: '', 
-           dueDate: new Date().toISOString()
-         });
-      } else {
-         await signInWithEmailAndPassword(auth, email, password);
-      }
-    } catch (err) {
-      console.error(err);
-      setError(err.message);
-    }
-    setLoading(false);
-  };
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      if (isSignUp) {
+         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+         const newUid = userCredential.user.uid;
+         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), {
+           uid: newUid,
+           username: name || email.split('@')[0],
+           email: email,
+           role: 'subscriber',
+           status: 'applicant', 
+           accountNumber: 'PENDING',
+           plan: null, 
+           balance: 0,
+           address: '', 
+           dueDate: new Date().toISOString()
+         });
+      } else {
+         await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+    }
+    setLoading(false);
+  };
 
-  const handleForgotPassword = async (e) => {
-     e.preventDefault();
-     if (!recoveryEmail) return;
-     setRecoveryLoading(true);
-     try {
-        const usersRef = collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME);
-        const q = query(usersRef, where('email', '==', recoveryEmail));
-        const querySnapshot = await getDocs(q);
-        if (querySnapshot.empty) { alert("This email is not registered in our system."); setRecoveryLoading(false); return; }
-        await sendPasswordResetEmail(auth, recoveryEmail);
-        alert("Success! A password reset link has been sent to your email.");
-        setShowForgot(false);
-        setRecoveryEmail('');
-     } catch(e) { console.error(e); alert("Error: " + e.message); }
-     setRecoveryLoading(false);
-  };
+  const handleForgotPassword = async (e) => {
+     e.preventDefault();
+     if (!recoveryEmail) return;
+     setRecoveryLoading(true);
+     try {
+        const usersRef = collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME);
+        const q = query(usersRef, where('email', '==', recoveryEmail));
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) { alert("This email is not registered."); setRecoveryLoading(false); return; }
+        await sendPasswordResetEmail(auth, recoveryEmail);
+        alert("Reset link sent!");
+        setShowForgot(false);
+     } catch(e) { alert(e.message); }
+     setRecoveryLoading(false);
+  };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center px-4 relative overflow-hidden">
-      <div className="max-w-md w-full bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden relative z-10 border border-white/20">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-center">
-           <div className="bg-white/20 w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center backdrop-blur-sm shadow-inner"><Wifi className="h-8 w-8 text-white" /></div>
-           <h2 className="text-2xl font-bold text-white mb-1">Welcome to SwiftNet</h2>
-           <p className="text-blue-100 text-sm font-light">{isSignUp ? 'Create your account' : 'Secure Subscriber Access'}</p>
-        </div>
-        <div className="p-8">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {isSignUp && (<div><label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Full Name</label><input type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" value={name} onChange={(e) => setName(e.target.value)} placeholder="John Doe" /></div>)}
-            <div><label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Email Address</label><input type="email" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" /></div>
-            <div><label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Password</label><div className="relative"><input type={showPassword ? "text" : "password"} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></div>
-            {error && <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-100"><AlertCircle size={16} />{error}</div>}
-            <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-3.5 rounded-xl shadow-lg hover:shadow-blue-500/30 transition-all disabled:opacity-70">{loading ? 'Processing...' : (isSignUp ? 'Create Account' : 'Sign In')}</button>
-          </form>
-          <div className="mt-4 text-center flex flex-col gap-2">{!isSignUp && (<button onClick={() => setShowForgot(true)} className="text-sm text-blue-600 font-medium hover:text-blue-800 transition-colors">Forgot Password?</button>)}<button onClick={() => { setIsSignUp(!isSignUp); setError(''); }} className="text-sm text-slate-500 hover:text-blue-600 underline">{isSignUp ? 'Already have an account? Sign In' : 'No account? Create one'}</button></div>
-        </div>
-      </div>
-      {showForgot && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-slate-800 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center gap-2"><HelpCircle size={18} /> Account Recovery</h3><button onClick={() => setShowForgot(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><div className="p-6"><p className="text-slate-600 text-sm mb-4">Enter your registered email address.</p><form onSubmit={handleForgotPassword}><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email Address</label><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none mb-4" placeholder="name@example.com" value={recoveryEmail} onChange={(e) => setRecoveryEmail(e.target.value)} /><button type="submit" disabled={recoveryLoading} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-50">{recoveryLoading ? 'Checking...' : 'Submit Request'}</button></form></div></div></div>)}
-    </div>
-  );
+  return (
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background Effects */}
+      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black"></div>
+      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-600/30 rounded-full blur-[120px] animate-pulse"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-600/30 rounded-full blur-[120px] animate-pulse delay-700"></div>
+
+      <div className="w-full max-w-md bg-white/10 backdrop-blur-2xl border border-white/20 rounded-3xl shadow-2xl overflow-hidden relative z-10 p-8">
+        <div className="text-center mb-8">
+           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-500 to-purple-600 shadow-lg shadow-blue-500/40 mb-4">
+              <Wifi className="h-8 w-8 text-white" />
+           </div>
+           <h2 className="text-3xl font-black text-white tracking-tight">SwiftNet<span className="text-blue-400">ISP</span></h2>
+           <p className="text-slate-400 mt-2 text-sm">Experience the speed of light.</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+           {isSignUp && (
+             <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-300 ml-1 uppercase">Full Name</label>
+                <input type="text" required className="w-full bg-slate-800/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" value={name} onChange={(e) => setName(e.target.value)} placeholder="John Doe" />
+             </div>
+           )}
+           <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-300 ml-1 uppercase">Email Address</label>
+              <input type="email" required className="w-full bg-slate-800/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@swiftnet.com" />
+           </div>
+           <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-300 ml-1 uppercase">Password</label>
+              <div className="relative">
+                <input type={showPassword ? "text" : "password"} required className="w-full bg-slate-800/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-white transition-colors">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+              </div>
+           </div>
+
+           {error && <div className="bg-red-500/10 border border-red-500/50 text-red-200 text-sm p-3 rounded-lg flex items-center gap-2"><AlertCircle size={16}/>{error}</div>}
+
+           <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed">
+              {loading ? 'Processing...' : (isSignUp ? 'Create Account' : 'Access Portal')}
+           </button>
+        </form>
+
+        <div className="mt-6 text-center space-y-3">
+           {!isSignUp && <button onClick={() => setShowForgot(true)} className="text-sm text-slate-400 hover:text-white transition-colors">Forgot Password?</button>}
+           <div className="pt-4 border-t border-white/10">
+              <button onClick={() => setIsSignUp(!isSignUp)} className="text-sm text-slate-300 hover:text-white transition-colors">
+                 {isSignUp ? 'Already a subscriber? Sign In' : "Don't have an account? Apply Now"}
+              </button>
+           </div>
+        </div>
+      </div>
+      
+      {/* Forgot Password Modal */}
+      {showForgot && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+           <div className="bg-slate-900 border border-white/20 w-full max-w-sm p-6 rounded-2xl shadow-2xl animate-in zoom-in-95">
+              <h3 className="text-xl font-bold text-white mb-2">Reset Password</h3>
+              <p className="text-slate-400 text-sm mb-4">We will send a recovery link to your email.</p>
+              <input type="email" value={recoveryEmail} onChange={e=>setRecoveryEmail(e.target.value)} className="w-full bg-slate-800 border border-white/10 rounded-lg px-4 py-2 text-white mb-4 outline-none" placeholder="Enter email" />
+              <div className="flex gap-2 justify-end">
+                 <button onClick={()=>setShowForgot(false)} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancel</button>
+                 <button onClick={handleForgotPassword} disabled={recoveryLoading} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold">{recoveryLoading ? 'Sending...' : 'Send Link'}</button>
+              </div>
+           </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 // 3. Subscriber Dashboard
@@ -782,65 +882,88 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       </div>
       {activeTab === 'speedtest' && <SpeedTest />}
       {activeTab === 'overview' && (
-        <>
-          {/* NEW: Network Status Widget */}
-          {hasOutage ? (
-              <div className="bg-red-50 border-l-4 border-red-600 p-6 rounded-r-xl mb-6 shadow-sm animate-pulse">
-                  <div className="flex items-start gap-4">
-                      <div className="p-3 bg-red-100 rounded-full text-red-600"><AlertTriangle size={28}/></div>
-                      <div>
-                          <h3 className="text-lg font-bold text-red-800">Service Interruption Detected</h3>
-                          <p className="text-sm text-red-700 mt-1">We are aware of a network issue affecting <strong>{activeOutages[0].area}</strong>.</p>
-                          <p className="text-sm font-bold text-red-800 mt-2">Status: {activeOutages[0].status} • {activeOutages[0].message}</p>
-                      </div>
-                  </div>
-              </div>
-          ) : (
-              <div className="bg-emerald-50 border-l-4 border-emerald-500 p-6 rounded-r-xl mb-6 shadow-sm">
-                  <div className="flex items-center gap-4">
-                      <div className="p-3 bg-emerald-100 rounded-full text-emerald-600"><Signal size={28}/></div>
-                      <div>
-                          <h3 className="text-lg font-bold text-emerald-800">System Healthy</h3>
-                          <p className="text-sm text-emerald-700">Your connection is stable. No outages reported in your area.</p>
-                      </div>
-                  </div>
-              </div>
-          )}
+        <div className="space-y-8">
+          {/* Welcome Banner */}
+          <div className="relative overflow-hidden rounded-3xl bg-slate-900 text-white p-8 shadow-2xl">
+             <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-blue-500/20 rounded-full blur-3xl -mr-20 -mt-40"></div>
+             <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-purple-500/20 rounded-full blur-3xl -ml-20 -mb-40"></div>
+             <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
+                <div>
+                    <h2 className="text-3xl font-bold mb-2">Hello, {userData.username} 👋</h2>
+                    <p className="text-slate-400">Welcome back to your SwiftNet portal.</p>
+                </div>
+                <div className={`px-4 py-2 rounded-full border flex items-center gap-2 ${userData.status === 'active' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
+                    <div className={`w-2 h-2 rounded-full ${userData.status === 'active' ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
+                    <span className="text-xs font-bold uppercase tracking-widest">{userData.status}</span>
+                </div>
+             </div>
+          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 hover:shadow-lg transition-shadow duration-300">
-              <div className={`p-4 rounded-2xl ${userData.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}><Activity size={28} /></div>
-              <div><p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Service Status</p><p className={`text-xl font-bold capitalize ${userData.status === 'active' ? 'text-green-700' : 'text-red-700'}`}>{userData.status}</p></div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 hover:shadow-lg transition-shadow duration-300">
-              <div className="p-4 rounded-2xl bg-blue-50 text-blue-600"><Zap size={28} /></div>
-              <div><p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Current Plan</p><p className="text-xl font-bold text-slate-800">{userData.plan}</p></div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4 hover:shadow-lg transition-shadow duration-300 sm:col-span-2 lg:col-span-1">
-              <div className="p-4 rounded-2xl bg-indigo-50 text-indigo-600"><CreditCard size={28} /></div>
-              <div><p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Total Balance</p><p className="text-xl font-bold text-slate-800">₱{userData.balance?.toFixed(2)}</p></div>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden h-fit">
-              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center"><h3 className="font-bold text-slate-800">Billing Overview</h3>{userData.balance > 0 && <span className="text-[10px] uppercase font-bold bg-red-100 text-red-600 px-3 py-1 rounded-full">Payment Due</span>}</div>
-              <div className="p-8 space-y-6">
-                <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Account No.</span><span className="font-mono font-medium text-slate-700">{userData.accountNumber}</span></div>
-                <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Due Date</span><span className={`font-medium ${isOverdue ? 'text-red-600' : 'text-slate-700'}`}>{new Date(userData.dueDate).toLocaleDateString()}</span></div>
-                <div className="flex justify-between items-center pt-2"><span className="text-slate-800 font-bold text-lg">Total Due</span><span className="text-blue-700 font-bold text-3xl">₱{userData.balance?.toFixed(2)}</span></div>
-                {userData.balance > 0 ? (<button onClick={() => setShowQR(true)} className="w-full mt-4 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center space-x-2 shadow-lg shadow-blue-200 transition-all"><Smartphone size={20} /><span>Pay with QR Code</span></button>) : <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center justify-center text-green-700 space-x-2"><CheckCircle size={20} /><span className="font-medium">No payment due. You are all set!</span></div>}
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit">
-              <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-slate-800">System Notifications</h3><button onClick={() => setActiveTab('support')} className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">Report Issue <ArrowRight size={14} /></button></div>
-              <div className="space-y-4">
-                {userData.status === 'disconnected' && (<div className="bg-red-50 border-l-4 border-red-500 p-5 rounded-r-xl"><div className="flex items-start"><AlertCircle className="text-red-500 mt-0.5 mr-3" size={20} /><div><h4 className="font-bold text-red-700">Service Disconnected</h4><p className="text-sm text-red-600 mt-1">Your internet service is suspended.</p></div></div></div>)}
-                {allAlerts && allAlerts.length > 0 ? allAlerts.map((ann) => (<div key={ann.id} className={`flex items-start p-4 rounded-xl border ${ann.isPublic ? 'bg-slate-50 border-transparent' : 'bg-blue-50 border-blue-100'}`}><div className={`p-2.5 rounded-full mr-4 flex-shrink-0 ${getBgColor(ann.type)}`}>{getIcon(ann.type)}</div><div><div className="flex items-center gap-2"><p className="font-bold text-sm text-slate-700">{ann.title}</p>{!ann.isPublic && <span className="text-[9px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded font-bold uppercase">Private</span>}</div><p className="text-xs text-slate-500 mt-0.5">{ann.message}</p><p className="text-[10px] text-slate-400 mt-1">{new Date(ann.date).toLocaleDateString()}</p></div></div>)) : <div className="flex items-center justify-center p-4 bg-slate-50 rounded-xl text-slate-400 text-sm">No new announcements.</div>}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+             {/* Balance Card - Glassmorphism */}
+             <div className="lg:col-span-2 relative overflow-hidden rounded-3xl p-8 shadow-xl border border-white/40 bg-white/60 backdrop-blur-xl transition-all hover:shadow-2xl group">
+                <div className="flex justify-between items-start mb-8">
+                    <div>
+                        <p className="text-slate-500 font-bold uppercase tracking-wider text-xs mb-1">Total Balance Due</p>
+                        <h3 className={`text-5xl font-black tracking-tight ${userData.balance > 0 ? 'text-slate-800' : 'text-green-600'}`}>
+                            ₱{userData.balance?.toFixed(2)}
+                        </h3>
+                    </div>
+                    <div className="bg-indigo-50 p-3 rounded-2xl text-indigo-600 group-hover:scale-110 transition-transform duration-300">
+                        <CreditCard size={32} />
+                    </div>
+                </div>
+                
+                <div className="flex flex-col md:flex-row gap-4 items-center">
+                    <div className="flex-1 w-full bg-white/50 rounded-2xl p-4 border border-white/50">
+                        <p className="text-xs text-slate-400 font-bold uppercase mb-1">Due Date</p>
+                        <p className={`font-bold text-lg ${isOverdue ? 'text-red-500' : 'text-slate-700'}`}>
+                            {new Date(userData.dueDate).toLocaleDateString(undefined, {month:'long', day:'numeric', year:'numeric'})}
+                        </p>
+                    </div>
+                    <div className="flex-1 w-full bg-white/50 rounded-2xl p-4 border border-white/50">
+                        <p className="text-xs text-slate-400 font-bold uppercase mb-1">Current Plan</p>
+                        <p className="font-bold text-lg text-slate-700">{userData.plan}</p>
+                    </div>
+                </div>
+
+                {userData.balance > 0 ? (
+                    <button onClick={() => setShowQR(true)} className="w-full mt-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all flex items-center justify-center gap-3">
+                        <Smartphone size={20} /> Pay Now via QR
+                    </button>
+                ) : (
+                    <div className="mt-6 bg-green-100/50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center justify-center gap-2 font-bold">
+                        <CheckCircle size={20} /> You are fully paid. Enjoy surfing!
+                    </div>
+                )}
+             </div>
+
+             {/* Notifications Column */}
+             <div className="bg-white/60 backdrop-blur-md border border-white/40 rounded-3xl p-6 shadow-xl h-fit">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="font-bold text-slate-700">Notifications</h3>
+                    <div className="bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded-full">{allAlerts.length} New</div>
+                </div>
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    {allAlerts.length > 0 ? allAlerts.map((ann) => (
+                        <div key={ann.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100/50 hover:bg-blue-50/50 transition-colors">
+                            <div className="flex items-start gap-3">
+                                <div className={`mt-1 p-1.5 rounded-full ${getBgColor(ann.type)}`}>{getIcon(ann.type)}</div>
+                                <div>
+                                    <p className="text-xs font-bold text-slate-700 mb-0.5">{ann.title}</p>
+                                    <p className="text-[10px] text-slate-500 leading-relaxed">{ann.message}</p>
+                                    <p className="text-[9px] text-slate-400 mt-2 font-medium">{new Date(ann.date).toLocaleDateString()}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )) : (
+                        <div className="text-center py-8 text-slate-400 text-sm">All caught up!</div>
+                    )}
+                </div>
+             </div>
+          </div>
+        </div>
+      )}
       {activeTab === 'repairs' && (
          <div className="space-y-6">
             <div className="flex justify-between items-center">
