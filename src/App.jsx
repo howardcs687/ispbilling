@@ -840,8 +840,15 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
         {['overview', 'usage', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-              tab === 'usage' ? <><Activity size={16}/> Usage</> :{tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'documents' ? <><FileText size={16}/> Documents</> : tab === 'rewards' ? <><Gift size={16}/> Rewards</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
-           </button>
+              {tab === 'usage' ? <><Activity size={16}/> Usage</> : 
+               tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : 
+               tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : 
+               tab === 'plans' ? <><Globe size={16}/> Plans</> : 
+               tab === 'documents' ? <><FileText size={16}/> Documents</> : 
+               tab === 'rewards' ? <><Gift size={16}/> Rewards</> : 
+               tab === 'settings' ? <><UserCog size={16}/> Settings</> : 
+               tab}
+            </button>
         ))}
       </div>
       {activeTab === 'usage' && <DataUsageWidget usageData={userData.usageData} planName={userData.plan} />}  
