@@ -53,7 +53,8 @@ import {
   FileWarning, 
   BookOpen, 
   ChevronRight, 
-  Edit3 
+  Edit3,
+  Sun, Moon, 
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
