@@ -1930,6 +1930,82 @@ const CashierMode = ({ subscribers, db, appId }) => {
   );
 };
 
+const AddStaffModal = ({ onClose }) => {
+  const [formData, setFormData] = useState({ email: '', password: '', username: '', role: 'cashier' });
+  const [loading, setLoading] = useState(false);
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    // Create user in a secondary app instance to avoid logging out the admin
+    let secondaryApp = null;
+    try {
+        secondaryApp = initializeApp(firebaseConfig, "Secondary");
+        const secondaryAuth = getAuth(secondaryApp);
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, formData.email, formData.password);
+        
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userCredential.user.uid), {
+            uid: userCredential.user.uid,
+            username: formData.username,
+            email: formData.email,
+            role: formData.role, 
+            status: 'active',
+            accountNumber: 'STAFF',
+            balance: 0,
+            dateCreated: new Date().toISOString()
+        });
+
+        await deleteApp(secondaryApp);
+        alert(`${formData.role.toUpperCase()} account created successfully!`);
+        onClose();
+    } catch (e) {
+        console.error(e);
+        alert("Error: " + e.message);
+        if (secondaryApp) await deleteApp(secondaryApp);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
+        <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6">
+            <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
+                <UserPlus size={20} className="text-blue-600"/> Add Staff Member
+            </h3>
+            <form onSubmit={handleCreate} className="space-y-3">
+                <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase">Staff Name</label>
+                    <input className="w-full border p-2 rounded-lg" required value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} />
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase">Role</label>
+                    <select className="w-full border p-2 rounded-lg bg-blue-50 font-bold text-blue-700" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
+                        <option value="cashier">Cashier (Billing Only)</option>
+                        <option value="technician">Technician (Repairs Only)</option>
+                        <option value="admin">Admin (Full Access)</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase">Email</label>
+                    <input type="email" className="w-full border p-2 rounded-lg" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase">Password</label>
+                    <input type="text" className="w-full border p-2 rounded-lg font-mono" required value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                </div>
+                <div className="flex gap-2 pt-2">
+                    <button type="button" onClick={onClose} className="flex-1 py-2 text-slate-500 font-bold hover:bg-slate-50 rounded-lg">Cancel</button>
+                    <button disabled={loading} className="flex-1 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50">
+                        {loading ? 'Creating...' : 'Create Account'}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+  );
+};
+
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -1962,6 +2038,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [newOutage, setNewOutage] = useState({ area: '', message: '', status: 'Active' });
   const [editingUser, setEditingUser] = useState(null);
   const [billingUser, setBillingUser] = useState(null);
+  const [showStaffModal, setShowStaffModal] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
@@ -2136,8 +2213,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
             <div className="flex items-center gap-3 flex-wrap">
                <button onClick={() => setShowAnnounceModal(true)} className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-sm"><Megaphone size={18} /> Alert</button>
                <button onClick={() => setShowPasswordModal(true)} className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-sm"><Lock size={18} /> Pass</button>
-               <button onClick={() => setShowAddTechModal(true)} className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-lg shadow-orange-200"><HardHat size={18} /> Add Tech</button>
-               <button onClick={() => setShowAddAdminModal(true)} className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-lg shadow-slate-300"><UserPlus size={18} /> Add Admin</button>
+               <button onClick={() => setShowStaffModal(true)} className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-lg shadow-slate-300"><UserPlus size={18} /> Add Staff</button>
                <button onClick={() => setShowAddModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors shadow-lg shadow-blue-200"><Plus size={18} /> Add Subscriber</button>
             </div>
           </div>
@@ -2268,8 +2344,27 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
             onClose={() => setBillingUser(null)} 
         />
       )}
+      {showStaffModal && <AddStaffModal onClose={() => setShowStaffModal(false)} />}
       </div>
     );
+};
+
+const CashierDashboard = ({ subscribers, db, appId }) => {
+    return (
+        <div className="p-6 animate-in fade-in">
+            <div className="mb-6 flex items-center gap-3">
+                <div className="bg-green-100 p-2 rounded-xl text-green-700">
+                    <Calculator size={24} />
+                </div>
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800">Billing Station</h1>
+                    <p className="text-slate-500 text-sm">Authorized Personnel Only</p>
+                </div>
+            </div>
+            {/* Reusing the CashierMode component we built earlier */}
+            <CashierMode subscribers={subscribers} db={db} appId={appId} />
+        </div>
+    );
 };
 
 // 5. New Technician Dashboard (Unchanged)
@@ -2364,7 +2459,7 @@ export default function App() {
   // Data Subscriptions
   useEffect(() => {
     if (!user) return;
-    if (user.role === 'admin') {
+    if (user.role === 'admin' || user.role === 'cashier') {
        onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), s => setSubscribers(s.docs.map(d => ({id: d.id, ...d.data()}))));
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), orderBy('date', 'desc')), s => setPayments(s.docs.map(d => ({id: d.id, ...d.data()}))));
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), orderBy('dateFiled', 'desc')), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()}))));
@@ -2425,8 +2520,10 @@ export default function App() {
   return (
     <Layout user={user} onLogout={handleLogout}>
       {user.role === 'admin' ? (
-        <AdminDashboard subscribers={subscribers} announcements={announcements} payments={payments} tickets={tickets} repairs={repairs} />
-      ) : user.role === 'technician' ? (
+        <AdminDashboard subscribers={subscribers} announcements={announcements} payments={payments} tickets={tickets} repairs={repairs} user={user} />
+      ) : user.role === 'cashier' ? (
+        <CashierDashboard subscribers={subscribers} db={db} appId={appId} />
+      ) : user.role === 'technician' ? (
         <TechnicianDashboard repairs={repairs} onTechUpdate={handleTechUpdateStatus} />
       ) : (
         <SubscriberDashboard userData={mySubscriberData || {}} onPay={handlePayment} announcements={announcements} notifications={notifications} tickets={tickets} repairs={repairs} onConfirmRepair={handleConfirmRepair} />
