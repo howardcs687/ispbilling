@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAnalytics } from "firebase/analytics";
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css'; // Essential for map styling
 import { 
   getAuth, 
   signInWithEmailAndPassword,
@@ -100,6 +103,7 @@ import {
   ShoppingBag,
   ArrowUpCircle,
   Edit,
+  Map,
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -136,6 +140,7 @@ const OUTAGES_COLLECTION = 'isp_outages_v1'; 
 const INVOICES_COLLECTION = 'isp_invoices_v1';
 const EXPENSES_COLLECTION = 'isp_expenses_v1';
 const PRODUCTS_COLLECTION = 'isp_products_v1';
+const SERVICE_AREAS_COLLECTION = 'isp_service_areas_v1';
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
 // --- Helper Functions ---
@@ -146,116 +151,132 @@ const sendSystemEmail = async (to, subject, htmlContent) => {
 
 // --- COMPONENTS (Ordered bottom-up to avoid hoisting issues) ---
 
-const ApplicationWizard = ({ plan, onClose, onSubmit }) => {
-  const [step, setStep] = useState(1);
-  const [addressType, setAddressType] = useState('house'); 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [formData, setFormData] = useState({
-    province: 'CAGAYAN',
-    city: 'STA ANA',
-    barangay: 'BGY MAREDE',
-    subdivision: '',
-    street: '',
-    building: '',
-    houseNo: '',
-    block: '',
-    lot: '',
-    landmark: ''
-  });
+// Fix for default Leaflet marker icons in React
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
-  const handleNext = () => setStep(step + 1);
-  const handleBack = () => setStep(step - 1);
+const ApplicationWizard = ({ plan, onClose, onSubmit, db, appId }) => {
+  const [step, setStep] = useState(1);
+  const [serviceStatus, setServiceStatus] = useState(null); 
+  const [position, setPosition] = useState({ lat: 18.4728, lng: 122.1557 }); // Default Center
+  
+  const [formData, setFormData] = useState({
+    province: 'CAGAYAN',
+    city: '',
+    barangay: '',
+    street: '',
+    landmark: '',
+    lat: '',
+    lng: ''
+  });
 
-  const steps = [
-    { id: 1, title: "Check Address" },
-    { id: 2, title: "Pin Location" },
-    { id: 3, title: "Review" },
-    { id: 4, title: "Details" }
-  ];
+  const checkAvailability = async () => {
+    if (!formData.city || !formData.barangay) return alert("Please enter City and Barangay");
+    const cityUpper = formData.city.toUpperCase().trim();
+    const brgyUpper = formData.barangay.toUpperCase().trim();
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4 animate-in fade-in zoom-in-95 duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="bg-red-600 p-6 text-white relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10"></div>
-            <h2 className="text-2xl font-bold mb-1">Guiding you in every step</h2>
-            <p className="text-red-100 text-sm">New Application - {plan.name}</p>
-            <button onClick={onClose} className="absolute top-4 right-4 text-white/80 hover:text-white"><X size={24}/></button>
-        </div>
-        <div className="px-8 pt-6 pb-2">
-           <div className="flex items-center justify-between mb-2">
-              {steps.map((s) => (
-                 <div key={s.id} className={`w-full h-2 rounded-full mr-2 ${step >= s.id ? 'bg-red-500' : 'bg-slate-200'}`}></div>
-              ))}
-           </div>
-           <p className="text-xs text-slate-400 text-right">Step {step} of 4</p>
-        </div>
-        <div className="p-8 overflow-y-auto flex-grow">
-            {step === 1 && (
-              <div className="text-center space-y-6">
-                 <h3 className="text-2xl font-bold text-red-600">Let's check your Address</h3>
-                 <p className="text-slate-600">Type in your address and make sure to drop the pin to the closest location of your residence</p>
-                 <div className="flex justify-center mb-6">
-                    <div className="bg-slate-100 p-1 rounded-full inline-flex">
-                       <button onClick={() => setAddressType('house')} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${addressType === 'house' ? 'bg-red-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>HOUSE/APARTMENT</button>
-                       <button onClick={() => setAddressType('condo')} className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${addressType === 'condo' ? 'bg-red-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>CONDOMINIUM</button>
-                    </div>
-                 </div>
-                 <div className="relative">
-                    <Search className="absolute left-4 top-3.5 text-slate-400" size={20} />
-                    <input type="text" placeholder="Type in address..." className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-full focus:ring-2 focus:ring-red-500 outline-none shadow-sm" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-                 </div>
-              </div>
-            )}
-            {step === 2 && (
-              <div className="text-center space-y-4">
-                 <h3 className="text-xl font-bold text-red-600">Pin Location</h3>
-                 <div className="bg-slate-100 rounded-full px-4 py-2 text-sm text-slate-700 font-medium inline-flex items-center gap-2"><Search size={14} /> {searchQuery || "Marede, Santa Ana, Cagayan"}</div>
-                 <p className="text-xs text-red-500 font-bold">Move the pin below to mark your exact location on the map.</p>
-                 <div className="aspect-video bg-blue-50 rounded-xl border-2 border-slate-200 relative overflow-hidden group cursor-crosshair">
-                    <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"></div>
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"><MapPin size={48} className="text-red-600 drop-shadow-2xl animate-bounce" fill="currentColor" /></div>
-                 </div>
-              </div>
-            )}
-            {step === 3 && (
-              <div className="text-center space-y-6">
-                 <h3 className="text-2xl font-bold text-red-600">Good News! SwiftNet is available in your area!</h3>
-                 <p className="text-slate-600">Please review the address below to ensure all details are correct.</p>
-                 <div className="bg-slate-50 p-6 rounded-xl text-left grid grid-cols-2 gap-4 text-sm border border-slate-100">
-                    <div><span className="block text-xs font-bold text-slate-400 uppercase">Province</span><span className="font-bold text-slate-800">{formData.province}</span></div>
-                    <div><span className="block text-xs font-bold text-slate-400 uppercase">City</span><span className="font-bold text-slate-800">{formData.city}</span></div>
-                    <div><span className="block text-xs font-bold text-slate-400 uppercase">Barangay</span><span className="font-bold text-slate-800">{formData.barangay}</span></div>
-                    <div><span className="block text-xs font-bold text-slate-400 uppercase">Plan</span><span className="font-bold text-blue-600">{plan.name}</span></div>
-                 </div>
-                 <div className="flex gap-3 justify-center"><button onClick={() => setStep(4)} className="px-6 py-2 border-2 border-red-600 text-red-600 font-bold rounded-full hover:bg-red-50">EDIT ADDRESS</button></div>
-              </div>
-            )}
-            {step === 4 && (
-              <div className="space-y-6">
-                 <div className="text-center mb-6"><h3 className="text-xl font-bold text-red-600">Finalize Address Details</h3><p className="text-sm text-slate-500">Click any of the fields below to make changes.</p></div>
-                 <div className="grid grid-cols-2 gap-4">
-                    <div><label className="text-xs font-bold text-red-600">* Province</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.province} readOnly /></div>
-                    <div><label className="text-xs font-bold text-red-600">* City</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.city} readOnly /></div>
-                    <div className="col-span-2"><label className="text-xs font-bold text-red-600">* Barangay</label><input className="w-full bg-slate-100 border-none rounded-lg p-3 text-sm font-bold text-slate-700" value={formData.barangay} readOnly /></div>
-                    <div><label className="text-xs font-bold text-slate-500">Subdivision</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Search..." value={formData.subdivision} onChange={e => setFormData({...formData, subdivision: e.target.value})} /></div>
-                    <div><label className="text-xs font-bold text-red-600">* Street</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Search..." value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} /></div>
-                    <div className="col-span-2"><label className="text-xs font-bold text-slate-500">Building</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="Type in your building" value={formData.building} onChange={e => setFormData({...formData, building: e.target.value})} /></div>
-                    <div><label className="text-xs font-bold text-slate-500">House No.</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 123" value={formData.houseNo} onChange={e => setFormData({...formData, houseNo: e.target.value})} /></div>
-                    <div><label className="text-xs font-bold text-slate-500">Block</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 5" value={formData.block} onChange={e => setFormData({...formData, block: e.target.value})} /></div>
-                    <div><label className="text-xs font-bold text-slate-500">Lot</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. 10" value={formData.lot} onChange={e => setFormData({...formData, lot: e.target.value})} /></div>
-                    <div className="col-span-2"><label className="text-xs font-bold text-slate-500">Landmark</label><input className="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="e.g. Near the Chapel" value={formData.landmark} onChange={e => setFormData({...formData, landmark: e.target.value})} /></div>
-                 </div>
-              </div>
-            )}
-        </div>
-        <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-white">
-           {step > 1 && (<button onClick={handleBack} className="px-8 py-3 border border-red-600 text-red-600 font-bold rounded-full hover:bg-red-50 transition-colors">BACK</button>)}
-           {step < 4 ? (<button onClick={handleNext} className="px-8 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200">{step === 3 ? 'CONTINUE' : step === 1 ? 'CHECK SERVICEABILITY' : 'NEXT'}</button>) : (<button onClick={() => onSubmit(formData)} className="px-8 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-colors shadow-lg shadow-red-200">SUBMIT APPLICATION</button>)}
-        </div>
-      </div>
-    </div>
-  );
+    const q = query(
+        collection(db, 'artifacts', appId, 'public', 'data', SERVICE_AREAS_COLLECTION), 
+        where('city', '==', cityUpper),
+        where('barangay', '==', brgyUpper)
+    );
+    
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) {
+        setServiceStatus('None');
+    } else {
+        const area = snapshot.docs[0].data();
+        setServiceStatus(area.status);
+        if (area.status === 'Available') setStep(2);
+    }
+  };
+
+  const LocationMarker = () => {
+    useMapEvents({
+      click(e) {
+        setPosition(e.latlng);
+        setFormData(prev => ({ ...prev, lat: e.latlng.lat, lng: e.latlng.lng }));
+      },
+    });
+    return position === null ? null : <Marker position={position}></Marker>;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4 animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-red-600 p-6 text-white relative overflow-hidden">
+            <h2 className="text-2xl font-bold mb-1">New Application</h2>
+            <p className="text-red-100 text-sm">Selected: {plan.name}</p>
+            <button onClick={onClose} className="absolute top-4 right-4 text-white/80 hover:text-white"><X size={24}/></button>
+        </div>
+        <div className="px-8 pt-6 pb-2">
+           <div className="flex items-center justify-between mb-2">
+              {[1, 2, 3, 4].map((id) => (
+                 <div key={id} className={`w-full h-2 rounded-full mr-2 ${step >= id ? 'bg-red-600' : 'bg-slate-200'}`}></div>
+              ))}
+           </div>
+           <p className="text-xs text-slate-400 text-right">Step {step} of 4</p>
+        </div>
+        <div className="p-8 overflow-y-auto flex-grow">
+            {step === 1 && (
+              <div className="space-y-6">
+                  <div className="text-center">
+                      <h3 className="text-2xl font-bold text-slate-800">Check Availability</h3>
+                      <p className="text-slate-500">Enter your location to see if we cover your area.</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                      <div><label className="text-xs font-bold text-slate-500 uppercase">Province</label><input className="w-full border p-3 rounded-lg bg-slate-100 text-slate-500" value="CAGAYAN" readOnly /></div>
+                      <div><label className="text-xs font-bold text-slate-500 uppercase">City</label><input className="w-full border p-3 rounded-lg uppercase" placeholder="STA ANA" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} /></div>
+                      <div className="col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Barangay</label><input className="w-full border p-3 rounded-lg uppercase" placeholder="BGY MAREDE" value={formData.barangay} onChange={e => setFormData({...formData, barangay: e.target.value})} /></div>
+                  </div>
+                  {serviceStatus === 'None' && <div className="bg-red-50 border border-red-200 p-4 rounded-lg text-center"><p className="text-red-700 font-bold">Sorry, we are not yet available in this area.</p></div>}
+                  {serviceStatus === 'Coming Soon' && <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg text-center"><p className="text-yellow-800 font-bold">Coming Soon!</p><p className="text-xs text-yellow-600">We are currently building lines here.</p></div>}
+                  <button onClick={checkAvailability} className="w-full py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700">CHECK COVERAGE</button>
+              </div>
+            )}
+            {step === 2 && (
+              <div className="space-y-4 h-full flex flex-col">
+                  <div className="text-center"><h3 className="text-xl font-bold text-slate-800">Pin Your Exact Location</h3><p className="text-sm text-slate-500">Click on the map where your house is located.</p></div>
+                  <div className="flex-grow rounded-xl overflow-hidden border-2 border-slate-200 h-[300px] relative z-0">
+                      <MapContainer center={[18.4728, 122.1557]} zoom={13} style={{ height: '100%', width: '100%' }}>
+                          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
+                          <LocationMarker />
+                      </MapContainer>
+                  </div>
+                  <div className="bg-blue-50 p-3 rounded-lg flex items-center gap-2 text-xs text-blue-700"><MapPin size={16}/> Coordinates: {formData.lat ? `${formData.lat.toFixed(6)}, ${formData.lng.toFixed(6)}` : 'Click map to set'}</div>
+                  <button onClick={() => formData.lat ? setStep(3) : alert("Please pin location first")} className="w-full py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700">CONFIRM LOCATION</button>
+              </div>
+            )}
+            {step === 3 && (
+              <div className="space-y-4">
+                  <h3 className="text-xl font-bold text-slate-800 text-center">Complete Address</h3>
+                  <div className="grid grid-cols-1 gap-4">
+                      <div><label className="text-xs font-bold text-slate-500 uppercase">Street / Purok</label><input className="w-full border p-3 rounded-lg" placeholder="e.g. Purok 1, Main St." value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} /></div>
+                      <div><label className="text-xs font-bold text-slate-500 uppercase">Landmark</label><input className="w-full border p-3 rounded-lg" placeholder="e.g. Near the Yellow Store" value={formData.landmark} onChange={e => setFormData({...formData, landmark: e.target.value})} /></div>
+                  </div>
+                  <button onClick={() => setStep(4)} className="w-full py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 mt-4">NEXT</button>
+              </div>
+            )}
+            {step === 4 && (
+              <div className="space-y-6 text-center">
+                  <h3 className="text-2xl font-bold text-slate-800">Review Application</h3>
+                  <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 text-left space-y-3 text-sm">
+                      <div className="flex justify-between"><span className="text-slate-500 font-bold">Plan</span><span className="font-bold text-blue-600">{plan.name}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Address</span><span>{formData.street}, {formData.barangay}, {formData.city}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">GPS</span><span className="font-mono text-xs">{formData.lat.toFixed(5)}, {formData.lng.toFixed(5)}</span></div>
+                  </div>
+                  <button onClick={() => onSubmit(formData)} className="w-full py-4 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-lg shadow-green-200">SUBMIT APPLICATION</button>
+              </div>
+            )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const InvoiceModal = ({ doc, user, onClose }) => {
@@ -992,7 +1013,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map(plan => (<div key={plan.id} className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-xl font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Fiber Optic</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => setSelectedPlanForApp(plan)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Apply Now <ArrowRight size={16} /></button></div></div>))}{availablePlans.length === 0 && <p className="col-span-full text-center text-slate-400">No plans configured by admin yet.</p>}</div>
            )}
            <div className="mt-12 text-center"><button onClick={() => signOut(getAuth(app))} className="text-slate-400 hover:text-slate-600 text-sm underline">Sign Out</button></div>
-           {selectedPlanForApp && (<ApplicationWizard plan={selectedPlanForApp} onClose={() => setSelectedPlanForApp(null)} onSubmit={handleWizardSubmit} />)}
+           {selectedPlanForApp && (<ApplicationWizard plan={selectedPlanForApp} onClose={() => setSelectedPlanForApp(null)} onSubmit={handleWizardSubmit} db={db} appId={appId} />)}
         </div>
       );
   }
@@ -1625,6 +1646,59 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
   );
 };
 
+const ServiceAreaManager = ({ appId, db }) => {
+  const [areas, setAreas] = useState([]);
+  const [newArea, setNewArea] = useState({ city: '', barangay: '', status: 'Available' });
+
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', SERVICE_AREAS_COLLECTION));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setAreas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, [appId, db]);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (!newArea.city || !newArea.barangay) return;
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', SERVICE_AREAS_COLLECTION), {
+        ...newArea,
+        city: newArea.city.toUpperCase(),
+        barangay: newArea.barangay.toUpperCase()
+    });
+    setNewArea({ city: '', barangay: '', status: 'Available' });
+  };
+
+  const handleDelete = async (id) => await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', SERVICE_AREAS_COLLECTION, id));
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+        <div className="bg-white p-6 rounded-xl border border-slate-200">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><MapPin size={20}/> Serviceable Areas</h3>
+            <form onSubmit={handleAdd} className="flex gap-4 items-end mb-6">
+                <input className="border p-2 rounded w-full" placeholder="City (e.g. STA ANA)" value={newArea.city} onChange={e=>setNewArea({...newArea, city: e.target.value})} />
+                <input className="border p-2 rounded w-full" placeholder="Barangay (e.g. MAREDE)" value={newArea.barangay} onChange={e=>setNewArea({...newArea, barangay: e.target.value})} />
+                <select className="border p-2 rounded" value={newArea.status} onChange={e=>setNewArea({...newArea, status: e.target.value})}>
+                    <option>Available</option><option>Coming Soon</option>
+                </select>
+                <button className="bg-blue-600 text-white px-4 py-2 rounded font-bold">Add</button>
+            </form>
+            <div className="space-y-2">
+                {areas.map(area => (
+                    <div key={area.id} className="flex justify-between p-3 bg-slate-50 rounded border border-slate-100">
+                        <span className="font-bold text-slate-700">{area.barangay}, {area.city}</span>
+                        <div className="flex items-center gap-3">
+                            <span className={`text-xs px-2 py-1 rounded font-bold uppercase ${area.status === 'Available' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{area.status}</span>
+                            <button onClick={() => handleDelete(area.id)} className="text-red-500"><Trash2 size={16}/></button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+  );
+};
+
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -1811,15 +1885,15 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit flex space-x-1 overflow-x-auto max-w-full mx-auto md:mx-0">
-         {['analytics', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
+         {['analytics', 'coverage', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
+                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
          ))}
       </div>
       {activeTab === 'store' && <ProductManager appId={appId} db={db} />}
       {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} payments={payments} />}
-      {activeTab === 'speedtest' && <SpeedTest />}{activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} />}
+      {activeTab === 'speedtest' && <SpeedTest />}{activeTab === 'analytics' && <AdminAnalytics {activeTab === 'coverage' && <ServiceAreaManager appId={appId} db={db} />} subscribers={subscribers} payments={payments} tickets={tickets} />}
       {activeTab === 'subscribers' && (
         <>
            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
