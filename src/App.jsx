@@ -1893,7 +1893,9 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       </div>
       {activeTab === 'store' && <ProductManager appId={appId} db={db} />}
       {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} payments={payments} />}
-      {activeTab === 'speedtest' && <SpeedTest />}{activeTab === 'analytics' && <AdminAnalytics {activeTab === 'coverage' && <ServiceAreaManager appId={appId} db={db} />} subscribers={subscribers} payments={payments} tickets={tickets} />}
+      {activeTab === 'speedtest' && <SpeedTest />}
+      {activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} />}
+      {activeTab === 'coverage' && <ServiceAreaManager appId={appId} db={db} />}
       {activeTab === 'subscribers' && (
         <>
            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
