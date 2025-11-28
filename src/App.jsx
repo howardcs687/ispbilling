@@ -5,6 +5,7 @@ import { getAnalytics } from "firebase/analytics";
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css'; // Essential for map styling
+import emailjs from '@emailjs/browser';
 import { 
   getAuth, 
   signInWithEmailAndPassword,
@@ -107,6 +108,11 @@ import {
   Calculator,
   UploadCloud,
   Image,
+  PieChart,
+  FileBarChart,
+  TrendingUp,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -147,9 +153,64 @@ const SERVICE_AREAS_COLLECTION = 'isp_service_areas_v1';
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
 // --- Helper Functions ---
-const sendSystemEmail = async (to, subject, htmlContent) => {
-  console.log(`%c[SYSTEM EMAIL] To: ${to}\nSubject: ${subject}\nContent: ${htmlContent}`, 'color: blue; font-weight: bold;');
-  return true;
+// --- Email Configuration ---
+// REPLACE THESE WITH YOUR ACTUAL EMAILJS KEYS
+// --- Email Configuration (Master Template Version) ---
+const EMAIL_CONFIG = {
+  serviceID: 'service_rku0sea',       // Get from EmailJS Dashboard
+  publicKey: 'gULI8936r5B6AVPx1',       // Get from Account > API Keys
+  masterTemplateID: 'template_wcdg2vn' // Create just 1 template and paste ID here
+};
+
+// Central Email Function (The Master Handler)
+const sendCustomEmail = async (type, data) => {
+  
+  // 1. Define Subjects dynamically based on the 'type'
+  let dynamicSubject = "Notification from SwiftNet";
+  let extraDetails = "";
+
+  switch (type) {
+      case 'welcome':
+          dynamicSubject = "Welcome to the SwiftNet Family!";
+          break;
+      case 'otp':
+          dynamicSubject = "Secure Access: Your Login Credentials";
+          extraDetails = `Access Code: ${data.code}`;
+          break;
+      case 'order':
+          dynamicSubject = "Order Confirmation";
+          extraDetails = `Item: ${data.orderDetails}`;
+          break;
+      case 'feedback':
+          dynamicSubject = "Repair Complete - We value your feedback";
+          extraDetails = `Click to rate: ${data.link}`;
+          break;
+      case 'auto_reply':
+          dynamicSubject = "We received your Ticket";
+          break;
+      case 'invoice':
+          dynamicSubject = "Your Latest Statement of Account";
+          extraDetails = `Amount Due: ${data.amount}`;
+          break;
+      default:
+          dynamicSubject = "New Notification";
+  }
+
+  // 2. Build the Params for the Master Template
+  const params = {
+    to_name: data.name,
+    to_email: data.email,
+    subject: dynamicSubject, // <--- This fills the {{subject}} in EmailJS
+    message: data.message || '', 
+    footer_details: extraDetails // <--- This fills the {{footer_details}}
+  };
+
+  try {
+    await emailjs.send(EMAIL_CONFIG.serviceID, EMAIL_CONFIG.masterTemplateID, params, EMAIL_CONFIG.publicKey);
+    console.log(`Email (${type}) sent successfully!`);
+  } catch (error) {
+    console.error("Email failed:", error);
+  }
 };
 
 // --- COMPONENTS (Ordered bottom-up to avoid hoisting issues) ---
@@ -284,6 +345,7 @@ const ApplicationWizard = ({ plan, onClose, onSubmit, db, appId }) => {
 
 const InvoiceModal = ({ doc, user, onClose }) => {
   const [downloading, setDownloading] = useState(false);
+  const [sending, setSending] = useState(false);
 
   if (!doc) return null;
   const amountVal = parseFloat((doc.amount || '0').toString().replace(/,/g, ''));
@@ -298,29 +360,52 @@ const InvoiceModal = ({ doc, user, onClose }) => {
   const handleDownload = async () => {
     setDownloading(true);
     const element = document.getElementById('printable-invoice');
-    
     try {
-        // Wait a tiny bit to ensure render
         await new Promise(r => setTimeout(r, 100));
-        
-        const canvas = await html2canvas(element, { 
-            scale: 2,
-            useCORS: true,
-            logging: false
-        });
-        
+        const canvas = await html2canvas(element, { scale: 2, useCORS: true });
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        
         pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
         pdf.save(`${doc.title.replace(/\s+/g, '_')}.pdf`);
-    } catch (err) {
-        console.error("PDF Error:", err);
-        alert("Could not generate PDF. Please try again.");
-    }
+    } catch (err) { alert("Error generating PDF."); }
     setDownloading(false);
+  };
+
+  const handleEmail = async () => {
+      if (!confirm(`Send this ${label} to ${user.email}?`)) return;
+      setSending(true);
+
+      // EMAILJS CONFIGURATION
+      // 1. Go to https://www.emailjs.com/ -> Sign Up (Free)
+      // 2. Add Service (Gmail) -> Get Service ID
+      // 3. Add Template -> Get Template ID
+      // 4. Account -> API Keys -> Get Public Key
+      
+      const serviceID = 'service_rku0sea';  // Replace with yours
+      const templateID = 'template_9pjx12n'; // Replace with yours
+      const publicKey = 'gULI8936r5B6AVPx1';   // Replace with yours
+
+      const templateParams = {
+          to_name: user.username,
+          to_email: user.email,
+          subject: `${label} - SwiftNet ISP`,
+          message: `Dear Subscriber, attached is your ${label} for ${doc.date}. Amount: ₱${amountVal.toLocaleString()}`,
+          amount: `₱${amountVal.toLocaleString()}`,
+          // Note: Free EmailJS can't attach PDFs directly easily, 
+          // so we send a formatted HTML receipt in the email body instead.
+      };
+
+      try {
+              await emailjs.send(serviceID, templateID, templateParams, publicKey);
+              alert("Email sent successfully!");
+          }
+      } catch (error) {
+          console.error('FAILED...', error);
+          alert("Failed to send email. Check console.");
+      }
+      setSending(false);
   };
 
   return (
@@ -329,8 +414,11 @@ const InvoiceModal = ({ doc, user, onClose }) => {
         <div className="bg-slate-800 text-white p-4 flex justify-between items-center sticky top-0 z-10">
             <div className="flex items-center gap-3"><FileText size={20} /><span className="font-bold">{doc.title}</span></div>
             <div className="flex items-center gap-3">
+                <button onClick={handleEmail} disabled={sending} className="text-slate-300 hover:text-white flex items-center gap-1 text-sm disabled:opacity-50 bg-blue-600/20 px-3 py-1 rounded hover:bg-blue-600 transition-colors">
+                    <Mail size={16} /> {sending ? 'Sending...' : 'Email to User'}
+                </button>
                 <button onClick={handleDownload} disabled={downloading} className="text-slate-300 hover:text-white flex items-center gap-1 text-sm disabled:opacity-50">
-                    <Download size={16} /> {downloading ? 'Generating...' : 'Download PDF'}
+                    <Download size={16} /> {downloading ? 'PDF...' : 'Download'}
                 </button>
                 <button onClick={onClose} className="text-slate-300 hover:text-white"><X size={24} /></button>
             </div>
@@ -346,9 +434,7 @@ const InvoiceModal = ({ doc, user, onClose }) => {
             </div>
             
             {isReceipt && (
-                <div className="absolute top-40 right-12 border-4 border-green-600/20 text-green-600/20 font-black text-6xl uppercase -rotate-12 p-4 rounded-xl select-none pointer-events-none">
-                    PAID
-                </div>
+                <div className="absolute top-40 right-12 border-4 border-green-600/20 text-green-600/20 font-black text-6xl uppercase -rotate-12 p-4 rounded-xl select-none pointer-events-none">PAID</div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
@@ -364,8 +450,19 @@ const InvoiceModal = ({ doc, user, onClose }) => {
                 <h3 className="font-bold text-slate-700 border-b border-slate-300 pb-2 mb-4 uppercase text-sm tracking-wider">Transaction Details</h3>
                 <table className="w-full text-sm">
                     <tbody className="text-slate-700">
-                        <tr><td className="py-2">Monthly Service Fee ({user.plan || 'Fiber Plan'})</td><td className="py-2 text-right">₱{baseAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}</td></tr>
-                        <tr><td className="py-2 border-b border-slate-100">Value Added Tax (12%)</td><td className="py-2 border-b border-slate-100 text-right">₱{vat.toLocaleString(undefined, {minimumFractionDigits: 2})}</td></tr>
+                        {/* Render Items if available, else fallback to Plan */}
+                        {doc.items ? doc.items.map((item, i) => (
+                            <tr key={i}>
+                                <td className="py-2">{item.description || item.desc}</td>
+                                <td className="py-2 text-right">₱{parseFloat(item.amount).toLocaleString()}</td>
+                            </tr>
+                        )) : (
+                            <tr><td className="py-2">Monthly Service Fee ({user.plan || 'Fiber Plan'})</td><td className="py-2 text-right">₱{baseAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}</td></tr>
+                        )}
+                        
+                        {/* VAT Row if no items or force show */}
+                        {!doc.items && <tr><td className="py-2 border-b border-slate-100">Value Added Tax (12%)</td><td className="py-2 border-b border-slate-100 text-right">₱{vat.toLocaleString(undefined, {minimumFractionDigits: 2})}</td></tr>}
+                        
                         <tr><td className={`py-4 font-bold text-lg ${themeColor}`}>Total</td><td className={`py-4 font-bold text-lg ${themeColor} text-right`}>₱{amountVal.toLocaleString(undefined, {minimumFractionDigits: 2})}</td></tr>
                     </tbody>
                 </table>
@@ -626,67 +723,126 @@ const BackgroundMusic = () => {
 
 const Layout = ({ children, user, onLogout }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // Initialize dark mode from localStorage or default to false
+  const [darkMode, setDarkMode] = useState(() => {
+      if (typeof window !== 'undefined') {
+          return localStorage.getItem('swiftnet_theme') === 'dark';
+      }
+      return false;
+  });
+
+  useEffect(() => {
+      // Persist to localStorage
+      localStorage.setItem('swiftnet_theme', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
+
+  const toggleTheme = () => setDarkMode(!darkMode);
   
   return (
-    <div className="min-h-screen font-sans text-slate-800 flex flex-col relative overflow-x-hidden selection:bg-indigo-200 selection:text-indigo-900">
-      {/* Animated Background */}
-      <div className="fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-200 via-slate-100 to-indigo-100"></div>
-        <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-purple-300/30 blur-[100px] animate-pulse"></div>
-        <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-blue-300/30 blur-[100px] animate-pulse delay-1000"></div>
+    <div className={`min-h-screen font-sans flex flex-col relative overflow-x-hidden transition-colors duration-300 ${darkMode ? 'text-slate-100 selection:bg-blue-500 selection:text-white' : 'text-slate-800 selection:bg-indigo-200 selection:text-indigo-900'}`}>
+      
+      {/* --- MAGIC DARK MODE STYLES --- */}
+      {/* This style block forces the app into Dark Mode without editing every component */}
+      {darkMode && (
+        <style>{`
+            .bg-white { background-color: #0f172a !important; color: #f1f5f9 !important; border-color: #1e293b !important; }
+            .bg-slate-50 { background-color: #1e293b !important; color: #e2e8f0 !important; border-color: #334155 !important; }
+            .bg-slate-100 { background-color: #334155 !important; color: #e2e8f0 !important; }
+            .text-slate-800, .text-slate-700, .text-slate-900 { color: #f8fafc !important; }
+            .text-slate-600, .text-slate-500 { color: #94a3b8 !important; }
+            .border-slate-200, .border-slate-100 { border-color: #334155 !important; }
+            .shadow-sm, .shadow-md, .shadow-lg { box-shadow: none !important; }
+            input, select, textarea { background-color: #1e293b !important; color: white !important; border-color: #475569 !important; }
+            /* Fix for specific colored backgrounds to remain visible but readable */
+            .bg-blue-50 { background-color: rgba(59, 130, 246, 0.1) !important; }
+            .bg-green-50 { background-color: rgba(34, 197, 94, 0.1) !important; }
+            .bg-red-50 { background-color: rgba(239, 68, 68, 0.1) !important; }
+            .bg-orange-50 { background-color: rgba(249, 115, 22, 0.1) !important; }
+            .bg-yellow-50 { background-color: rgba(234, 179, 8, 0.1) !important; }
+            .bg-purple-50 { background-color: rgba(168, 85, 247, 0.1) !important; }
+        `}</style>
+      )}
+
+      {/* Background Animation */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        {darkMode ? (
+            // Dark Mode Background
+            <div className="absolute inset-0 bg-slate-950">
+                <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-900/20 rounded-full blur-[120px]"></div>
+                <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-900/20 rounded-full blur-[120px]"></div>
+            </div>
+        ) : (
+            // Light Mode Background
+            <>
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-200 via-slate-100 to-indigo-100"></div>
+                <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-purple-300/30 blur-[100px] animate-pulse"></div>
+                <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-blue-300/30 blur-[100px] animate-pulse delay-1000"></div>
+            </>
+        )}
       </div>
 
-      {/* Nav - Added z-[100] to ensure it is always on top */}
-      <nav className="sticky top-0 z-[100] bg-white/70 backdrop-blur-xl border-b border-white/20 shadow-sm">
+      {/* Nav - z-[100] ensures it stays on top */}
+      <nav className={`sticky top-0 z-[100] backdrop-blur-xl border-b shadow-sm transition-colors duration-300 ${darkMode ? 'bg-slate-900/80 border-slate-700' : 'bg-white/70 border-white/20'}`}>
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
             <div className="flex items-center gap-3">
                 <div className="bg-gradient-to-tr from-blue-600 to-purple-600 p-2.5 rounded-xl shadow-lg shadow-blue-500/30">
                     <Wifi className="h-6 w-6 text-white" />
                 </div>
-                <span className="font-black text-2xl tracking-tighter text-slate-800 bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600">
-                    SwiftNet<span className="text-indigo-600">ISP</span>
+                <span className={`font-black text-2xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-r ${darkMode ? 'from-white to-slate-400' : 'from-slate-800 to-slate-600'}`}>
+                    SwiftNet<span className="text-indigo-500">ISP</span>
                 </span>
             </div>
             
-            {user && (
-              <div className="hidden md:flex items-center gap-4">
-                <div className="flex items-center gap-3 px-5 py-2 bg-slate-100/50 rounded-full border border-white/50 shadow-inner">
-                   {user.role === 'admin' ? <Shield size={16} className="text-indigo-600" /> : 
-                    user.role === 'technician' ? <HardHat size={16} className="text-orange-600" /> : 
-                    <User size={16} className="text-blue-600" />}
-                   <span className="font-bold text-sm text-slate-700">{user.displayName || user.email}</span>
-                </div>
-                <button onClick={onLogout} className="p-3 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-full transition-all duration-300 group" title="Sign Out">
-                    <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
+            <div className="flex items-center gap-4">
+                {/* DARK MODE TOGGLE BUTTON */}
+                <button 
+                    onClick={toggleTheme} 
+                    className={`p-2 rounded-full transition-all duration-300 ${darkMode ? 'bg-slate-800 text-yellow-400 hover:bg-slate-700' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
+                    title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                >
+                    {darkMode ? <Sun size={20} /> : <Moon size={20} />}
                 </button>
-              </div>
-            )}
-            
-            {/* Mobile Hamburger Button */}
-            {user && (
-                <div className="md:hidden">
-                    <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-                        {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+
+                {user && (
+                  <div className="hidden md:flex items-center gap-4">
+                    <div className={`flex items-center gap-3 px-5 py-2 rounded-full border shadow-inner ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100/50 border-white/50'}`}>
+                       {user.role === 'admin' ? <Shield size={16} className="text-indigo-500" /> : 
+                        user.role === 'technician' ? <HardHat size={16} className="text-orange-500" /> : 
+                        <User size={16} className="text-blue-500" />}
+                       <span className={`font-bold text-sm ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>{user.displayName || user.email}</span>
+                    </div>
+                    <button onClick={onLogout} className="p-3 hover:bg-red-500/10 text-slate-400 hover:text-red-500 rounded-full transition-all duration-300 group" title="Sign Out">
+                        <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
                     </button>
-                </div>
-            )}
+                  </div>
+                )}
+
+                {/* Mobile Hamburger */}
+                {user && (
+                    <div className="md:hidden">
+                        <button onClick={() => setIsMenuOpen(!isMenuOpen)} className={`p-2 rounded-lg transition-colors ${darkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}>
+                            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                        </button>
+                    </div>
+                )}
+            </div>
           </div>
         </div>
 
-        {/* --- FIXED: Mobile Menu Dropdown --- */}
+        {/* Mobile Menu Dropdown */}
         {isMenuOpen && user && (
-            <div className="md:hidden absolute top-20 left-0 w-full bg-white/90 backdrop-blur-2xl border-b border-white/20 shadow-2xl p-4 flex flex-col gap-4 animate-in slide-in-from-top-5">
-                <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl border border-slate-100">
-                   {user.role === 'admin' ? <Shield size={20} className="text-indigo-600" /> : 
-                    user.role === 'technician' ? <HardHat size={20} className="text-orange-600" /> : 
-                    <User size={20} className="text-blue-600" />}
+            <div className={`md:hidden absolute top-20 left-0 w-full backdrop-blur-2xl border-b shadow-2xl p-4 flex flex-col gap-4 animate-in slide-in-from-top-5 ${darkMode ? 'bg-slate-900/90 border-slate-700' : 'bg-white/90 border-white/20'}`}>
+                <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                   {user.role === 'admin' ? <Shield size={20} className="text-indigo-500" /> : 
+                    user.role === 'technician' ? <HardHat size={20} className="text-orange-500" /> : 
+                    <User size={20} className="text-blue-500" />}
                    <div>
-                       <p className="font-bold text-sm text-slate-800">{user.displayName || user.email}</p>
+                       <p className={`font-bold text-sm ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{user.displayName || user.email}</p>
                        <p className="text-xs text-slate-500 uppercase">{user.role}</p>
                    </div>
                 </div>
-                <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 bg-red-50 text-red-600 py-4 rounded-xl font-bold hover:bg-red-100 transition-colors">
+                <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 bg-red-500/10 text-red-500 py-4 rounded-xl font-bold hover:bg-red-500/20 transition-colors">
                     <LogOut size={20} /> Sign Out
                 </button>
             </div>
@@ -734,6 +890,13 @@ const Login = ({ onLogin }) => {
            address: '', 
            dueDate: new Date().toISOString()
          });
+
+         await sendCustomEmail('welcome', {
+            name: name,
+            email: email,
+            message: 'Welcome to the SwiftNet family! Your application is under review.'
+         });
+
       } else {
          await signInWithEmailAndPassword(auth, email, password);
       }
@@ -1004,7 +1167,7 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
-        <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 flex flex-col max-h-[90vh]">
+        <div className="bg-white w-[95%] md:w-full max-w-md rounded-2xl shadow-2xl p-6 flex flex-col max-h-[90vh]">
             <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
                 <UploadCloud size={20} className="text-blue-600"/> Upload Payment Proof
             </h3>
@@ -1147,7 +1310,11 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   }
 
   const handlePaymentSubmit = async (e) => { e.preventDefault(); setSubmitting(true); await onPay(userData.id, refNumber, userData.username); setSubmitting(false); setShowQR(false); setRefNumber(''); };
-  const handleCreateTicket = async (e) => { if(e) e.preventDefault(); if (!newTicket.subject || !newTicket.message) return; setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: newTicket.subject, message: newTicket.message, status: 'open', adminReply: '', date: new Date().toISOString() }); setNewTicket({ subject: '', message: '' }); alert(`Ticket #${ticketId} submitted successfully!`); setActiveTab('support'); } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } setTicketLoading(false); };
+  const handleCreateTicket = async (e) => { if(e) e.preventDefault(); if (!newTicket.subject || !newTicket.message) return; setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: newTicket.subject, message: newTicket.message, status: 'open', adminReply: '', date: new Date().toISOString() }); setNewTicket({ subject: '', message: '' }); await sendCustomEmail('auto_reply', {
+            name: userData.username,
+            email: userData.email,
+            message: `We received your ticket #${ticketId}: "${newTicket.subject}". Our support team is reviewing it now.`
+        }); alert(`Ticket #${ticketId} submitted successfully!`); setActiveTab('support'); } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } setTicketLoading(false); };
   const handleFollowUpTicket = async (ticketId, originalMessage) => { if(!followUpText) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId); const timestamp = new Date().toLocaleString(); const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`; await updateDoc(docRef, { message: newMessage, status: 'open', date: new Date().toISOString() }); setFollowingUpTo(null); setFollowUpText(''); alert("Follow-up sent successfully!"); } catch(e) { console.error(e); alert("Failed to send follow-up"); } };
   const handleRequestRepair = async (e) => { e.preventDefault(); if(!repairNote) return; try { const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0'); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: randomId, userId: userData.uid, username: userData.username, address: userData.address || "No address provided", type: 'Service Repair - Internet', notes: repairNote, status: 'Submission', stepIndex: 0, technicianNote: 'Waiting for initial evaluation.', dateFiled: new Date().toISOString() }); setRepairNote(''); setShowRepairModal(false); alert("Repair request filed successfully!"); } catch(e) { console.error(e); alert("Failed to request repair."); } };
   const handleApplyPlan = (planName) => { if(confirm(`Apply for ${planName}?`)) { const msg = `Requesting plan change.\n\nCurrent: ${userData.plan}\nNew: ${planName}`; const submitPlanTicket = async () => { setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'Plan Change Request', message: msg, status: 'open', adminReply: '', date: new Date().toISOString(), isPlanChange: true, targetPlan: planName }); alert(`Application submitted! Ticket #${ticketId}.`); setActiveTab('support'); } catch(e) { alert("Failed."); } setTicketLoading(false); }; submitPlanTicket(); } };
@@ -1651,6 +1818,12 @@ const Marketplace = ({ user, db, appId }) => {
             date: new Date().toISOString(),
             isOrder: true
         });
+        await sendCustomEmail('order', {
+            name: user.username,
+            email: user.email || 'user@example.com',
+            orderDetails: product.name + " - " + product.price,
+            message: `We received your request for ${product.name}. A technician will contact you shortly.`
+        });
         alert("Order request sent!");
     } catch (e) { alert("Error sending request."); }
     setBuying(null);
@@ -1724,7 +1897,7 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
-        <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-white w-[95%] md:w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-slate-800 p-5 flex justify-between items-center text-white">
                 <h3 className="font-bold text-lg flex items-center gap-2">
                     <Edit size={20} /> Edit Subscriber
@@ -1900,7 +2073,7 @@ const BillingModal = ({ user, onClose, db, appId }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
-        <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-white w-[95%] md:w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-slate-800 p-5 flex justify-between items-center text-white">
                 <h3 className="font-bold text-lg flex items-center gap-2"><FileText size={20}/> Custom Invoice Builder</h3>
                 <button onClick={onClose}><X className="text-slate-400 hover:text-white"/></button>
@@ -2027,8 +2200,11 @@ const CashierMode = ({ subscribers, db, appId }) => {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in h-[calc(100vh-150px)] flex gap-6">
-        <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col">
+    // CHANGE: Added 'flex-col lg:flex-row' and 'h-auto lg:h-[calc...]'
+    <div className="space-y-6 animate-in fade-in flex flex-col lg:flex-row gap-6 h-auto lg:h-[calc(100vh-150px)] pb-20 lg:pb-0">
+        
+        {/* Left: Search & List */}
+        <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col h-[500px] lg:h-auto">
             <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><User size={20}/> Find Subscriber</h3>
             <div className="relative mb-4">
                 <Search className="absolute left-4 top-3.5 text-slate-400" size={20}/>
@@ -2045,7 +2221,8 @@ const CashierMode = ({ subscribers, db, appId }) => {
                 ))}
             </div>
         </div>
-        <div className="w-[400px] bg-slate-900 rounded-2xl shadow-2xl p-8 text-white flex flex-col">
+        {/* CHANGE: w-full on mobile, w-[400px] on desktop */}
+        <div className="w-full lg:w-[400px] bg-slate-900 rounded-2xl shadow-2xl p-8 text-white flex flex-col h-auto min-h-[500px]">
             <h3 className="font-black text-2xl mb-6 flex items-center gap-3"><Calculator className="text-green-400"/> Cashier</h3>
             {selectedUser ? (
                 <div className="flex-1 flex flex-col gap-6">
@@ -2090,6 +2267,12 @@ const AddStaffModal = ({ onClose }) => {
         });
 
         await deleteApp(secondaryApp);
+        await sendCustomEmail('otp', {
+            name: formData.username,
+            email: formData.email,
+            code: formData.password, 
+            message: `You have been assigned as a ${formData.role}. Use this password to log in.`
+        });
         alert(`${formData.role.toUpperCase()} account created successfully!`);
         onClose();
     } catch (e) {
@@ -2134,6 +2317,163 @@ const AddStaffModal = ({ onClose }) => {
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+  );
+};
+
+const ReportGenerator = ({ payments, expenses, subscribers }) => {
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [generating, setGenerating] = useState(false);
+
+  const generatePDF = async () => {
+    setGenerating(true);
+    const element = document.getElementById('monthly-report-print');
+    
+    try {
+        await new Promise(r => setTimeout(r, 100));
+        const canvas = await html2canvas(element, { scale: 2 });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`Financial_Report_${month}.pdf`);
+    } catch (e) {
+        alert("Error generating report");
+    }
+    setGenerating(false);
+  };
+
+  // Filter Data by Selected Month
+  const selectedDate = new Date(month);
+  const selectedMonthIndex = selectedDate.getMonth();
+  const selectedYear = selectedDate.getFullYear();
+
+  const monthlyPayments = payments.filter(p => {
+      const d = new Date(p.date);
+      return d.getMonth() === selectedMonthIndex && d.getFullYear() === selectedYear && p.status === 'verified';
+  });
+
+  const monthlyExpenses = expenses.filter(e => {
+      const d = new Date(e.date);
+      return d.getMonth() === selectedMonthIndex && d.getFullYear() === selectedYear;
+  });
+
+  const newSubscribers = subscribers.filter(s => {
+      // Assuming you have a dateCreated, if not fallback to dueDate comparison or mock
+      const d = new Date(s.dateCreated || s.dueDate); 
+      return d.getMonth() === selectedMonthIndex && d.getFullYear() === selectedYear;
+  });
+
+  const totalIncome = monthlyPayments.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
+  const totalExpense = monthlyExpenses.reduce((acc, e) => acc + (parseFloat(e.amount) || 0), 0);
+  const netProfit = totalIncome - totalExpense;
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+        <div className="bg-white p-6 rounded-xl border border-slate-200 flex justify-between items-end">
+            <div>
+                <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2"><FileBarChart size={20} className="text-blue-600"/> Monthly Financial Reports</h3>
+                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Select Period</label>
+                <input type="month" value={month} onChange={e => setMonth(e.target.value)} className="border p-2 rounded-lg font-bold text-slate-700 outline-none focus:border-blue-500"/>
+            </div>
+            <button onClick={generatePDF} disabled={generating} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-slate-800 flex items-center gap-2 disabled:opacity-50">
+                <Download size={18}/> {generating ? 'Generating...' : 'Download PDF Report'}
+            </button>
+        </div>
+
+        {/* PREVIEW AREA (This gets printed) */}
+        <div className="overflow-auto bg-slate-100 p-4 rounded-xl border border-slate-200">
+            <div id="monthly-report-print" className="bg-white p-12 w-[800px] mx-auto shadow-sm min-h-[1000px] text-slate-800 relative">
+                
+                {/* Report Header */}
+                <div className="flex justify-between items-start border-b-4 border-slate-900 pb-6 mb-8">
+                    <div>
+                        <h1 className="text-3xl font-black uppercase tracking-tight">SwiftNet<span className="text-blue-600">ISP</span></h1>
+                        <p className="text-sm text-slate-500 font-bold">Financial Performance Report</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-2xl font-bold text-slate-700">{new Date(month).toLocaleDateString(undefined, {month:'long', year:'numeric'})}</p>
+                        <p className="text-xs text-slate-400">Generated on {new Date().toLocaleDateString()}</p>
+                    </div>
+                </div>
+
+                {/* Executive Summary */}
+                <div className="grid grid-cols-3 gap-4 mb-8">
+                    <div className="p-4 bg-green-50 border border-green-100 rounded-lg text-center">
+                        <p className="text-xs font-bold text-green-600 uppercase">Total Income</p>
+                        <p className="text-2xl font-black text-green-800">₱{totalIncome.toLocaleString()}</p>
+                    </div>
+                    <div className="p-4 bg-red-50 border border-red-100 rounded-lg text-center">
+                        <p className="text-xs font-bold text-red-600 uppercase">Total Expenses</p>
+                        <p className="text-2xl font-black text-red-800">₱{totalExpense.toLocaleString()}</p>
+                    </div>
+                    <div className={`p-4 border rounded-lg text-center ${netProfit >= 0 ? 'bg-blue-50 border-blue-100' : 'bg-orange-50 border-orange-100'}`}>
+                        <p className="text-xs font-bold text-slate-600 uppercase">Net Profit</p>
+                        <p className={`text-2xl font-black ${netProfit >= 0 ? 'text-blue-800' : 'text-orange-800'}`}>₱{netProfit.toLocaleString()}</p>
+                    </div>
+                </div>
+
+                {/* Growth Metrics */}
+                <div className="mb-8">
+                    <h3 className="font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4 uppercase text-xs tracking-widest">Business Growth</h3>
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-slate-100 p-3 rounded-full"><UserPlus size={20}/></div>
+                            <div>
+                                <p className="font-bold text-xl">{newSubscribers.length}</p>
+                                <p className="text-xs text-slate-500">New Subscribers</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="bg-slate-100 p-3 rounded-full"><CheckCircle size={20}/></div>
+                            <div>
+                                <p className="font-bold text-xl">{monthlyPayments.length}</p>
+                                <p className="text-xs text-slate-500">Successful Payments</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="bg-slate-100 p-3 rounded-full"><TrendingUp size={20}/></div>
+                            <div>
+                                <p className="font-bold text-xl">{((netProfit / (totalIncome || 1)) * 100).toFixed(1)}%</p>
+                                <p className="text-xs text-slate-500">Profit Margin</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Expense Breakdown Table */}
+                <div className="mb-8">
+                    <h3 className="font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4 uppercase text-xs tracking-widest">Expense Breakdown</h3>
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-50 text-slate-500">
+                            <tr>
+                                <th className="p-2">Description</th>
+                                <th className="p-2">Category</th>
+                                <th className="p-2 text-right">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {monthlyExpenses.map((ex, i) => (
+                                <tr key={i} className="border-b border-slate-100">
+                                    <td className="p-2 font-bold text-slate-700">{ex.title}</td>
+                                    <td className="p-2 text-slate-500 text-xs uppercase">{ex.category}</td>
+                                    <td className="p-2 text-right text-red-600 font-mono font-bold">- ₱{ex.amount.toLocaleString()}</td>
+                                </tr>
+                            ))}
+                            {monthlyExpenses.length === 0 && <tr><td colSpan="3" className="p-4 text-center text-slate-400 italic">No expenses recorded.</td></tr>}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div className="mt-12 pt-8 border-t border-slate-200 text-center">
+                    <p className="font-bold text-slate-800">SwiftNet Internet Service Provider</p>
+                    <p className="text-xs text-slate-500">Confidential Financial Document • Authorized Personnel Only</p>
+                </div>
+
+            </div>
         </div>
     </div>
   );
@@ -2326,10 +2666,11 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
 
   return (
     <div className="space-y-6 animate-in fade-in">
-      <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit flex space-x-1 overflow-x-auto max-w-full mx-auto md:mx-0">
-         {['analytics', 'cashier', 'coverage', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
+      {/* CHANGE: max-w-[95vw] and overflow-x-auto */}
+      <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex space-x-1 overflow-x-auto max-w-[95vw] mx-auto md:mx-0 scrollbar-hide">
+         {['analytics', 'reports', 'cashier', 'coverage', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
+                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
          ))}
       </div>
@@ -2337,6 +2678,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} payments={payments} />}
       {activeTab === 'speedtest' && <SpeedTest />}
       {activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} />}
+      {activeTab === 'reports' && <ReportGenerator payments={payments} expenses={expenses || []} subscribers={subscribers} />}
       {activeTab === 'cashier' && <CashierMode subscribers={subscribers} db={db} appId={appId} />}
       {activeTab === 'coverage' && <ServiceAreaManager appId={appId} db={db} />}
       {activeTab === 'subscribers' && (
@@ -2351,9 +2693,10 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
             </div>
           </div>
           <div className="relative w-full"><Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} /><input type="text" placeholder="Search users..." className="pl-12 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none w-full bg-white shadow-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+          {/* Added max-w-[90vw] to ensure it fits within the screen width */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden max-w-[90vw] mx-auto lg:max-w-full">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm min-w-[800px]"> {/* Added min-w-[800px] to force scroll */}
                 <thead className="bg-slate-50 text-slate-500 border-b border-slate-200"><tr><th className="px-6 py-4 font-bold">User</th><th className="px-6 py-4 font-bold">Role</th><th className="px-6 py-4 font-bold">Plan</th><th className="px-6 py-4 font-bold">Balance</th><th className="px-6 py-4 font-bold">Points</th><th className="px-6 py-4 font-bold">Due Date</th><th className="px-6 py-4 font-bold">Status</th><th className="px-6 py-4 font-bold text-right">Actions</th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredSubscribers.map((sub) => (
@@ -2643,6 +2986,13 @@ export default function App() {
       try {
           const docRef = doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId);
           await updateDoc(docRef, { stepIndex: 4, status: 'Completed', completedDate: new Date().toISOString() });
+          // Need to pass userData to this function or fetch it, assuming 'user' state is available in App scope
+          await sendCustomEmail('feedback', {
+              name: user.displayName || user.email,
+              email: user.email,
+              message: `Your repair #${repairId} is complete. How did we do? Click the link to rate us.`,
+              link: 'https://www.facebook.com/SwiftnetISP/reviews' 
+          });
           alert("Thank you! The repair is now marked as completed.");
       } catch(e) { console.error(e); alert("Failed to confirm."); }
   };
