@@ -104,6 +104,7 @@ import {
   ArrowUpCircle,
   Edit,
   Map,
+  Calculator,
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -1699,6 +1700,236 @@ const ServiceAreaManager = ({ appId, db }) => {
   );
 };
 
+const BillingModal = ({ user, onClose, db, appId }) => {
+  // Start with an empty list so you have full control
+  const [items, setItems] = useState([]); 
+  
+  // Input state
+  const [newItem, setNewItem] = useState({ description: '', amount: '' });
+  const [loading, setLoading] = useState(false);
+
+  // Auto-calculate Total
+  const total = items.reduce((acc, item) => acc + parseFloat(item.amount || 0), 0);
+
+  const addItem = (e) => {
+    e.preventDefault();
+    if(!newItem.description || !newItem.amount) return;
+    
+    // Add to list
+    setItems([...items, { ...newItem, amount: parseFloat(newItem.amount) }]);
+    
+    // Reset inputs for next entry
+    setNewItem({ description: '', amount: '' });
+  };
+
+  const removeItem = (index) => {
+    setItems(items.filter((_, i) => i !== index));
+  };
+
+  const handleSave = async () => {
+    if (items.length === 0) return alert("Please add at least one item to the bill.");
+    setLoading(true);
+    
+    try {
+        const date = new Date();
+        const monthName = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 15); // Default 15 days due
+
+        // 1. Create the Invoice Document
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', INVOICES_COLLECTION), {
+            userId: user.id,
+            title: `Statement - ${monthName}`,
+            date: date.toISOString(),
+            dueDate: dueDate.toISOString(),
+            type: 'Invoice',
+            amount: total,
+            items: items, // Save the detailed list
+            status: 'Unpaid'
+        });
+
+        // 2. Update User Balance
+        const newBalance = (user.balance || 0) + total;
+        
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id), {
+            balance: newBalance,
+            status: newBalance > 0 ? 'overdue' : 'active',
+            dueDate: dueDate.toISOString()
+        });
+
+        alert("Invoice Generated Successfully!");
+        onClose();
+    } catch (e) {
+        alert("Error: " + e.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
+        <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-slate-800 p-5 flex justify-between items-center text-white">
+                <h3 className="font-bold text-lg flex items-center gap-2"><FileText size={20}/> Custom Invoice Builder</h3>
+                <button onClick={onClose}><X className="text-slate-400 hover:text-white"/></button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+                {/* Header Info */}
+                <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
+                    <div>
+                        <p className="text-xs font-bold text-blue-500 uppercase">Billed To</p>
+                        <p className="font-bold text-blue-900">{user.username}</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-xs font-bold text-blue-500 uppercase">Current Balance</p>
+                        <p className="font-bold text-blue-900">₱{(user.balance || 0).toLocaleString()}</p>
+                    </div>
+                </div>
+
+                {/* List of Added Items */}
+                <div className="space-y-2 mb-6">
+                    {items.map((item, i) => (
+                        <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-200">
+                            <span className="text-sm font-medium text-slate-700">{item.description}</span>
+                            <div className="flex items-center gap-3">
+                                <span className="font-bold text-slate-900">₱{item.amount.toLocaleString()}</span>
+                                <button onClick={() => removeItem(i)} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
+                            </div>
+                        </div>
+                    ))}
+                    {items.length === 0 && <p className="text-center text-slate-400 text-xs italic">List is empty. Add items below.</p>}
+                </div>
+
+                {/* Input Form */}
+                <form onSubmit={addItem} className="flex gap-2 mb-6">
+                    <input 
+                        className="flex-1 border p-2 rounded-lg text-sm outline-none focus:border-blue-500" 
+                        placeholder="Description (e.g. Monthly Fee)" 
+                        value={newItem.description} 
+                        onChange={e => setNewItem({...newItem, description: e.target.value})} 
+                        autoFocus
+                    />
+                    <input 
+                        type="number" 
+                        className="w-24 border p-2 rounded-lg text-sm outline-none focus:border-blue-500" 
+                        placeholder="Amount" 
+                        value={newItem.amount} 
+                        onChange={e => setNewItem({...newItem, amount: e.target.value})} 
+                    />
+                    <button className="bg-slate-200 text-slate-600 p-2 rounded-lg hover:bg-slate-300"><Plus size={20}/></button>
+                </form>
+
+                {/* Total */}
+                <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+                    <span className="text-xl font-bold text-slate-800">Total Bill</span>
+                    <span className="text-2xl font-black text-blue-600">₱{total.toLocaleString()}</span>
+                </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200">
+                <button onClick={handleSave} disabled={loading} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:opacity-50">
+                    {loading ? 'Processing...' : 'Generate Invoice'}
+                </button>
+            </div>
+        </div>
+    </div>
+  );
+};
+
+const CashierMode = ({ subscribers, db, appId }) => {
+  const [queryText, setQueryText] = useState('');
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [amount, setAmount] = useState('');
+  const [cash, setCash] = useState('');
+  const [processing, setProcessing] = useState(false);
+
+  const filtered = queryText ? subscribers.filter(s => s.username.toLowerCase().includes(queryText.toLowerCase()) || s.accountNumber.includes(queryText)) : [];
+
+  const handlePayment = async () => {
+      if (!amount || !selectedUser) return;
+      setProcessing(true);
+      
+      const newRef = `POS-${Math.floor(100000 + Math.random() * 900000)}`;
+      const paidAmount = parseFloat(amount);
+      const newBalance = (selectedUser.balance || 0) - paidAmount;
+
+      try {
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
+              userId: selectedUser.id,
+              username: selectedUser.username,
+              refNumber: newRef,
+              amount: paidAmount,
+              date: new Date().toISOString(),
+              status: 'verified',
+              type: 'Walk-in Cash'
+          });
+
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, selectedUser.id), {
+              balance: newBalance,
+              lastPaymentDate: new Date().toISOString()
+          });
+
+          // Generate Receipt
+          const date = new Date();
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', INVOICES_COLLECTION), {
+              userId: selectedUser.id,
+              title: `Official Receipt - Walk-in`,
+              date: date.toISOString(),
+              type: 'Receipt',
+              refNumber: newRef,
+              amount: paidAmount,
+              status: 'Paid',
+              items: [{ description: 'Cash Payment (Walk-in)', amount: paidAmount }]
+          });
+
+          alert(`Payment Successful!\nChange: ₱${(parseFloat(cash) - paidAmount).toFixed(2)}`);
+          setSelectedUser(null);
+          setAmount('');
+          setCash('');
+          setQueryText('');
+      } catch(e) {
+          alert("Error: " + e.message);
+      }
+      setProcessing(false);
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in h-[calc(100vh-150px)] flex gap-6">
+        <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><User size={20}/> Find Subscriber</h3>
+            <div className="relative mb-4">
+                <Search className="absolute left-4 top-3.5 text-slate-400" size={20}/>
+                <input className="w-full pl-12 pr-4 py-3 bg-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-lg" placeholder="Search Name or Account #" value={queryText} onChange={e => setQueryText(e.target.value)} autoFocus />
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2">
+                {filtered.map(sub => (
+                    <div key={sub.id} onClick={() => { setSelectedUser(sub); setAmount(sub.balance > 0 ? sub.balance : ''); }} className={`p-4 rounded-xl border cursor-pointer hover:bg-blue-50 transition-all ${selectedUser?.id === sub.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-100'}`}>
+                        <div className="flex justify-between items-center">
+                            <div><p className="font-bold text-lg">{sub.username}</p><p className={`text-xs ${selectedUser?.id === sub.id ? 'text-blue-100' : 'text-slate-500'}`}>#{sub.accountNumber}</p></div>
+                            <div className="text-right"><p className="font-mono font-black text-xl">₱{sub.balance?.toLocaleString()}</p><p className={`text-[10px] font-bold uppercase ${selectedUser?.id === sub.id ? 'text-blue-200' : 'text-slate-400'}`}>{sub.status}</p></div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+        <div className="w-[400px] bg-slate-900 rounded-2xl shadow-2xl p-8 text-white flex flex-col">
+            <h3 className="font-black text-2xl mb-6 flex items-center gap-3"><Calculator className="text-green-400"/> Cashier</h3>
+            {selectedUser ? (
+                <div className="flex-1 flex flex-col gap-6">
+                    <div className="bg-white/10 p-4 rounded-xl border border-white/10"><p className="text-slate-400 text-xs uppercase font-bold">Billing To</p><p className="text-xl font-bold truncate">{selectedUser.username}</p><p className="text-green-400 font-mono text-lg mt-1">Bal: ₱{selectedUser.balance?.toLocaleString()}</p></div>
+                    <div><label className="text-slate-400 text-xs uppercase font-bold block mb-2">Amount To Pay</label><input type="number" className="w-full bg-slate-800 border-2 border-slate-700 rounded-xl p-4 text-3xl font-mono font-bold text-white outline-none focus:border-green-500" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} /></div>
+                    <div><label className="text-slate-400 text-xs uppercase font-bold block mb-2">Cash Received</label><input type="number" className="w-full bg-slate-800 border-2 border-slate-700 rounded-xl p-4 text-3xl font-mono font-bold text-white outline-none focus:border-blue-500" placeholder="0.00" value={cash} onChange={e => setCash(e.target.value)} /></div>
+                    <div className="mt-auto pt-6 border-t border-white/10">
+                        <div className="flex justify-between items-center mb-4"><span className="text-slate-400 font-bold">Change:</span><span className="text-3xl font-black text-yellow-400">₱{cash && amount ? (parseFloat(cash) - parseFloat(amount)).toLocaleString() : '0.00'}</span></div>
+                        <button onClick={handlePayment} disabled={processing || !amount || !cash} className="w-full bg-green-600 hover:bg-green-500 text-white py-4 rounded-xl font-bold text-xl shadow-lg transition-all disabled:opacity-50">{processing ? 'Processing...' : 'Confirm Payment'}</button>
+                    </div>
+                </div>
+            ) : (<div className="flex-1 flex flex-col items-center justify-center text-slate-600"><User size={64} className="mb-4 opacity-20"/><p>Select a user to start</p></div>)}
+        </div>
+    </div>
+  );
+};
+
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -1730,6 +1961,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [outages, setOutages] = useState([]);
   const [newOutage, setNewOutage] = useState({ area: '', message: '', status: 'Active' });
   const [editingUser, setEditingUser] = useState(null);
+  const [billingUser, setBillingUser] = useState(null);
 
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
@@ -1885,9 +2117,9 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit flex space-x-1 overflow-x-auto max-w-full mx-auto md:mx-0">
-         {['analytics', 'coverage', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
+         {['analytics', 'cashier', 'coverage', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
+                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
          ))}
       </div>
@@ -1895,6 +2127,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} payments={payments} />}
       {activeTab === 'speedtest' && <SpeedTest />}
       {activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} />}
+      {activeTab === 'cashier' && <CashierMode subscribers={subscribers} db={db} appId={appId} />}
       {activeTab === 'coverage' && <ServiceAreaManager appId={appId} db={db} />}
       {activeTab === 'subscribers' && (
         <>
@@ -1923,7 +2156,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                       <td className="px-6 py-4 font-bold text-yellow-600 flex items-center gap-1"><Gift size={12}/> {sub.points || 0}</td>
                       <td className="px-6 py-4 text-slate-600 group relative"><div className="flex items-center gap-2">{new Date(sub.dueDate).toLocaleDateString()}<button onClick={() => { setShowDateModal(sub); setNewDueDate(new Date(sub.dueDate).toISOString().split('T')[0]); }} className="opacity-0 group-hover:opacity-100 text-blue-600 hover:bg-blue-100 p-1.5 rounded-md transition-all"><Calendar size={14} /></button></div></td>
                       <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold capitalize ${sub.status === 'active' ? 'bg-green-100 text-green-700' : sub.status === 'disconnected' ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'}`}>{sub.status}</span></td>
-                      <td className="px-6 py-4 text-right space-x-2 flex justify-end items-center">{sub.role !== 'admin' && sub.role !== 'technician' && (<><button onClick={() => setEditingUser(sub)} className="text-slate-500 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-md transition-colors mr-1" title="Edit Details"><Edit size={16} /></button><button onClick={() => handleOpenNotify(sub)} className="text-slate-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md transition-colors" title="Send Notification"><Bell size={16} /></button><button onClick={() => handleAddBill(sub)} className="text-blue-600 hover:text-blue-900 text-xs font-bold border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">+ Bill</button>{sub.status === 'active' ? <button onClick={() => handleStatusChange(sub.id, 'disconnected')} className="text-red-600 hover:text-red-900 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">Cut</button> : <button onClick={() => handleStatusChange(sub.id, 'active')} className="text-green-600 hover:text-green-900 text-xs font-bold border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors">Restore</button>}<button onClick={() => handleDeleteSubscriber(sub.id)} className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md transition-colors ml-2" title="Delete User"><UserX size={16} /></button></>)}</td>
+                      <td className="px-6 py-4 text-right space-x-2 flex justify-end items-center">{sub.role !== 'admin' && sub.role !== 'technician' && (<><button onClick={() => setEditingUser(sub)} className="text-slate-500 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-md transition-colors mr-1" title="Edit Details"><Edit size={16} /></button><button onClick={() => handleOpenNotify(sub)} className="text-slate-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md transition-colors" title="Send Notification"><Bell size={16} /></button><button onClick={() => setBillingUser(sub)} className="text-blue-600 hover:text-blue-900 text-xs font-bold border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">+ Bill</button>{sub.status === 'active' ? <button onClick={() => handleStatusChange(sub.id, 'disconnected')} className="text-red-600 hover:text-red-900 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">Cut</button> : <button onClick={() => handleStatusChange(sub.id, 'active')} className="text-green-600 hover:text-green-900 text-xs font-bold border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors">Restore</button>}<button onClick={() => handleDeleteSubscriber(sub.id)} className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md transition-colors ml-2" title="Delete User"><UserX size={16} /></button></>)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2026,6 +2259,15 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
     />
 )}
         {showNotifyModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Bell size={18} /> Notify {notifyData.targetName}</h3><button onClick={() => setShowNotifyModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div><form onSubmit={handleSendNotification}><div className="space-y-3"><div><label className="text-xs font-bold text-slate-500 uppercase">Title</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" placeholder="e.g. Payment Received" value={notifyData.title} onChange={(e) => setNotifyData({...notifyData, title: e.target.value})} required /></div><div><label className="text-xs font-bold text-slate-500 uppercase">Message</label><textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 h-24 resize-none" placeholder="Write your message here..." value={notifyData.message} onChange={(e) => setNotifyData({...notifyData, message: e.target.value})} required ></textarea></div><button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">Send Notification</button></div></form></div></div>)}
+        {/* Billing Modal Render */}
+      {billingUser && (
+        <BillingModal 
+            user={billingUser} 
+            db={db} 
+            appId={appId} 
+            onClose={() => setBillingUser(null)} 
+        />
+      )}
       </div>
     );
 };
