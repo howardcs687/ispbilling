@@ -97,6 +97,9 @@ import {
   Music,
   Volume2,
   QrCode,
+  ShoppingBag,
+  ArrowUpCircle,
+  Edit,
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -132,6 +135,7 @@ const NOTIFICATIONS_COLLECTION = 'isp_notifications_v1';
 const OUTAGES_COLLECTION = 'isp_outages_v1'; 
 const INVOICES_COLLECTION = 'isp_invoices_v1';
 const EXPENSES_COLLECTION = 'isp_expenses_v1';
+const PRODUCTS_COLLECTION = 'isp_products_v1';
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
 // --- Helper Functions ---
@@ -817,7 +821,6 @@ const DigitalID = ({ user }) => {
         const canvas = await html2canvas(element, { scale: 3, useCORS: true });
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
-        // Position card in center of A4
         pdf.addImage(imgData, 'PNG', 55, 50, 100, 60); 
         pdf.save(`SwiftNet_ID_${user.accountNumber}.pdf`);
     } catch (e) {
@@ -825,57 +828,75 @@ const DigitalID = ({ user }) => {
     }
   };
 
+  // Generate QR based on Account Number (or UID if Account # is pending)
+  const qrData = user.accountNumber !== 'PENDING' ? user.accountNumber : user.uid;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}&bgcolor=ffffff`;
+
   return (
     <div className="space-y-6 animate-in fade-in">
         <div className="flex flex-col items-center">
             <h2 className="text-2xl font-bold text-slate-800 mb-6">Your Digital Member ID</h2>
             
-            {/* THE ID CARD DESIGN */}
-            <div id="digital-id-card" className="relative w-[400px] h-[240px] rounded-3xl overflow-hidden shadow-2xl transition-transform hover:scale-105 duration-500">
-                {/* Background */}
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900"></div>
-                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16"></div>
-                <div className="absolute bottom-0 left-0 w-40 h-40 bg-blue-500/10 rounded-full blur-2xl -ml-10 -mb-10"></div>
+            {/* THE ID CARD */}
+            <div id="digital-id-card" className="relative w-[400px] h-[240px] rounded-3xl overflow-hidden shadow-2xl transition-transform hover:scale-105 duration-500 group">
+                
+                {/* Background Design */}
+                <div className="absolute inset-0 bg-slate-900">
+                    <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900"></div>
+                    {/* Animated shine effect */}
+                    <div className="absolute top-0 -inset-full h-full w-1/2 z-5 block transform -skew-x-12 bg-gradient-to-r from-transparent to-white opacity-10 group-hover:animate-shine" />
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                    <div className="absolute bottom-0 left-0 w-40 h-40 bg-purple-500/10 rounded-full blur-2xl -ml-10 -mb-10"></div>
+                </div>
                 
                 {/* Content */}
                 <div className="relative z-10 p-6 flex flex-col h-full justify-between text-white">
                     <div className="flex justify-between items-start">
                         <div className="flex items-center gap-2">
-                            <Wifi size={24} className="text-blue-400"/>
-                            <span className="font-bold tracking-widest text-lg">SwiftNet<span className="text-blue-400">ISP</span></span>
+                            <div className="bg-white/10 p-1.5 rounded-lg backdrop-blur-md">
+                                <Wifi size={20} className="text-white"/>
+                            </div>
+                            <div>
+                                <span className="font-bold tracking-widest text-lg block leading-none">SwiftNet</span>
+                                <span className="text-[8px] uppercase tracking-[0.2em] text-blue-200">Fiber Internet</span>
+                            </div>
                         </div>
-                        <span className="bg-white/10 border border-white/20 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md">
+                        <span className="bg-gradient-to-r from-blue-500 to-indigo-500 border border-white/20 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-lg">
                             {user.plan || 'Subscriber'}
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gradient-to-tr from-yellow-200 to-yellow-500 rounded-lg shadow-inner opacity-80"></div> 
-                        {/* Chip Graphic */}
-                        <div className="font-mono text-sm opacity-50 tracking-widest">
-                            xxxx xxxx {user.accountNumber ? user.accountNumber.slice(-4) : '0000'}
+                    <div className="flex flex-row items-center justify-between gap-4 mt-2">
+                        {/* Chip & Details */}
+                        <div className="space-y-4">
+                            <div className="w-10 h-8 bg-gradient-to-tr from-yellow-200 to-yellow-500 rounded-md shadow-inner opacity-90 border border-yellow-600/30"></div> 
+                            <div>
+                                <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-0.5">Account Number</p>
+                                <p className="font-mono text-lg tracking-widest text-blue-100 shadow-black drop-shadow-sm">
+                                    {user.accountNumber}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* REAL QR CODE */}
+                        <div className="bg-white p-1.5 rounded-xl shadow-lg">
+                            <img 
+                                src={qrUrl} 
+                                alt="ID QR" 
+                                className="w-20 h-20 object-contain rounded-lg"
+                            />
                         </div>
                     </div>
 
-                    <div className="flex justify-between items-end">
-                        <div>
-                            <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-1">Subscriber Name</p>
-                            <p className="font-bold text-lg tracking-wide uppercase">{user.username}</p>
-                        </div>
-                        <div className="bg-white p-1 rounded-lg">
-                            {/* Uses a public API to generate QR code on the fly */}
-                            <img 
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${user.accountNumber}`} 
-                                alt="QR" 
-                                className="w-12 h-12"
-                            />
-                        </div>
+                    <div className="mt-1">
+                        <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-0.5">Subscriber Name</p>
+                        <p className="font-bold text-lg tracking-wide uppercase truncate">{user.username}</p>
                     </div>
                 </div>
             </div>
 
             <p className="text-slate-500 text-sm mt-6 text-center max-w-sm">
-                Present this digital card at any payment center or authorized agent for faster transaction processing.
+                This QR code contains your unique <strong>Account Number</strong>. Show this to the admin for quick scanning during payments or repairs.
             </p>
 
             <button 
@@ -989,9 +1010,9 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
-        {['overview', 'my_id', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
+        {['overview', 'shop', 'my_id', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'my_id' ? <><CreditCard size={16}/> My ID</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'documents' ? <><FileText size={16}/> Documents</> : tab === 'rewards' ? <><Gift size={16}/> Rewards</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
+              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'shop' ? <><ShoppingBag size={16}/> Shop</> : tab === 'my_id' ? <><CreditCard size={16}/> My ID</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'documents' ? <><FileText size={16}/> Documents</> : tab === 'rewards' ? <><Gift size={16}/> Rewards</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
            </button>
         ))}
       </div>
@@ -1079,6 +1100,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           </div>
         </div>
       )}
+      {activeTab === 'shop' && <Marketplace user={userData} db={db} appId={appId} />}
       {activeTab === 'my_id' && <DigitalID user={userData} />}
       {activeTab === 'repairs' && (
          <div className="space-y-6">
@@ -1357,6 +1379,252 @@ const totalRevenue = payments
   );
 };
 
+const ProductManager = ({ appId, db }) => {
+  const [products, setProducts] = useState([]);
+  const [newProduct, setNewProduct] = useState({ name: '', price: '', description: '', category: 'Add-on' });
+  const [isAdding, setIsAdding] = useState(false);
+
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', PRODUCTS_COLLECTION));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, [appId, db]);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (!newProduct.name || !newProduct.price) return;
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PRODUCTS_COLLECTION), newProduct);
+    setNewProduct({ name: '', price: '', description: '', category: 'Add-on' });
+    setIsAdding(false);
+  };
+
+  const handleDelete = async (id) => {
+    if(confirm("Delete this product?")) {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', PRODUCTS_COLLECTION, id));
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+        <div className="flex justify-between items-center">
+            <div><h2 className="text-2xl font-bold text-slate-800">Store Inventory</h2><p className="text-sm text-slate-500">Manage items visible in the Subscriber Shop.</p></div>
+            <button onClick={() => setIsAdding(!isAdding)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 hover:bg-blue-700">
+                {isAdding ? 'Cancel' : <><Plus size={16}/> Add Product</>}
+            </button>
+        </div>
+
+        {isAdding && (
+            <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                <form onSubmit={handleAdd} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase">Product Name</label>
+                            <input className="w-full border p-2 rounded-lg" placeholder="e.g. Mesh Router" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} required/>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase">Price Label</label>
+                            <input className="w-full border p-2 rounded-lg" placeholder="e.g. ₱1,500 /mo" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} required/>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase">Category</label>
+                            <select className="w-full border p-2 rounded-lg" value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})}>
+                                <option>Add-on</option><option>Hardware</option><option>Upgrade</option><option>Gaming</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase">Description</label>
+                            <input className="w-full border p-2 rounded-lg" placeholder="Short description..." value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} required/>
+                        </div>
+                    </div>
+                    <button className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold w-full hover:bg-green-700">Save Product</button>
+                </form>
+            </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {products.map(p => (
+                <div key={p.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative group">
+                    <div className="flex justify-between items-start mb-2">
+                        <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded uppercase">{p.category}</span>
+                        <button onClick={() => handleDelete(p.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={16}/></button>
+                    </div>
+                    <h4 className="font-bold text-slate-800 text-lg">{p.name}</h4>
+                    <p className="text-sm text-slate-500 mb-4 h-10">{p.description}</p>
+                    <div className="font-bold text-blue-600 bg-blue-50 p-2 rounded-lg text-center">{p.price}</div>
+                </div>
+            ))}
+            {products.length === 0 && <p className="col-span-full text-center text-slate-400 py-10">No products in store.</p>}
+        </div>
+    </div>
+  );
+};
+
+const Marketplace = ({ user, db, appId }) => {
+  const [products, setProducts] = useState([]);
+  const [buying, setBuying] = useState(null);
+
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', PRODUCTS_COLLECTION));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, [appId, db]);
+
+  const getIcon = (cat) => {
+      if(cat === 'Hardware') return <Wifi size={32} className="text-purple-500"/>;
+      if(cat === 'Gaming') return <Zap size={32} className="text-yellow-500"/>;
+      if(cat === 'Upgrade') return <ArrowUpCircle size={32} className="text-green-500"/>;
+      return <Globe size={32} className="text-blue-500"/>;
+  };
+
+  const handlePurchase = async (product) => {
+    if (!confirm(`Request to order: ${product.name}? An agent will contact you.`)) return;
+    setBuying(product.id);
+    try {
+        const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString();
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+            ticketId,
+            userId: user.uid,
+            username: user.username,
+            subject: `Order: ${product.name}`,
+            message: `Customer wants to purchase/subscribe to: ${product.name} (${product.price}).`,
+            status: 'open',
+            adminReply: '',
+            date: new Date().toISOString(),
+            isOrder: true
+        });
+        alert("Order request sent!");
+    } catch (e) { alert("Error sending request."); }
+    setBuying(null);
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+        <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16"></div>
+            <div className="relative z-10">
+                <h2 className="text-3xl font-black mb-2 flex items-center gap-3">
+                    <ShoppingBag className="text-indigo-400"/> Upgrade Store
+                </h2>
+                <p className="text-slate-300 max-w-lg">Enhance your internet experience. Purchase add-ons and hardware directly.</p>
+            </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {products.map(product => (
+                <div key={product.id} className="p-6 rounded-2xl border-2 border-slate-100 bg-white hover:shadow-lg transition-all group">
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="bg-slate-50 p-3 rounded-xl shadow-sm group-hover:scale-110 transition-transform">
+                            {getIcon(product.category)}
+                        </div>
+                        <span className="font-bold text-slate-800 bg-slate-100 px-3 py-1 rounded-full text-sm">
+                            {product.price}
+                        </span>
+                    </div>
+                    <h3 className="font-bold text-slate-800 text-lg mb-2">{product.name}</h3>
+                    <p className="text-sm text-slate-600 mb-6 min-h-[40px]">{product.description}</p>
+                    <button onClick={() => handlePurchase(product)} disabled={buying === product.id} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-indigo-600 transition-colors shadow-md disabled:opacity-50">
+                        {buying === product.id ? 'Processing...' : 'Request Order'}
+                    </button>
+                </div>
+            ))}
+            {products.length === 0 && <div className="col-span-full text-center text-slate-400 py-10">Store is currently empty. Check back soon!</div>}
+        </div>
+    </div>
+  );
+};
+
+const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
+  const [formData, setFormData] = useState({
+    username: user.username || '',
+    email: user.email || '',
+    accountNumber: user.accountNumber || '',
+    plan: user.plan || '',
+    address: user.address || '',
+    status: user.status || 'active',
+    balance: user.balance || 0
+  });
+  const [loading, setLoading] = useState(false);
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id);
+        await updateDoc(docRef, {
+            ...formData,
+            balance: parseFloat(formData.balance)
+        });
+        alert("Subscriber details updated successfully!");
+        onClose();
+    } catch (e) {
+        console.error(e);
+        alert("Error updating user: " + e.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
+        <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-slate-800 p-5 flex justify-between items-center text-white">
+                <h3 className="font-bold text-lg flex items-center gap-2">
+                    <Edit size={20} /> Edit Subscriber
+                </h3>
+                <button onClick={onClose}><X className="text-slate-400 hover:text-white"/></button>
+            </div>
+
+            <form onSubmit={handleUpdate} className="p-6 overflow-y-auto space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Full Name</label>
+                        <input className="w-full border p-2 rounded-lg" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Account No.</label>
+                        <input className="w-full border p-2 rounded-lg bg-slate-50 font-mono" value={formData.accountNumber} onChange={e => setFormData({...formData, accountNumber: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Status</label>
+                        <select className="w-full border p-2 rounded-lg" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
+                            <option value="active">Active</option>
+                            <option value="overdue">Overdue</option>
+                            <option value="disconnected">Disconnected</option>
+                            <option value="applicant">Applicant</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Internet Plan</label>
+                        <select className="w-full border p-2 rounded-lg" value={formData.plan} onChange={e => setFormData({...formData, plan: e.target.value})}>
+                            <option value="">-- Select Plan --</option>
+                            {plans.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Current Balance</label>
+                        <input type="number" className="w-full border p-2 rounded-lg" value={formData.balance} onChange={e => setFormData({...formData, balance: e.target.value})} />
+                    </div>
+                    <div className="col-span-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Address</label>
+                        <textarea className="w-full border p-2 rounded-lg h-20 resize-none" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})}></textarea>
+                    </div>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                    <button type="button" onClick={onClose} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-xl transition-colors">Cancel</button>
+                    <button type="submit" disabled={loading} className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg transition-all">
+                        {loading ? 'Saving...' : 'Save Changes'}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+  );
+};
+
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -1387,6 +1655,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   // NEW: Outage States
   const [outages, setOutages] = useState([]);
   const [newOutage, setNewOutage] = useState({ area: '', message: '', status: 'Active' });
+  const [editingUser, setEditingUser] = useState(null);
 
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
@@ -1542,12 +1811,13 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit flex space-x-1 overflow-x-auto max-w-full mx-auto md:mx-0">
-         {['analytics', 'expenses', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
+         {['analytics', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
+                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
          ))}
       </div>
+      {activeTab === 'store' && <ProductManager appId={appId} db={db} />}
       {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} payments={payments} />}
       {activeTab === 'speedtest' && <SpeedTest />}{activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} />}
       {activeTab === 'subscribers' && (
@@ -1577,7 +1847,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                       <td className="px-6 py-4 font-bold text-yellow-600 flex items-center gap-1"><Gift size={12}/> {sub.points || 0}</td>
                       <td className="px-6 py-4 text-slate-600 group relative"><div className="flex items-center gap-2">{new Date(sub.dueDate).toLocaleDateString()}<button onClick={() => { setShowDateModal(sub); setNewDueDate(new Date(sub.dueDate).toISOString().split('T')[0]); }} className="opacity-0 group-hover:opacity-100 text-blue-600 hover:bg-blue-100 p-1.5 rounded-md transition-all"><Calendar size={14} /></button></div></td>
                       <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold capitalize ${sub.status === 'active' ? 'bg-green-100 text-green-700' : sub.status === 'disconnected' ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'}`}>{sub.status}</span></td>
-                      <td className="px-6 py-4 text-right space-x-2 flex justify-end items-center">{sub.role !== 'admin' && sub.role !== 'technician' && (<><button onClick={() => handleOpenNotify(sub)} className="text-slate-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md transition-colors" title="Send Notification"><Bell size={16} /></button><button onClick={() => handleAddBill(sub)} className="text-blue-600 hover:text-blue-900 text-xs font-bold border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">+ Bill</button>{sub.status === 'active' ? <button onClick={() => handleStatusChange(sub.id, 'disconnected')} className="text-red-600 hover:text-red-900 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">Cut</button> : <button onClick={() => handleStatusChange(sub.id, 'active')} className="text-green-600 hover:text-green-900 text-xs font-bold border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors">Restore</button>}<button onClick={() => handleDeleteSubscriber(sub.id)} className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md transition-colors ml-2" title="Delete User"><UserX size={16} /></button></>)}</td>
+                      <td className="px-6 py-4 text-right space-x-2 flex justify-end items-center">{sub.role !== 'admin' && sub.role !== 'technician' && (<><button onClick={() => setEditingUser(sub)} className="text-slate-500 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-md transition-colors mr-1" title="Edit Details"><Edit size={16} /></button><button onClick={() => handleOpenNotify(sub)} className="text-slate-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md transition-colors" title="Send Notification"><Bell size={16} /></button><button onClick={() => handleAddBill(sub)} className="text-blue-600 hover:text-blue-900 text-xs font-bold border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">+ Bill</button>{sub.status === 'active' ? <button onClick={() => handleStatusChange(sub.id, 'disconnected')} className="text-red-600 hover:text-red-900 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">Cut</button> : <button onClick={() => handleStatusChange(sub.id, 'active')} className="text-green-600 hover:text-green-900 text-xs font-bold border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors">Restore</button>}<button onClick={() => handleDeleteSubscriber(sub.id)} className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md transition-colors ml-2" title="Delete User"><UserX size={16} /></button></>)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1670,6 +1940,15 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
        {showAnnounceModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Post Announcement</h3><input className="w-full border p-2 rounded mb-2" placeholder="Title" value={newAnnouncement.title} onChange={e=>setNewAnnouncement({...newAnnouncement, title: e.target.value})}/><textarea className="w-full border p-2 rounded mb-2" placeholder="Message" value={newAnnouncement.message} onChange={e=>setNewAnnouncement({...newAnnouncement, message: e.target.value})}></textarea><div className="flex justify-end gap-2"><button onClick={()=>setShowAnnounceModal(false)} className="text-slate-500">Cancel</button><button onClick={handlePostAnnouncement} className="bg-blue-600 text-white px-4 py-2 rounded">Post</button></div></div></div>)}
        {showPasswordModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Change Password</h3><input className="w-full border p-2 rounded mb-4" type="password" placeholder="New Password" value={adminNewPass} onChange={e=>setAdminNewPass(e.target.value)}/><div className="flex justify-end gap-2"><button onClick={()=>setShowPasswordModal(false)} className="text-slate-500">Cancel</button><button onClick={handleChangePassword} className="bg-blue-600 text-white px-4 py-2 rounded">Update</button></div></div></div>)}
        {showDateModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold">Change Due Date</h3><button onClick={() => setShowDateModal(null)} className="text-white/80 hover:text-white"><X size={24} /></button></div><form onSubmit={handleUpdateDueDate} className="p-6 space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Due Date</label><input type="date" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} /></div><button type="submit" className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">Update Date</button></form></div></div>)}
+        {editingUser && (
+    <EditSubscriberModal 
+        user={editingUser} 
+        plans={plans} 
+        db={db} 
+        appId={appId} 
+        onClose={() => setEditingUser(null)} 
+    />
+)}
         {showNotifyModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Bell size={18} /> Notify {notifyData.targetName}</h3><button onClick={() => setShowNotifyModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div><form onSubmit={handleSendNotification}><div className="space-y-3"><div><label className="text-xs font-bold text-slate-500 uppercase">Title</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" placeholder="e.g. Payment Received" value={notifyData.title} onChange={(e) => setNotifyData({...notifyData, title: e.target.value})} required /></div><div><label className="text-xs font-bold text-slate-500 uppercase">Message</label><textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 h-24 resize-none" placeholder="Write your message here..." value={notifyData.message} onChange={(e) => setNotifyData({...notifyData, message: e.target.value})} required ></textarea></div><button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">Send Notification</button></div></form></div></div>)}
       </div>
     );
