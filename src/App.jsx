@@ -37,82 +37,23 @@ import { 
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { 
-  Wifi, 
-  CreditCard, 
-  User, 
-  LogOut, 
-  Shield, 
-  CheckCircle, 
-  AlertCircle, 
-  Smartphone, 
-  Activity, 
-  Search, 
-  Menu, 
-  X, 
-  Plus, 
-  Settings, 
-  Trash2, 
-  Zap, 
-  Mail, 
-  Lock, 
-  Eye, 
-  EyeOff, 
-  RefreshCw, 
-  Calendar, 
-  Megaphone, 
-  MessageSquare, 
-  FileText, 
-  Send, 
-  ArrowRight, 
-  Gauge, 
-  Download, 
-  Upload, 
-  UserPlus, 
-  UserCog, 
-  Globe, 
-  Check, 
-  MessageCircle, 
-  Wrench, 
-  ClipboardList, 
-  UserCheck, 
-  Hammer, 
-  Hourglass, 
-  HelpCircle, 
-  Bell, 
-  Hash, 
-  UserX, 
-  Clock, 
-  HardHat, 
-  PlayCircle, 
-  History, 
-  MapPin, 
-  CheckSquare, 
-  Briefcase, 
-  Signal, 
-  Gift, 
-  AlertTriangle,
-  // New icons added recently:
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
-  Package,
-  PlusCircle,
-  MinusCircle,
-  Music,
-  Volume2,
-  QrCode,
-  ShoppingBag,
-  ArrowUpCircle,
-  Edit,
-  Map,
-  Calculator,
-  UploadCloud,
-  Image,
-  PieChart,
-  FileBarChart,
-  TrendingUp,
-  Sun,
-  Moon,
+  Wifi, CreditCard, User, LogOut, Shield, CheckCircle, AlertCircle, 
+  Smartphone, Activity, Search, Menu, X, Plus, Settings, Trash2, Zap, 
+  Mail, Lock, Eye, EyeOff, RefreshCw, Calendar, Megaphone, MessageSquare, 
+  FileText, Send, ArrowRight, Gauge, Download, Upload, UserPlus, UserCog, 
+  Globe, Check, MessageCircle, Wrench, ClipboardList, UserCheck, Hammer, 
+  Hourglass, HelpCircle, Bell, Hash, UserX, Clock, HardHat, PlayCircle, 
+  History, MapPin, CheckSquare, Briefcase, Signal, Gift, AlertTriangle,
+  DollarSign, TrendingUp, TrendingDown, Package, PlusCircle, MinusCircle,
+  Music, Volume2, QrCode, ShoppingBag, ArrowUpCircle, Edit, Map, 
+  Calculator, UploadCloud, Image, 
+  PieChart as PieChartIcon, // <--- FIXED: Renamed to avoid conflict
+  FileBarChart, 
+  Siren, 
+  FileWarning, 
+  BookOpen, 
+  ChevronRight, 
+  Edit3 
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -378,14 +319,9 @@ const InvoiceModal = ({ doc, user, onClose }) => {
       setSending(true);
 
       // EMAILJS CONFIGURATION
-      // 1. Go to https://www.emailjs.com/ -> Sign Up (Free)
-      // 2. Add Service (Gmail) -> Get Service ID
-      // 3. Add Template -> Get Template ID
-      // 4. Account -> API Keys -> Get Public Key
-      
-      const serviceID = 'service_rku0sea';  // Replace with yours
-      const templateID = 'template_9pjx12n'; // Replace with yours
-      const publicKey = 'gULI8936r5B6AVPx1';   // Replace with yours
+      const serviceID = 'YOUR_SERVICE_ID';   // Replace with yours
+      const templateID = 'YOUR_TEMPLATE_ID'; // Replace with yours
+      const publicKey = 'YOUR_PUBLIC_KEY';   // Replace with yours
 
       const templateParams = {
           to_name: user.username,
@@ -393,14 +329,11 @@ const InvoiceModal = ({ doc, user, onClose }) => {
           subject: `${label} - SwiftNet ISP`,
           message: `Dear Subscriber, attached is your ${label} for ${doc.date}. Amount: ₱${amountVal.toLocaleString()}`,
           amount: `₱${amountVal.toLocaleString()}`,
-          // Note: Free EmailJS can't attach PDFs directly easily, 
-          // so we send a formatted HTML receipt in the email body instead.
       };
 
       try {
-              await emailjs.send(serviceID, templateID, templateParams, publicKey);
-              alert("Email sent successfully!");
-          }
+          await emailjs.send(serviceID, templateID, templateParams, publicKey);
+          alert("Email sent successfully!");
       } catch (error) {
           console.error('FAILED...', error);
           alert("Failed to send email. Check console.");
