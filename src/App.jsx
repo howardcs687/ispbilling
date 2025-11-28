@@ -1213,12 +1213,14 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
                 </div>
 
                 {userData.balance > 0 ? (
-                    <button onClick={() => setShowQR(true)} className="w-full mt-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all flex items-center justify-center gap-3">
-                        <Smartphone size={20} /> Pay Now via QR
-                    </button>
-                    <button onClick={() => setShowProofModal(true)} className="w-full mt-2 py-3 bg-white border border-blue-200 text-blue-600 rounded-xl font-bold hover:bg-blue-50 flex items-center justify-center gap-2 transition-all">
-                        <UploadCloud size={20}/> Upload Payment Receipt
+                    <>
+                        <button onClick={() => setShowQR(true)} className="w-full mt-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all flex items-center justify-center gap-3">
+                            <Smartphone size={20} /> Pay Now via QR
                         </button>
+                        <button onClick={() => setShowProofModal(true)} className="w-full mt-3 py-3 bg-white border-2 border-blue-100 text-blue-600 rounded-xl font-bold hover:bg-blue-50 transition-all flex items-center justify-center gap-2">
+                            <UploadCloud size={20}/> Upload Payment Receipt
+                        </button>
+                    </>
                 ) : (
                     <div className="mt-6 bg-green-100/50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center justify-center gap-2 font-bold">
                         <CheckCircle size={20} /> You are fully paid. Enjoy surfing!
