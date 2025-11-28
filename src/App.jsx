@@ -96,6 +96,7 @@ import {
   MinusCircle,
   Music,
   Volume2,
+  QrCode,
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -607,7 +608,8 @@ const Layout = ({ children, user, onLogout }) => {
         <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-blue-300/30 blur-[100px] animate-pulse delay-1000"></div>
       </div>
 
-      <nav className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-white/20 shadow-sm">
+      {/* Nav - Added z-[100] to ensure it is always on top */}
+      <nav className="sticky top-0 z-[100] bg-white/70 backdrop-blur-xl border-b border-white/20 shadow-sm">
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
             <div className="flex items-center gap-3">
@@ -627,14 +629,40 @@ const Layout = ({ children, user, onLogout }) => {
                     <User size={16} className="text-blue-600" />}
                    <span className="font-bold text-sm text-slate-700">{user.displayName || user.email}</span>
                 </div>
-                <button onClick={onLogout} className="p-3 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-full transition-all duration-300 group">
+                <button onClick={onLogout} className="p-3 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-full transition-all duration-300 group" title="Sign Out">
                     <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
                 </button>
               </div>
             )}
-            {user && <div className="md:hidden"><button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 text-slate-600"><Menu /></button></div>}
+            
+            {/* Mobile Hamburger Button */}
+            {user && (
+                <div className="md:hidden">
+                    <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                        {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                    </button>
+                </div>
+            )}
           </div>
         </div>
+
+        {/* --- FIXED: Mobile Menu Dropdown --- */}
+        {isMenuOpen && user && (
+            <div className="md:hidden absolute top-20 left-0 w-full bg-white/90 backdrop-blur-2xl border-b border-white/20 shadow-2xl p-4 flex flex-col gap-4 animate-in slide-in-from-top-5">
+                <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl border border-slate-100">
+                   {user.role === 'admin' ? <Shield size={20} className="text-indigo-600" /> : 
+                    user.role === 'technician' ? <HardHat size={20} className="text-orange-600" /> : 
+                    <User size={20} className="text-blue-600" />}
+                   <div>
+                       <p className="font-bold text-sm text-slate-800">{user.displayName || user.email}</p>
+                       <p className="text-xs text-slate-500 uppercase">{user.role}</p>
+                   </div>
+                </div>
+                <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 bg-red-50 text-red-600 py-4 rounded-xl font-bold hover:bg-red-100 transition-colors">
+                    <LogOut size={20} /> Sign Out
+                </button>
+            </div>
+        )}
       </nav>
 
       <main className="flex-grow w-full px-4 sm:px-6 lg:px-8 py-8 relative z-10">
@@ -781,6 +809,86 @@ const Login = ({ onLogin }) => {
   );
 };
 
+const DigitalID = ({ user }) => {
+  const handleDownloadID = async () => {
+    const element = document.getElementById('digital-id-card');
+    try {
+        await new Promise(r => setTimeout(r, 100));
+        const canvas = await html2canvas(element, { scale: 3, useCORS: true });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        // Position card in center of A4
+        pdf.addImage(imgData, 'PNG', 55, 50, 100, 60); 
+        pdf.save(`SwiftNet_ID_${user.accountNumber}.pdf`);
+    } catch (e) {
+        alert("Error downloading ID");
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+        <div className="flex flex-col items-center">
+            <h2 className="text-2xl font-bold text-slate-800 mb-6">Your Digital Member ID</h2>
+            
+            {/* THE ID CARD DESIGN */}
+            <div id="digital-id-card" className="relative w-[400px] h-[240px] rounded-3xl overflow-hidden shadow-2xl transition-transform hover:scale-105 duration-500">
+                {/* Background */}
+                <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900"></div>
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                <div className="absolute bottom-0 left-0 w-40 h-40 bg-blue-500/10 rounded-full blur-2xl -ml-10 -mb-10"></div>
+                
+                {/* Content */}
+                <div className="relative z-10 p-6 flex flex-col h-full justify-between text-white">
+                    <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-2">
+                            <Wifi size={24} className="text-blue-400"/>
+                            <span className="font-bold tracking-widest text-lg">SwiftNet<span className="text-blue-400">ISP</span></span>
+                        </div>
+                        <span className="bg-white/10 border border-white/20 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md">
+                            {user.plan || 'Subscriber'}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-gradient-to-tr from-yellow-200 to-yellow-500 rounded-lg shadow-inner opacity-80"></div> 
+                        {/* Chip Graphic */}
+                        <div className="font-mono text-sm opacity-50 tracking-widest">
+                            xxxx xxxx {user.accountNumber ? user.accountNumber.slice(-4) : '0000'}
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between items-end">
+                        <div>
+                            <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-1">Subscriber Name</p>
+                            <p className="font-bold text-lg tracking-wide uppercase">{user.username}</p>
+                        </div>
+                        <div className="bg-white p-1 rounded-lg">
+                            {/* Uses a public API to generate QR code on the fly */}
+                            <img 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${user.accountNumber}`} 
+                                alt="QR" 
+                                className="w-12 h-12"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <p className="text-slate-500 text-sm mt-6 text-center max-w-sm">
+                Present this digital card at any payment center or authorized agent for faster transaction processing.
+            </p>
+
+            <button 
+                onClick={handleDownloadID}
+                className="mt-6 bg-slate-900 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-600 transition-colors shadow-lg"
+            >
+                <Download size={18}/> Download ID Card
+            </button>
+        </div>
+    </div>
+  );
+};
+
 // 3. Subscriber Dashboard
 const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair, outages }) => {
   const [activeTab, setActiveTab] = useState('overview'); 
@@ -881,9 +989,9 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
-        {['overview', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
+        {['overview', 'my_id', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'documents' ? <><FileText size={16}/> Documents</> : tab === 'rewards' ? <><Gift size={16}/> Rewards</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
+              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'my_id' ? <><CreditCard size={16}/> My ID</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'documents' ? <><FileText size={16}/> Documents</> : tab === 'rewards' ? <><Gift size={16}/> Rewards</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
            </button>
         ))}
       </div>
@@ -971,6 +1079,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           </div>
         </div>
       )}
+      {activeTab === 'my_id' && <DigitalID user={userData} />}
       {activeTab === 'repairs' && (
          <div className="space-y-6">
             <div className="flex justify-between items-center">
