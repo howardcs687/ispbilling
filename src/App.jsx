@@ -105,6 +105,8 @@ import {
   Edit,
   Map,
   Calculator,
+  UploadCloud,
+  Image,
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -932,10 +934,135 @@ const DigitalID = ({ user }) => {
   );
 };
 
+const PaymentProofModal = ({ user, onClose, db, appId }) => {
+  const [refNumber, setRefNumber] = useState('');
+  const [amount, setAmount] = useState('');
+  const [method, setMethod] = useState('GCash');
+  const [preview, setPreview] = useState(null);
+  const [base64Image, setBase64Image] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Magic Function: Compress image to text
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setPreview(URL.createObjectURL(file));
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 600; // Resize to 600px width
+            const scaleSize = MAX_WIDTH / img.width;
+            canvas.width = MAX_WIDTH;
+            canvas.height = img.height * scaleSize;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+            setBase64Image(compressedBase64);
+        };
+    };
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!amount || !refNumber) return alert("Please fill in all fields.");
+    if (!base64Image) return alert("Please attach a screenshot.");
+    
+    setLoading(true);
+
+    try {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
+            userId: user.uid,
+            username: user.username,
+            refNumber: refNumber,
+            amount: parseFloat(amount),
+            method: method,
+            date: new Date().toISOString(),
+            status: 'pending_approval',
+            proofImage: base64Image // Saving image as text!
+        });
+
+        alert("Proof submitted successfully!");
+        onClose();
+    } catch(e) {
+        console.error("Save Error:", e);
+        if (e.message.includes('exceeds the maximum allowed size')) {
+            alert("Image too large. Please crop it.");
+        } else {
+            alert("Error: " + e.message);
+        }
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
+        <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 flex flex-col max-h-[90vh]">
+            <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
+                <UploadCloud size={20} className="text-blue-600"/> Upload Payment Proof
+            </h3>
+            
+            <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto p-1">
+                <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Payment Method</label>
+                    <div className="flex gap-2">
+                        {['GCash', 'Maya', 'Bank'].map(m => (
+                            <button type="button" key={m} onClick={() => setMethod(m)} className={`flex-1 py-2 text-xs font-bold rounded-lg border ${method === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200'}`}>
+                                {m}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Amount Paid</label>
+                        <input type="number" required className="w-full border p-2 rounded-lg" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Ref No.</label>
+                        <input type="text" required className="w-full border p-2 rounded-lg" placeholder="e.g. 100234" value={refNumber} onChange={e => setRefNumber(e.target.value)} />
+                    </div>
+                </div>
+
+                <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:bg-slate-50 relative overflow-hidden">
+                    <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" onChange={handleFileChange} />
+                    {preview ? (
+                        <div className="relative">
+                            <img src={preview} alt="Preview" className="mx-auto h-32 object-contain rounded-lg shadow-sm" />
+                            <p className="text-xs text-green-600 font-bold mt-2">Ready to submit</p>
+                        </div>
+                    ) : (
+                        <div>
+                            <div className="mx-auto bg-blue-50 w-10 h-10 rounded-full flex items-center justify-center text-blue-500 mb-2"><Image size={20}/></div>
+                            <p className="text-sm font-bold text-slate-600 px-4">Tap to attach screenshot</p>
+                        </div>
+                    )}
+                </div>
+
+                <button disabled={loading} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:opacity-50 flex justify-center items-center gap-2">
+                    {loading ? <RefreshCw className="animate-spin" size={18}/> : <CheckCircle size={18}/>}
+                    {loading ? 'Compressing & Sending...' : 'Submit Proof'}
+                </button>
+            </form>
+            <button onClick={onClose} className="w-full mt-2 text-slate-400 text-xs font-bold hover:text-slate-600">Cancel</button>
+        </div>
+    </div>
+  );
+};
+
 // 3. Subscriber Dashboard
 const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair, outages }) => {
   const [activeTab, setActiveTab] = useState('overview'); 
   const [showQR, setShowQR] = useState(false);
+  const [showProofModal, setShowProofModal] = useState(false);
   const [refNumber, setRefNumber] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [newTicket, setNewTicket] = useState({ subject: '', message: '' });
@@ -1089,6 +1216,9 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
                     <button onClick={() => setShowQR(true)} className="w-full mt-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all flex items-center justify-center gap-3">
                         <Smartphone size={20} /> Pay Now via QR
                     </button>
+                    <button onClick={() => setShowProofModal(true)} className="w-full mt-2 py-3 bg-white border border-blue-200 text-blue-600 rounded-xl font-bold hover:bg-blue-50 flex items-center justify-center gap-2 transition-all">
+                        <UploadCloud size={20}/> Upload Payment Receipt
+                        </button>
                 ) : (
                     <div className="mt-6 bg-green-100/50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center justify-center gap-2 font-bold">
                         <CheckCircle size={20} /> You are fully paid. Enjoy surfing!
@@ -1212,6 +1342,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       {activeTab === 'settings' && (<div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Lock size={20} className="text-blue-600"/> Change Password</h3><form onSubmit={handleUpdatePassword} className="space-y-4"><input type="password" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={managePass} onChange={(e) => setManagePass(e.target.value)} placeholder="New password" /><button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">{updatingCreds ? 'Updating...' : 'Update'}</button></form></div><div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Mail size={20} className="text-blue-600"/> Update Email</h3><form onSubmit={handleUpdateEmail} className="space-y-4"><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={manageEmail} onChange={(e) => setManageEmail(e.target.value)} placeholder="new@email.com" /><button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900">{updatingCreds ? 'Updating...' : 'Update'}</button></form></div></div>)}
       {showQR && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"><div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center space-x-2"><CreditCard size={20} /><span>Scan to Pay</span></h3><button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full"><X size={20} /></button></div><div className="p-8 flex flex-col items-center text-center"><p className="text-slate-600 text-sm mb-6">Scan the QR code with your banking app to pay <span className="font-bold text-slate-900 block text-2xl mt-2">₱{userData.balance.toFixed(2)}</span></p><div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8"><img src="/qr-code.png" alt="Payment QR" className="w-48 h-48 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/200x200?text=QR+Image+Missing"; }} /></div><div className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 mb-4">Payment posting will reflect once the admin verifies your payment. Your reference number provided should match on the payment they received.</div><div className="w-full text-left"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reference Number</label><form onSubmit={handlePaymentSubmit} className="flex gap-3"><input type="text" required placeholder="e.g. Ref-123456" className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium" value={refNumber} onChange={(e) => setRefNumber(e.target.value)} /><button type="submit" disabled={submitting} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200">{submitting ? '...' : 'Verify'}</button></form></div></div></div></div>)}
       {showRepairModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-red-600 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center gap-2"><Hammer size={20} /> Request Service Repair</h3><button onClick={() => setShowRepairModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><div className="p-6"><p className="text-slate-600 text-sm mb-4">Please describe the issue.</p><textarea className="w-full border border-slate-300 rounded-lg p-3 h-32" value={repairNote} onChange={(e) => setRepairNote(e.target.value)}></textarea><div className="mt-4 flex justify-end gap-2"><button onClick={() => setShowRepairModal(false)} className="px-4 py-2 text-slate-500 font-bold">Cancel</button><button onClick={handleRequestRepair} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700">Submit</button></div></div></div></div>)}
+      {showProofModal && <PaymentProofModal user={userData} db={db} appId={appId} onClose={() => setShowProofModal(false)} />}
       <InvoiceModal doc={selectedDoc} user={userData} onClose={() => setSelectedDoc(null)} />
     </div>
   );
