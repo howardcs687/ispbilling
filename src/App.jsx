@@ -36,6 +36,7 @@ import { 
 } from 'firebase/firestore';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import SignatureCanvas from 'react-signature-canvas';
 import { 
   Wifi, CreditCard, User, LogOut, Shield, CheckCircle, AlertCircle, 
   Smartphone, Activity, Search, Menu, X, Plus, Settings, Trash2, Zap, 
@@ -54,7 +55,11 @@ import {
   BookOpen, 
   ChevronRight, 
   Edit3,
-  Sun, Moon, 
+  Sun, Moon,
+  PenTool, FileSignature,
+  ShieldCheck, FileCheck, Fingerprint,
+  Wallet, ArrowRightLeft, ArrowUpRight, ArrowDownLeft,
+  ToggleLeft, ToggleRight,
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -92,6 +97,7 @@ const INVOICES_COLLECTION = 'isp_invoices_v1';
 const EXPENSES_COLLECTION = 'isp_expenses_v1';
 const PRODUCTS_COLLECTION = 'isp_products_v1';
 const SERVICE_AREAS_COLLECTION = 'isp_service_areas_v1';
+const CONFIG_COLLECTION = 'isp_config_v1';
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
 // --- Helper Functions ---
@@ -809,11 +815,13 @@ const Login = ({ onLogin }) => {
     setLoading(true);
     setError('');
     try {
+      let userUid;
+      
       if (isSignUp) {
          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-         const newUid = userCredential.user.uid;
-         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), {
-           uid: newUid,
+         userUid = userCredential.user.uid; // Fix: Use userUid variable
+         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid), {
+           uid: userUid,
            username: name || email.split('@')[0],
            email: email,
            role: 'subscriber',
@@ -825,18 +833,41 @@ const Login = ({ onLogin }) => {
            dueDate: new Date().toISOString()
          });
 
-         await sendCustomEmail('welcome', {
-            name: name,
-            email: email,
-            message: 'Welcome to the SwiftNet family! Your application is under review.'
-         });
+         // Send welcome email if enabled (Optional, based on your previous features)
+         if (typeof sendCustomEmail === 'function') {
+             await sendCustomEmail('welcome', {
+                name: name,
+                email: email,
+                message: 'Welcome to the SwiftNet family! Your application is under review.'
+             });
+         }
 
       } else {
-         await signInWithEmailAndPassword(auth, email, password);
+         // 1. Authenticate
+         const userCredential = await signInWithEmailAndPassword(auth, email, password);
+         userUid = userCredential.user.uid;
+
+         // 2. Check Maintenance Mode
+         const configRef = doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'main_settings');
+         const configSnap = await getDoc(configRef);
+         
+         if (configSnap.exists() && configSnap.data().maintenanceMode) {
+             // 3. Check User Role
+             const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid);
+             const userSnap = await getDoc(userRef);
+             
+             // If user is NOT admin, kick them out with YOUR CUSTOM MESSAGE
+             if (userSnap.exists() && userSnap.data().role !== 'admin') {
+                 await signOut(auth);
+                 throw new Error("⚠️ SYSTEM UNDER MAINTENANCE, A NEW FEATURE WILL BE DEPLOYED SOON, PLEASE TRY AGAIN LATER. ⚠️");
+             }
+         }
       }
     } catch (err) {
       console.error(err);
       setError(err.message);
+      // Force logout if error occurred after auth but before validation
+      if (auth.currentUser) await signOut(auth);
     }
     setLoading(false);
   };
@@ -1155,6 +1186,363 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
   );
 };
 
+const ServiceContractModal = ({ user, onClose, db, appId }) => {
+  const sigCanvas = React.useRef({});
+  const [loading, setLoading] = useState(false);
+
+  const clear = () => sigCanvas.current.clear();
+
+  const handleSign = async () => {
+    if (sigCanvas.current.isEmpty()) return alert("Please sign the contract.");
+    
+    setLoading(true);
+    const signatureData = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
+    
+    try {
+        const docPDF = new jsPDF();
+        
+        docPDF.setFontSize(20);
+        docPDF.setFont("helvetica", "bold");
+        docPDF.text("SWIFTNET SERVICE AGREEMENT", 105, 20, null, null, "center");
+        
+        docPDF.setFontSize(10);
+        docPDF.setFont("helvetica", "normal");
+        const text = `
+        This Agreement is made between SwiftNet ISP (Provider) and ${user.username} (Subscriber).
+
+        1. SERVICE: The Provider agrees to supply fiber internet connection speed of ${user.plan || 'Standard Plan'} to the address: ${user.address || 'Registered Address'}.
+        
+        2. PAYMENT: The Subscriber agrees to pay the monthly fee on or before the due date. Failure to pay may result in disconnection.
+        
+        3. LOCK-IN PERIOD: This contract has a minimum lock-in period of 24 months. Pre-termination fees apply.
+        
+        4. USAGE: Illegal activities, hacking, or reselling of bandwidth is strictly prohibited.
+
+        I, the undersigned, acknowledge that I have read and understood the terms and conditions.
+        `;
+        
+        const splitText = docPDF.splitTextToSize(text, 180);
+        docPDF.text(splitText, 15, 40);
+
+        docPDF.text("Signed by:", 15, 120);
+        docPDF.addImage(signatureData, 'PNG', 15, 125, 60, 30);
+        
+        docPDF.text("Date Signed:", 100, 120);
+        docPDF.text(new Date().toLocaleDateString(), 100, 130);
+
+        docPDF.save(`Contract_${user.username}.pdf`);
+
+        // Save status to DB (saving signature as text string for spark plan compatibility)
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id), {
+            contractSigned: true,
+            contractDate: new Date().toISOString(),
+            signature: signatureData 
+        });
+
+        // Add to Documents list
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', INVOICES_COLLECTION), {
+            userId: user.id,
+            title: `Service Contract (Signed)`,
+            date: new Date().toISOString(),
+            type: 'Contract',
+            amount: '0.00',
+            status: 'Signed'
+        });
+
+        alert("Contract Signed & Saved!");
+        onClose();
+
+    } catch (e) {
+        alert("Error saving contract: " + e.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
+        <div className="bg-white w-[95%] md:w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-slate-800 p-5 flex justify-between items-center text-white">
+                <h3 className="font-bold text-lg flex items-center gap-2"><FileSignature size={20}/> Sign Contract</h3>
+                <button onClick={onClose}><X className="text-slate-400 hover:text-white"/></button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm text-slate-600 mb-6 h-40 overflow-y-scroll">
+                    <p className="font-bold mb-2 text-slate-800">TERMS AND CONDITIONS</p>
+                    <p className="mb-2">1. The Subscriber shall pay the monthly service fee on time.</p>
+                    <p className="mb-2">2. The Provider guarantees 80% service reliability.</p>
+                    <p className="mb-2">3. Contract lock-in period is 24 months.</p>
+                    <p className="mb-2">4. Equipment (Modem/ONU) remains property of SwiftNet.</p>
+                    <p>5. Any illegal use of the connection voids this contract.</p>
+                </div>
+
+                <p className="text-xs font-bold text-slate-500 uppercase mb-2">Sign Below (Use finger or mouse)</p>
+                <div className="border-2 border-dashed border-slate-300 rounded-xl bg-white hover:border-blue-400 transition-colors">
+                    <SignatureCanvas 
+                        penColor='black'
+                        canvasProps={{width: 450, height: 150, className: 'sigCanvas'}}
+                        ref={sigCanvas}
+                    />
+                </div>
+                <button onClick={clear} className="text-xs text-red-500 font-bold mt-2 hover:underline">Clear Signature</button>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex gap-3">
+                <button onClick={onClose} className="flex-1 py-3 text-slate-500 font-bold">Cancel</button>
+                <button onClick={handleSign} disabled={loading} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:opacity-50">
+                    {loading ? 'Signing...' : 'Sign & Accept'}
+                </button>
+            </div>
+        </div>
+    </div>
+  );
+};
+
+const KYCModal = ({ user, onClose, db, appId }) => {
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [base64Image, setBase64Image] = useState(null);
+  const [idType, setIdType] = useState('National ID');
+  const [loading, setLoading] = useState(false);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    setPreview(URL.createObjectURL(file));
+    
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 800; 
+            const scaleSize = MAX_WIDTH / img.width;
+            canvas.width = MAX_WIDTH;
+            canvas.height = img.height * scaleSize;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+            setBase64Image(compressedBase64);
+        };
+    };
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!base64Image) return alert("Please upload an ID.");
+    setLoading(true);
+
+    try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id), {
+            kycStatus: 'pending',
+            kycType: idType,
+            kycImage: base64Image,
+            kycDate: new Date().toISOString()
+        });
+        alert("ID Submitted! Admin will review it shortly.");
+        onClose();
+    } catch (e) {
+        alert("Error: " + e.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
+        <div className="bg-white w-[95%] md:w-full max-w-md rounded-2xl shadow-2xl p-6 flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                    <ShieldCheck size={24} className="text-blue-600"/> Verify Identity
+                </h3>
+                <button onClick={onClose}><X size={20} className="text-slate-400"/></button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto p-1">
+                <div className="bg-blue-50 p-4 rounded-xl text-xs text-blue-700 border border-blue-100">
+                    To prevent fraud, please upload a clear photo of a valid Government ID.
+                </div>
+
+                <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase block mb-1">ID Type</label>
+                    <select className="w-full border p-3 rounded-xl bg-slate-50 text-slate-700" value={idType} onChange={e => setIdType(e.target.value)}>
+                        <option>National ID</option>
+                        <option>Driver's License</option>
+                        <option>Passport</option>
+                        <option>UMID</option>
+                        <option>Postal ID</option>
+                        <option>Voter's ID</option>
+                    </select>
+                </div>
+
+                <div className="border-2 border-dashed border-slate-300 rounded-xl h-48 flex flex-col items-center justify-center hover:bg-slate-50 relative overflow-hidden cursor-pointer transition-colors">
+                     <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleFileChange} />
+                     {preview ? (
+                         <img src={preview} className="w-full h-full object-contain" alt="ID Preview" />
+                     ) : (
+                         <div className="text-center">
+                            <Fingerprint size={48} className="text-slate-300 mb-2 mx-auto"/>
+                            <p className="text-sm font-bold text-slate-500">Tap to upload ID photo</p>
+                         </div>
+                     )}
+                </div>
+
+                <button disabled={loading} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:opacity-50">
+                    {loading ? 'Encrypting & Sending...' : 'Submit Verification'}
+                </button>
+            </form>
+        </div>
+    </div>
+  );
+};
+
+const SwiftWallet = ({ user, db, appId }) => {
+  const [transferEmail, setTransferEmail] = useState('');
+  const [amount, setAmount] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [history, setHistory] = useState([]);
+
+  useEffect(() => {
+    const q = query(
+        collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), 
+        where('userId', '==', user.uid),
+        orderBy('date', 'desc')
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, [user, db, appId]);
+
+  const handleTransfer = async (e) => {
+    e.preventDefault();
+    if (!transferEmail || !amount) return;
+    const transferVal = parseFloat(amount);
+    if (transferVal > (user.walletCredits || 0)) return alert("Insufficient balance.");
+
+    setLoading(true);
+    try {
+        const usersRef = collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME);
+        const q = query(usersRef, where('email', '==', transferEmail));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            alert("Recipient email not found.");
+            setLoading(false);
+            return;
+        }
+
+        const recipient = querySnapshot.docs[0];
+        
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id), {
+            walletCredits: (user.walletCredits || 0) - transferVal
+        });
+
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, recipient.id), {
+            walletCredits: (recipient.data().walletCredits || 0) + transferVal
+        });
+
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
+            userId: user.uid,
+            username: user.username,
+            amount: -transferVal, 
+            type: 'Transfer Sent',
+            refNumber: `TR-${Math.floor(Math.random()*999999)}`,
+            date: new Date().toISOString(),
+            status: 'verified'
+        });
+
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
+            userId: recipient.id,
+            username: recipient.data().username,
+            amount: transferVal, 
+            type: 'Transfer Received',
+            refNumber: `TR-${Math.floor(Math.random()*999999)}`,
+            date: new Date().toISOString(),
+            status: 'verified'
+        });
+
+        alert("Transfer Successful!");
+        setTransferEmail('');
+        setAmount('');
+    } catch(e) {
+        alert("Transfer failed: " + e.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-700 p-8 text-white shadow-2xl">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+            <div className="relative z-10">
+                <div className="flex justify-between items-start mb-8">
+                    <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-md">
+                        <Wallet size={32} className="text-white" />
+                    </div>
+                    <div className="text-right">
+                        <p className="text-emerald-100 font-bold uppercase text-xs tracking-widest mb-1">Current Balance</p>
+                        <h2 className="text-5xl font-black tracking-tight">₱{(user.walletCredits || 0).toLocaleString()}</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <ArrowRightLeft className="text-emerald-600" size={20}/> Pasaload (Transfer)
+                </h3>
+                <form onSubmit={handleTransfer} className="space-y-4">
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Recipient Email</label>
+                        <input required type="email" className="w-full border p-3 rounded-xl bg-slate-50 text-sm outline-none focus:border-emerald-500" placeholder="friend@swiftnet.com" value={transferEmail} onChange={e => setTransferEmail(e.target.value)} />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Amount</label>
+                        <input required type="number" className="w-full border p-3 rounded-xl bg-slate-50 text-sm outline-none focus:border-emerald-500" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} />
+                    </div>
+                    <button disabled={loading} className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 shadow-lg shadow-emerald-200 disabled:opacity-50">
+                        {loading ? 'Processing...' : 'Send Credits'}
+                    </button>
+                </form>
+            </div>
+
+            <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="p-6 border-b border-slate-100">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <History className="text-slate-400" size={20}/> Wallet History
+                    </h3>
+                </div>
+                <div className="max-h-[400px] overflow-y-auto p-2">
+                    {history.map((item, i) => (
+                        <div key={i} className="flex items-center justify-between p-4 hover:bg-slate-50 rounded-xl transition-colors border-b border-slate-50 last:border-0">
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-full ${item.amount > 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                    {item.amount > 0 ? <ArrowDownLeft size={18}/> : <ArrowUpRight size={18}/>}
+                                </div>
+                                <div>
+                                    <p className="font-bold text-sm text-slate-700">{item.type || 'Transaction'}</p>
+                                    <p className="text-[10px] text-slate-400">{new Date(item.date).toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <span className={`font-mono font-bold ${item.amount > 0 ? 'text-green-600' : 'text-slate-800'}`}>
+                                {item.amount > 0 ? '+' : ''}₱{Math.abs(item.amount).toLocaleString()}
+                            </span>
+                        </div>
+                    ))}
+                    {history.length === 0 && <p className="text-center text-slate-400 text-sm py-10">No transactions yet.</p>}
+                </div>
+            </div>
+        </div>
+    </div>
+  );
+};
+
 // 3. Subscriber Dashboard
 const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair, outages }) => {
   const [activeTab, setActiveTab] = useState('overview'); 
@@ -1175,6 +1563,8 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   const [selectedPlanForApp, setSelectedPlanForApp] = useState(null); 
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [documents, setDocuments] = useState([]);
+  const [showContract, setShowContract] = useState(false);
+  const [showKYC, setShowKYC] = useState(false);
 
   useEffect(() => {
     if (!userData?.id) return;
@@ -1260,9 +1650,9 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
-        {['overview', 'shop', 'my_id', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
+        {['overview', 'wallet', 'shop', 'my_id', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'shop' ? <><ShoppingBag size={16}/> Shop</> : tab === 'my_id' ? <><CreditCard size={16}/> My ID</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'documents' ? <><FileText size={16}/> Documents</> : tab === 'rewards' ? <><Gift size={16}/> Rewards</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
+              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'wallet' ? <><Wallet size={16}/> Wallet</> : tab === 'shop' ? <><ShoppingBag size={16}/> Shop</> : tab === 'my_id' ? <><CreditCard size={16}/> My ID</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'documents' ? <><FileText size={16}/> Documents</> : tab === 'rewards' ? <><Gift size={16}/> Rewards</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
            </button>
         ))}
       </div>
@@ -1355,6 +1745,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           </div>
         </div>
       )}
+      {activeTab === 'wallet' && <SwiftWallet user={userData} db={db} appId={appId} />}
       {activeTab === 'shop' && <Marketplace user={userData} db={db} appId={appId} />}
       {activeTab === 'my_id' && <DigitalID user={userData} />}
       {activeTab === 'repairs' && (
@@ -1375,6 +1766,21 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
               <div className="flex justify-between items-center">
                   <div><h2 className="text-2xl font-bold text-slate-800">My Documents</h2><p className="text-sm text-slate-500">View and download your contracts and statements.</p></div>
               </div>
+              {/* Contract CTA */}
+              {!userData.contractSigned && (
+                  <div className="mb-6 p-6 bg-red-50 border-b border-red-100 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                          <div className="bg-red-100 p-3 rounded-xl text-red-600"><PenTool size={24}/></div>
+                          <div>
+                              <h4 className="font-bold text-red-800">Service Contract Pending</h4>
+                              <p className="text-xs text-red-600">Please sign your agreement to avoid interruption.</p>
+                          </div>
+                      </div>
+                      <button onClick={() => setShowContract(true)} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 shadow-md">
+                          Sign Now
+                      </button>
+                  </div>
+              )}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                   <div className="divide-y divide-slate-100">
                       {documents.length > 0 ? documents.map(doc => (
@@ -1442,11 +1848,66 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       )}
       {activeTab === 'plans' && (<div className="space-y-6"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-slate-800">Available Internet Plans</h2><span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">Current: {userData.plan}</span></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map((plan) => (<div key={plan.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-lg font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => handleApplyPlan(plan.name)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Request Change <ArrowRight size={16} /></button></div></div>))}</div></div>)}
       {activeTab === 'support' && (<div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-1 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><MessageSquare size={20} className="text-blue-600"/> Create New Ticket</h3><form onSubmit={handleCreateTicket} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-white" value={newTicket.subject} onChange={(e) => setNewTicket({...newTicket, subject: e.target.value})}><option value="">Select...</option><option value="No Internet">No Internet</option><option value="Billing">Billing</option><option value="Other">Other</option></select></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Message</label><textarea required className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none h-32 resize-none" value={newTicket.message} onChange={(e) => setNewTicket({...newTicket, message: e.target.value})}></textarea></div><button type="submit" disabled={ticketLoading} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">{ticketLoading ? 'Submitting...' : 'Submit Ticket'}</button></form></div><div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-2 h-fit"><h3 className="font-bold text-slate-800 mb-4">My Ticket History</h3><div className="space-y-4 max-h-[600px] overflow-y-auto">{tickets && tickets.length > 0 ? tickets.map(ticket => (<div key={ticket.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50"><div className="flex justify-between items-start mb-2"><h4 className="font-bold text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject}</h4><span className="text-[10px] font-bold uppercase bg-yellow-100 text-yellow-700 px-2 py-1 rounded">{ticket.status}</span></div><p className="text-sm text-slate-600 mb-3">{ticket.message}</p>{ticket.adminReply && <div className="bg-white border-l-4 border-blue-500 p-3 rounded-r-lg mt-3"><p className="text-xs font-bold text-blue-600 mb-1">Admin Response:</p><p className="text-sm text-slate-700">{ticket.adminReply}</p></div>}<div className="mt-3 pt-2 border-t border-slate-100">{followingUpTo === ticket.id ? (<div className="mt-2"><textarea className="w-full border p-2 text-sm" rows="2" value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setFollowingUpTo(null)} className="text-xs font-bold px-3">Cancel</button><button onClick={() => handleFollowUpTicket(ticket.id, ticket.message)} className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded">Send</button></div></div>) : (<button onClick={() => setFollowingUpTo(ticket.id)} className="text-blue-600 text-xs font-bold flex items-center gap-1 mt-1"><MessageCircle size={14} /> Add Note</button>)}</div></div>)) : <p className="text-center text-slate-400">No tickets found.</p>}</div></div></div>)}
-      {activeTab === 'settings' && (<div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Lock size={20} className="text-blue-600"/> Change Password</h3><form onSubmit={handleUpdatePassword} className="space-y-4"><input type="password" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={managePass} onChange={(e) => setManagePass(e.target.value)} placeholder="New password" /><button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">{updatingCreds ? 'Updating...' : 'Update'}</button></form></div><div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Mail size={20} className="text-blue-600"/> Update Email</h3><form onSubmit={handleUpdateEmail} className="space-y-4"><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={manageEmail} onChange={(e) => setManageEmail(e.target.value)} placeholder="new@email.com" /><button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900">{updatingCreds ? 'Updating...' : 'Update'}</button></form></div></div>)}
+      {activeTab === 'settings' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* Identity Card */}
+              <div className="col-span-full bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div>
+                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                          <ShieldCheck size={20} className={userData.kycStatus === 'verified' ? "text-green-500" : "text-slate-400"}/> 
+                          Identity Verification
+                      </h3>
+                      <p className="text-sm text-slate-500 mt-1">
+                          {userData.kycStatus === 'verified' ? 'Your identity is verified.' : 
+                           userData.kycStatus === 'pending' ? 'Verification is under review.' : 
+                           'Please upload an ID to secure your account.'}
+                      </p>
+                  </div>
+
+                  {/* Simplified Logic: Shows Button OR Verified Badge OR Pending Badge */}
+                  {userData.kycStatus === 'verified' ? (
+                      <span className="bg-green-100 text-green-700 px-4 py-1 rounded-full text-xs font-bold uppercase">Verified</span>
+                  ) : userData.kycStatus === 'pending' ? (
+                      <span className="bg-yellow-100 text-yellow-700 px-4 py-1 rounded-full text-xs font-bold uppercase">Pending</span>
+                  ) : (
+                      <button onClick={() => setShowKYC(true)} className="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 w-full md:w-auto">
+                          Verify Now
+                      </button>
+                  )}
+              </div>
+
+              {/* Password & Email Cards */}
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit">
+                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Lock size={20} className="text-blue-600"/> Change Password</h3>
+                  <form onSubmit={handleUpdatePassword} className="space-y-4">
+                      <input type="password" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none text-slate-700" value={managePass} onChange={(e) => setManagePass(e.target.value)} placeholder="New password" />
+                      <button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">{updatingCreds ? 'Updating...' : 'Update'}</button>
+                  </form>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit">
+                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Mail size={20} className="text-blue-600"/> Update Email</h3>
+                  <form onSubmit={handleUpdateEmail} className="space-y-4">
+                      <input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none text-slate-700" value={manageEmail} onChange={(e) => setManageEmail(e.target.value)} placeholder="new@email.com" />
+                      <button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900">{updatingCreds ? 'Updating...' : 'Update'}</button>
+                  </form>
+              </div>
+          </div>
+      )}
       {showQR && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"><div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center space-x-2"><CreditCard size={20} /><span>Scan to Pay</span></h3><button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full"><X size={20} /></button></div><div className="p-8 flex flex-col items-center text-center"><p className="text-slate-600 text-sm mb-6">Scan the QR code with your banking app to pay <span className="font-bold text-slate-900 block text-2xl mt-2">₱{userData.balance.toFixed(2)}</span></p><div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8"><img src="/qr-code.png" alt="Payment QR" className="w-48 h-48 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/200x200?text=QR+Image+Missing"; }} /></div><div className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 mb-4">Payment posting will reflect once the admin verifies your payment. Your reference number provided should match on the payment they received.</div><div className="w-full text-left"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reference Number</label><form onSubmit={handlePaymentSubmit} className="flex gap-3"><input type="text" required placeholder="e.g. Ref-123456" className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium" value={refNumber} onChange={(e) => setRefNumber(e.target.value)} /><button type="submit" disabled={submitting} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200">{submitting ? '...' : 'Verify'}</button></form></div></div></div></div>)}
       {showRepairModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-red-600 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center gap-2"><Hammer size={20} /> Request Service Repair</h3><button onClick={() => setShowRepairModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><div className="p-6"><p className="text-slate-600 text-sm mb-4">Please describe the issue.</p><textarea className="w-full border border-slate-300 rounded-lg p-3 h-32" value={repairNote} onChange={(e) => setRepairNote(e.target.value)}></textarea><div className="mt-4 flex justify-end gap-2"><button onClick={() => setShowRepairModal(false)} className="px-4 py-2 text-slate-500 font-bold">Cancel</button><button onClick={handleRequestRepair} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700">Submit</button></div></div></div></div>)}
       {showProofModal && <PaymentProofModal user={userData} db={db} appId={appId} onClose={() => setShowProofModal(false)} />}
+        {showKYC && <KYCModal user={userData} db={db} appId={appId} onClose={() => setShowKYC(false)} />}
       <InvoiceModal doc={selectedDoc} user={userData} onClose={() => setSelectedDoc(null)} />
+     {showContract && (
+        <ServiceContractModal 
+            user={userData} 
+            db={db} 
+            appId={appId} 
+            onClose={() => setShowContract(false)} 
+        />
+      )}
     </div>
   );
 };
@@ -1801,6 +2262,7 @@ const Marketplace = ({ user, db, appId }) => {
 
 const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
   const [formData, setFormData] = useState({
+    kycStatus: user.kycStatus || 'none',
     username: user.username || '',
     email: user.email || '',
     accountNumber: user.accountNumber || '',
@@ -1873,6 +2335,28 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
                         <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Address</label>
                         <textarea className="w-full border p-2 rounded-lg h-20 resize-none" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})}></textarea>
                     </div>
+                    {/* KYC Section */}
+                    {user.kycImage && (
+                        <div className="col-span-2 mt-4 pt-4 border-t border-slate-100">
+                            <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Identity Verification ({user.kycType})</label>
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex gap-4 items-start">
+                                <img src={user.kycImage} alt="KYC" className="w-32 h-24 object-cover rounded-lg border border-slate-300 bg-white cursor-pointer" onClick={() => window.open(user.kycImage, '_blank')} />
+                                <div className="flex-1">
+                                    <p className="font-bold text-sm text-slate-800 mb-1">Status: <span className="uppercase text-blue-600">{formData.kycStatus}</span></p>
+                                    <p className="text-xs text-slate-500 mb-2">Submitted: {user.kycDate ? new Date(user.kycDate).toLocaleDateString() : 'N/A'}</p>
+                                    
+                                    <div className="flex gap-2">
+                                        <button type="button" onClick={() => setFormData({...formData, kycStatus: 'verified'})} className={`px-3 py-1 rounded text-xs font-bold border ${formData.kycStatus === 'verified' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-green-600 border-green-600'}`}>
+                                            Approve
+                                        </button>
+                                        <button type="button" onClick={() => setFormData({...formData, kycStatus: 'rejected'})} className={`px-3 py-1 rounded text-xs font-bold border ${formData.kycStatus === 'rejected' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-600 border-red-600'}`}>
+                                            Reject
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="pt-4 flex gap-3">
@@ -2080,64 +2564,48 @@ const CashierMode = ({ subscribers, db, appId }) => {
   const [queryText, setQueryText] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [amount, setAmount] = useState('');
-  const [cash, setCash] = useState('');
+  const [mode, setMode] = useState('bill'); // 'bill' or 'wallet'
   const [processing, setProcessing] = useState(false);
 
   const filtered = queryText ? subscribers.filter(s => s.username.toLowerCase().includes(queryText.toLowerCase()) || s.accountNumber.includes(queryText)) : [];
 
-  const handlePayment = async () => {
+  const handleTransaction = async () => {
       if (!amount || !selectedUser) return;
       setProcessing(true);
       
       const newRef = `POS-${Math.floor(100000 + Math.random() * 900000)}`;
-      const paidAmount = parseFloat(amount);
-      const newBalance = (selectedUser.balance || 0) - paidAmount;
+      const val = parseFloat(amount);
 
       try {
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
-              userId: selectedUser.id,
-              username: selectedUser.username,
-              refNumber: newRef,
-              amount: paidAmount,
-              date: new Date().toISOString(),
-              status: 'verified',
-              type: 'Walk-in Cash'
-          });
-
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, selectedUser.id), {
-              balance: newBalance,
-              lastPaymentDate: new Date().toISOString()
-          });
-
-          // Generate Receipt
-          const date = new Date();
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', INVOICES_COLLECTION), {
-              userId: selectedUser.id,
-              title: `Official Receipt - Walk-in`,
-              date: date.toISOString(),
-              type: 'Receipt',
-              refNumber: newRef,
-              amount: paidAmount,
-              status: 'Paid',
-              items: [{ description: 'Cash Payment (Walk-in)', amount: paidAmount }]
-          });
-
-          alert(`Payment Successful!\nChange: ₱${(parseFloat(cash) - paidAmount).toFixed(2)}`);
-          setSelectedUser(null);
-          setAmount('');
-          setCash('');
-          setQueryText('');
-      } catch(e) {
-          alert("Error: " + e.message);
-      }
+          if (mode === 'bill') {
+              // Pay Bill Logic
+              const newBalance = (selectedUser.balance || 0) - val;
+              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, selectedUser.id), {
+                  balance: newBalance, lastPaymentDate: new Date().toISOString()
+              });
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
+                  userId: selectedUser.id, username: selectedUser.username, refNumber: newRef, amount: val, date: new Date().toISOString(), status: 'verified', type: 'Bill Payment'
+              });
+              alert(`Bill Paid! New Balance: ₱${newBalance}`);
+          } else {
+              // Wallet Top-up Logic
+              const newCredits = (selectedUser.walletCredits || 0) + val;
+              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, selectedUser.id), {
+                  walletCredits: newCredits
+              });
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
+                  userId: selectedUser.id, username: selectedUser.username, refNumber: newRef, amount: val, date: new Date().toISOString(), status: 'verified', type: 'Wallet Top-up'
+              });
+              alert(`Wallet Loaded! New Credits: ₱${newCredits}`);
+          }
+          
+          setSelectedUser(null); setAmount(''); setQueryText('');
+      } catch(e) { alert("Error: " + e.message); }
       setProcessing(false);
   };
 
   return (
-    // CHANGE: Added 'flex-col lg:flex-row' and 'h-auto lg:h-[calc...]'
     <div className="space-y-6 animate-in fade-in flex flex-col lg:flex-row gap-6 h-auto lg:h-[calc(100vh-150px)] pb-20 lg:pb-0">
-        
-        {/* Left: Search & List */}
         <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col h-[500px] lg:h-auto">
             <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><User size={20}/> Find Subscriber</h3>
             <div className="relative mb-4">
@@ -2146,7 +2614,7 @@ const CashierMode = ({ subscribers, db, appId }) => {
             </div>
             <div className="flex-1 overflow-y-auto space-y-2">
                 {filtered.map(sub => (
-                    <div key={sub.id} onClick={() => { setSelectedUser(sub); setAmount(sub.balance > 0 ? sub.balance : ''); }} className={`p-4 rounded-xl border cursor-pointer hover:bg-blue-50 transition-all ${selectedUser?.id === sub.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-100'}`}>
+                    <div key={sub.id} onClick={() => setSelectedUser(sub)} className={`p-4 rounded-xl border cursor-pointer hover:bg-blue-50 transition-all ${selectedUser?.id === sub.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-100'}`}>
                         <div className="flex justify-between items-center">
                             <div><p className="font-bold text-lg">{sub.username}</p><p className={`text-xs ${selectedUser?.id === sub.id ? 'text-blue-100' : 'text-slate-500'}`}>#{sub.accountNumber}</p></div>
                             <div className="text-right"><p className="font-mono font-black text-xl">₱{sub.balance?.toLocaleString()}</p><p className={`text-[10px] font-bold uppercase ${selectedUser?.id === sub.id ? 'text-blue-200' : 'text-slate-400'}`}>{sub.status}</p></div>
@@ -2155,20 +2623,45 @@ const CashierMode = ({ subscribers, db, appId }) => {
                 ))}
             </div>
         </div>
-        {/* CHANGE: w-full on mobile, w-[400px] on desktop */}
         <div className="w-full lg:w-[400px] bg-slate-900 rounded-2xl shadow-2xl p-8 text-white flex flex-col h-auto min-h-[500px]">
-            <h3 className="font-black text-2xl mb-6 flex items-center gap-3"><Calculator className="text-green-400"/> Cashier</h3>
+            <h3 className="font-black text-2xl mb-6 flex items-center gap-3"><Calculator className="text-green-400"/> POS Terminal</h3>
+            
+            {/* Mode Toggle */}
+            <div className="flex bg-slate-800 p-1 rounded-xl mb-6">
+                <button onClick={() => setMode('bill')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${mode === 'bill' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>Pay Bill</button>
+                <button onClick={() => setMode('wallet')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${mode === 'wallet' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>Load Wallet</button>
+            </div>
+
             {selectedUser ? (
                 <div className="flex-1 flex flex-col gap-6">
-                    <div className="bg-white/10 p-4 rounded-xl border border-white/10"><p className="text-slate-400 text-xs uppercase font-bold">Billing To</p><p className="text-xl font-bold truncate">{selectedUser.username}</p><p className="text-green-400 font-mono text-lg mt-1">Bal: ₱{selectedUser.balance?.toLocaleString()}</p></div>
-                    <div><label className="text-slate-400 text-xs uppercase font-bold block mb-2">Amount To Pay</label><input type="number" className="w-full bg-slate-800 border-2 border-slate-700 rounded-xl p-4 text-3xl font-mono font-bold text-white outline-none focus:border-green-500" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} /></div>
-                    <div><label className="text-slate-400 text-xs uppercase font-bold block mb-2">Cash Received</label><input type="number" className="w-full bg-slate-800 border-2 border-slate-700 rounded-xl p-4 text-3xl font-mono font-bold text-white outline-none focus:border-blue-500" placeholder="0.00" value={cash} onChange={e => setCash(e.target.value)} /></div>
-                    <div className="mt-auto pt-6 border-t border-white/10">
-                        <div className="flex justify-between items-center mb-4"><span className="text-slate-400 font-bold">Change:</span><span className="text-3xl font-black text-yellow-400">₱{cash && amount ? (parseFloat(cash) - parseFloat(amount)).toLocaleString() : '0.00'}</span></div>
-                        <button onClick={handlePayment} disabled={processing || !amount || !cash} className="w-full bg-green-600 hover:bg-green-500 text-white py-4 rounded-xl font-bold text-xl shadow-lg transition-all disabled:opacity-50">{processing ? 'Processing...' : 'Confirm Payment'}</button>
+                    <div className="bg-white/10 p-4 rounded-xl border border-white/10">
+                        <p className="text-slate-400 text-xs uppercase font-bold">Customer</p>
+                        <p className="text-xl font-bold truncate">{selectedUser.username}</p>
+                        <div className="flex gap-4 mt-2">
+                            <div className="text-center">
+                                <p className="text-[10px] text-slate-400 uppercase">Bill Balance</p>
+                                <p className="text-red-400 font-mono font-bold">₱{selectedUser.balance}</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-[10px] text-slate-400 uppercase">Wallet Credits</p>
+                                <p className="text-emerald-400 font-mono font-bold">₱{selectedUser.walletCredits || 0}</p>
+                            </div>
+                        </div>
                     </div>
+                    <div>
+                        <label className="text-slate-400 text-xs uppercase font-bold block mb-2">{mode === 'bill' ? 'Payment Amount' : 'Load Amount'}</label>
+                        <input type="number" className="w-full bg-slate-800 border-2 border-slate-700 rounded-xl p-4 text-3xl font-mono font-bold text-white outline-none focus:border-green-500" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} />
+                    </div>
+                    <button onClick={handleTransaction} disabled={processing || !amount} className={`w-full mt-auto py-4 rounded-xl font-bold text-xl shadow-lg transition-all disabled:opacity-50 ${mode === 'bill' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
+                        {processing ? 'Processing...' : mode === 'bill' ? 'Confirm Payment' : 'Confirm Top-up'}
+                    </button>
                 </div>
-            ) : (<div className="flex-1 flex flex-col items-center justify-center text-slate-600"><User size={64} className="mb-4 opacity-20"/><p>Select a user to start</p></div>)}
+            ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-600">
+                    <User size={64} className="mb-4 opacity-20"/>
+                    <p>Select a user to start</p>
+                </div>
+            )}
         </div>
     </div>
   );
@@ -2413,6 +2906,36 @@ const ReportGenerator = ({ payments, expenses, subscribers }) => {
   );
 };
 
+const MaintenanceSwitch = ({ db, appId }) => {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'main_settings'), (snap) => {
+        if (snap.exists()) setEnabled(snap.data().maintenanceMode || false);
+    });
+    return () => unsub();
+  }, [db, appId]);
+
+  const toggle = async () => {
+      const newState = !enabled;
+      if (newState && !confirm("WARNING: Turning this ON will block all subscribers and staff from logging in. Only Admins will have access. Proceed?")) return;
+      
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'main_settings'), {
+          maintenanceMode: newState
+      }, { merge: true });
+  };
+
+  return (
+    <button onClick={toggle} className={`flex items-center gap-3 px-4 py-2 rounded-xl border-2 transition-all ${enabled ? 'bg-red-50 border-red-500 text-red-700' : 'bg-white border-slate-200 text-slate-600'}`}>
+        {enabled ? <ToggleRight size={24} className="text-red-600"/> : <ToggleLeft size={24} />}
+        <div className="text-left leading-tight">
+            <p className="text-xs font-bold uppercase tracking-wider">Maintenance Mode</p>
+            <p className="text-[10px] font-bold">{enabled ? 'ACTIVE (Lockdown)' : 'Normal Operation'}</p>
+        </div>
+    </button>
+  );
+};
+
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -2617,6 +3140,12 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       {activeTab === 'coverage' && <ServiceAreaManager appId={appId} db={db} />}
       {activeTab === 'subscribers' && (
         <>
+           <div className="mb-6 flex justify-between items-center bg-slate-100 p-4 rounded-2xl border border-slate-200">
+          <h2 className="font-bold text-slate-700 flex items-center gap-2">
+              <Shield size={20}/> System Control
+          </h2>
+          <MaintenanceSwitch db={db} appId={appId} />
+         </div>
            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div><h1 className="text-3xl font-bold text-slate-800">User Management</h1><p className="text-slate-500 text-sm mt-1">Total Users: {subscribers.length}</p></div>
             <div className="flex items-center gap-3 flex-wrap">
