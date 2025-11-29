@@ -1613,7 +1613,13 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
             const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
             const fullAddress = `${addressData.street}, ${addressData.barangay}, ${addressData.city}, ${addressData.province}`;
             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { plan: selectedPlanForApp.name, address: fullAddress, addressDetails: addressData });
-            await sendSystemEmail(userData.email, 'Plan Application', `Application #${ticketId} for ${selectedPlanForApp.name} received.`);
+            // REPLACE THE OLD sendSystemEmail WITH THIS:
+            await sendCustomEmail('order', {
+                name: userData.username,
+                email: userData.email,
+                orderDetails: selectedPlanForApp.name,
+                message: `We have received your application for ${selectedPlanForApp.name}. Ticket #${ticketId}. We will review your area coverage shortly.`
+            });
             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'New Subscription Application', message: `Applicant ${userData.username} (${userData.email}) has applied for the ${selectedPlanForApp.name} plan.\nAddress: ${fullAddress}`, status: 'open', adminReply: '', isApplication: true, targetUserId: userData.uid, targetPlan: selectedPlanForApp.name, date: new Date().toISOString() });
             setSelectedPlanForApp(null);
             alert(`Application submitted! Ticket #${ticketId}.`);
