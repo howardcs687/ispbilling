@@ -2965,6 +2965,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   
   // NEW: Outage States
   const [outages, setOutages] = useState([]);
+const [expenses, setExpenses] = useState([]);
   const [newOutage, setNewOutage] = useState({ area: '', message: '', status: 'Active' });
   const [editingUser, setEditingUser] = useState(null);
   const [billingUser, setBillingUser] = useState(null);
@@ -2992,6 +2993,15 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       const unsubscribe = onSnapshot(q, (s) => setOutages(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       return () => unsubscribe();
   }, []);
+
+// Fetch Expenses (Fixes the crash)
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', EXPENSES_COLLECTION), orderBy('date', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, [appId, db]);
 
   const handleStatusChange = async (userId, newStatus) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { status: newStatus }); } catch (e) { console.error(e); } };
   const handleAddBill = async (subscriber) => {
