@@ -2600,36 +2600,68 @@ const CashierMode = ({ subscribers, db, appId }) => {
 
       try {
           if (mode === 'bill') {
-              // Pay Bill Logic
+              // --- BILL PAYMENT LOGIC ---
+
+              // 1. Update Balance
               const newBalance = (selectedUser.balance || 0) - val;
               await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, selectedUser.id), {
                   balance: newBalance, lastPaymentDate: new Date().toISOString()
               });
+
+              // 2. Save Payment Record
               await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
-                  userId: selectedUser.id, username: selectedUser.username, refNumber: newRef, amount: val, date: new Date().toISOString(), status: 'verified', type: 'Bill Payment'
+                  userId: selectedUser.id, username: selectedUser.username, refNumber: newRef, amount: val, date: new Date().toISOString(), status: 'verified', type: 'Walk-in Cash'
               });
 
-              // AUTOMATIC EMAIL: Send Walk-in Receipt
+              // 3. AUTO-GENERATE DOCUMENT (This puts it in the Documents tab)
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', INVOICES_COLLECTION), {
+                  userId: selectedUser.id,
+                  title: `Official Receipt - Walk-in`,
+                  date: new Date().toISOString(),
+                  type: 'Receipt',
+                  refNumber: newRef,
+                  amount: val,
+                  status: 'Paid',
+                  items: [{ description: 'Cash Payment (Walk-in)', amount: val }]
+              });
+
+              // 4. AUTO-SEND EMAIL
               if (selectedUser.email) {
                   await sendCustomEmail('receipt', {
                       name: selectedUser.username,
                       email: selectedUser.email,
-                      amount: `₱${val.toLocaleString()}`, // Note: Use 'val', not 'paidAmount' in this version
+                      amount: `₱${val.toLocaleString()}`, 
                       refNumber: newRef,
-                      message: `Thank you for your payment at our office. Here is your digital receipt.`
+                      message: `Thank you for visiting our office. Your payment has been posted and the receipt is in your dashboard.`
                   });
               }
-              
-              alert(`Bill Paid! New Balance: ₱${newBalance}`);
+
+              alert(`Bill Paid! Receipt saved to Dashboard & Email Sent.`);
           } else {
-              // Wallet Top-up Logic
+              // --- WALLET TOP-UP LOGIC ---
               const newCredits = (selectedUser.walletCredits || 0) + val;
+              
+              // 1. Update Credits
               await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, selectedUser.id), {
                   walletCredits: newCredits
               });
+
+              // 2. Log Transaction
               await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
                   userId: selectedUser.id, username: selectedUser.username, refNumber: newRef, amount: val, date: new Date().toISOString(), status: 'verified', type: 'Wallet Top-up'
               });
+
+              // 3. Send Email Notification for Top-up
+              if (selectedUser.email) {
+                  await sendCustomEmail('receipt', {
+                      name: selectedUser.username,
+                      email: selectedUser.email,
+                      amount: `₱${val.toLocaleString()}`, 
+                      refNumber: newRef,
+                      message: `Your SwiftWallet has been loaded with ₱${val.toLocaleString()}. New Balance: ₱${newCredits.toLocaleString()}`
+                  });
+              }
+
               alert(`Wallet Loaded! New Credits: ₱${newCredits}`);
           }
           
@@ -3097,24 +3129,31 @@ const [expenses, setExpenses] = useState([]);
   const handleVerifyPayment = async (paymentId, userId, amountPaid, refNumber) => { 
       if (!confirm("Verify payment and generate Official Receipt?")) return; 
       
+      // 1. Get User Data to verify email and current balance
       const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId);
-      
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) return alert("User error.");
+      const userData = userSnap.data();
+
       try { 
-          // 1. Mark Payment as Verified
+          // 2. Mark the Payment Record as Verified
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION, paymentId), { 
               status: 'verified', 
               verifiedAt: new Date().toISOString() 
           }); 
 
-          // 2. Reset User Balance & Add Points
+          // 3. Update the Subscriber's Balance (Ledger)
+          const finalAmount = parseFloat(amountPaid) || 1500;
+          const newBalance = (userData.balance || 0) - finalAmount;
+
           await updateDoc(userRef, { 
-              balance: 0, 
+              balance: newBalance, 
               status: 'active', 
               lastPaymentDate: new Date().toISOString(),
-              points: increment(50) 
+              points: increment(50) // Auto-Reward Points
           }); 
 
-          // 3. Generate Official Receipt Document
+          // 4. AUTO-GENERATE DOCUMENT (This makes it appear in the "Documents" tab)
           const date = new Date();
           const monthName = date.toLocaleString('default', { month: 'long', year: 'numeric' });
           
@@ -3124,25 +3163,26 @@ const [expenses, setExpenses] = useState([]);
               date: date.toISOString(),
               type: 'Receipt', 
               refNumber: refNumber, 
-              amount: amountPaid || 1500, 
-              status: 'Paid'
+              amount: finalAmount, 
+              status: 'Paid',
+              items: [{ description: 'Payment Verified', amount: finalAmount }]
           });
 
-          // AUTOMATIC EMAIL: Send Official Receipt
-          // userSnap was fetched earlier in this function
-          const userData = userSnap.data();
-          await sendCustomEmail('receipt', {
-              name: userData.username,
-              email: userData.email,
-              amount: `₱${amountPaid || 1500}`,
-              refNumber: refNumber,
-              message: `We have successfully verified your payment. Your Official Receipt is now available in your dashboard.`
-          });
+          // 5. AUTO-SEND EMAIL (This sends the notification)
+          if (userData.email) {
+              await sendCustomEmail('receipt', {
+                  name: userData.username,
+                  email: userData.email,
+                  amount: `₱${finalAmount.toLocaleString()}`,
+                  refNumber: refNumber,
+                  message: `Payment verified! We have added the Official Receipt to your Documents tab.`
+              });
+          }
 
-          alert("Payment Verified! Official Receipt generated."); 
+          alert("Success! Receipt generated in Documents tab & Email sent."); 
       } catch (e) { 
           console.error(e);
-          alert("Failed to verify: " + e.message); 
+          alert("Failed: " + e.message); 
       } 
   };
   
