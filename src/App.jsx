@@ -865,6 +865,10 @@ const Login = ({ onLogin }) => {
       }
     } catch (err) {
       console.error(err);
+      
+      // THIS IS THE NEW LINE THAT MAKES IT POP UP
+      alert(err.message); 
+      
       setError(err.message);
       // Force logout if error occurred after auth but before validation
       if (auth.currentUser) await signOut(auth);
