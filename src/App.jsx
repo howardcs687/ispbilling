@@ -60,6 +60,7 @@ import {
   ShieldCheck, FileCheck, Fingerprint,
   Wallet, ArrowRightLeft, ArrowUpRight, ArrowDownLeft,
   ToggleLeft, ToggleRight,
+  Server, Cloud, 
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -97,6 +98,7 @@ const INVOICES_COLLECTION = 'isp_invoices_v1';
 const EXPENSES_COLLECTION = 'isp_expenses_v1';
 const PRODUCTS_COLLECTION = 'isp_products_v1';
 const SERVICE_AREAS_COLLECTION = 'isp_service_areas_v1';
+const STATUS_COLLECTION = 'isp_status_v1';
 const CONFIG_COLLECTION = 'isp_config_v1';
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
@@ -1551,6 +1553,63 @@ const SwiftWallet = ({ user, db, appId }) => {
   );
 };
 
+const NetworkStatusWidget = ({ db, appId }) => {
+  const [status, setStatus] = useState({
+    local: 'operational',
+    upstream: 'operational',
+    global: 'operational',
+    message: ''
+  });
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', STATUS_COLLECTION, 'main_status'), (doc) => {
+        if (doc.exists()) setStatus(doc.data());
+    });
+    return () => unsub();
+  }, [db, appId]);
+
+  const StatusIndicator = ({ label, value, icon }) => {
+      let color = 'bg-green-500';
+      let text = 'Operational';
+      let pulse = '';
+      
+      if (value === 'degradation') { color = 'bg-yellow-500'; text = 'Issues Detected'; }
+      if (value === 'outage') { color = 'bg-red-600'; text = 'Service Outage'; pulse = 'animate-pulse'; }
+
+      return (
+        <div className="flex items-center justify-between p-3 bg-white/50 rounded-xl border border-white/40 backdrop-blur-sm">
+            <div className="flex items-center gap-3">
+                <div className="bg-white p-2 rounded-lg text-slate-600 shadow-sm">{icon}</div>
+                <div>
+                    <p className="text-xs font-bold text-slate-600 uppercase">{label}</p>
+                    <p className={`text-[10px] font-bold ${value === 'operational' ? 'text-green-700' : value === 'degradation' ? 'text-yellow-700' : 'text-red-700'}`}>
+                        {text}
+                    </p>
+                </div>
+            </div>
+            <div className={`w-3 h-3 rounded-full ${color} ${pulse} shadow-lg`}></div>
+        </div>
+      );
+  };
+
+  return (
+    <div className="space-y-4 mb-6 animate-in slide-in-from-top-4">
+        {status.message && (
+            <div className="bg-red-600 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-pulse">
+                <AlertTriangle size={20} className="shrink-0"/>
+                <p className="text-xs font-bold">{status.message}</p>
+            </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <StatusIndicator label="SwiftNet Network" value={status.local} icon={<Server size={16}/>} />
+            <StatusIndicator label="Upstream (ISP)" value={status.upstream} icon={<Globe size={16}/>} />
+            <StatusIndicator label="Global Services" value={status.global} icon={<Activity size={16}/>} />
+        </div>
+    </div>
+  );
+};
+
 // 3. Subscriber Dashboard
 const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair, outages }) => {
   const [activeTab, setActiveTab] = useState('overview'); 
@@ -1673,6 +1732,9 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       {activeTab === 'speedtest' && <SpeedTest />}
       {activeTab === 'overview' && (
         <div className="space-y-8">
+
+            <NetworkStatusWidget db={db} appId={appId} />
+            
           {/* Welcome Banner */}
           <div className="relative overflow-hidden rounded-3xl bg-slate-900 text-white p-8 shadow-2xl">
              <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-blue-500/20 rounded-full blur-3xl -mr-20 -mt-40"></div>
@@ -3002,6 +3064,113 @@ const MaintenanceSwitch = ({ db, appId }) => {
   );
 };
 
+const NetworkStatusManager = ({ db, appId }) => {
+  const [status, setStatus] = useState({
+    local: 'operational', // operational, degradation, outage
+    upstream: 'operational',
+    global: 'operational',
+    message: '',
+    lastUpdated: new Date().toISOString()
+  });
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', STATUS_COLLECTION, 'main_status'), (doc) => {
+        if (doc.exists()) setStatus(doc.data());
+    });
+    return () => unsub();
+  }, [db, appId]);
+
+  const updateStatus = async (key, value) => {
+    const newStatus = { ...status, [key]: value, lastUpdated: new Date().toISOString() };
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', STATUS_COLLECTION, 'main_status'), newStatus);
+  };
+
+  const handleMessageSave = async () => {
+      await updateStatus('message', status.message);
+      alert("Public incident message updated!");
+  };
+
+  const StatusButton = ({ label, value, current, onClick }) => (
+      <button 
+        onClick={onClick}
+        className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase transition-all border-2 ${current === value 
+            ? (value === 'operational' ? 'bg-green-500 text-white border-green-500' 
+            : value === 'degradation' ? 'bg-yellow-500 text-white border-yellow-500' 
+            : 'bg-red-600 text-white border-red-600')
+            : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'
+        }`}
+      >
+          {label}
+      </button>
+  );
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <Activity className="text-blue-600"/> Network Control Center
+            </h3>
+
+            <div className="space-y-6">
+                {/* Local Network */}
+                <div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <Server size={16} className="text-slate-500"/>
+                        <span className="text-xs font-bold text-slate-500 uppercase">Local Network (SwiftNet)</span>
+                    </div>
+                    <div className="flex gap-2">
+                        <StatusButton label="Operational" value="operational" current={status.local} onClick={() => updateStatus('local', 'operational')} />
+                        <StatusButton label="Slow / Maint." value="degradation" current={status.local} onClick={() => updateStatus('local', 'degradation')} />
+                        <StatusButton label="Major Outage" value="outage" current={status.local} onClick={() => updateStatus('local', 'outage')} />
+                    </div>
+                </div>
+
+                {/* Upstream */}
+                <div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <Globe size={16} className="text-slate-500"/>
+                        <span className="text-xs font-bold text-slate-500 uppercase">Upstream (PLDT/Globe Backhaul)</span>
+                    </div>
+                    <div className="flex gap-2">
+                        <StatusButton label="Operational" value="operational" current={status.upstream} onClick={() => updateStatus('upstream', 'operational')} />
+                        <StatusButton label="High Latency" value="degradation" current={status.upstream} onClick={() => updateStatus('upstream', 'degradation')} />
+                        <StatusButton label="Down" value="outage" current={status.upstream} onClick={() => updateStatus('upstream', 'outage')} />
+                    </div>
+                </div>
+
+                {/* Global Services */}
+                <div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <Cloud size={16} className="text-slate-500"/>
+                        <span className="text-xs font-bold text-slate-500 uppercase">Global Apps (FB, YouTube)</span>
+                    </div>
+                    <div className="flex gap-2">
+                        <StatusButton label="Operational" value="operational" current={status.global} onClick={() => updateStatus('global', 'operational')} />
+                        <StatusButton label="Issues Reported" value="degradation" current={status.global} onClick={() => updateStatus('global', 'degradation')} />
+                        <StatusButton label="Down" value="outage" current={status.global} onClick={() => updateStatus('global', 'outage')} />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {/* Public Message */}
+        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+            <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Public Incident Message (Ticker)</label>
+            <div className="flex gap-2">
+                <input 
+                    className="flex-1 border p-3 rounded-xl bg-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. Fiber Cut in Brgy Marede. Tech dispatched. ETR 2hrs."
+                    value={status.message}
+                    onChange={e => setStatus({...status, message: e.target.value})}
+                />
+                <button onClick={handleMessageSave} className="bg-blue-600 text-white px-6 rounded-xl font-bold text-sm hover:bg-blue-700">Update</button>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-2">Leave empty to hide the ticker on user dashboard.</p>
+        </div>
+    </div>
+  );
+};
+
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -3220,13 +3389,14 @@ const [expenses, setExpenses] = useState([]);
     <div className="space-y-6 animate-in fade-in">
       {/* CHANGE: max-w-[95vw] and overflow-x-auto */}
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex space-x-1 overflow-x-auto max-w-[95vw] mx-auto md:mx-0 scrollbar-hide">
-         {['analytics', 'reports', 'cashier', 'coverage', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
+         {['analytics', 'status', 'reports', 'cashier', 'coverage', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
+                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'status' ? <><Activity size={16}/> Network Status</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
          ))}
       </div>
       {activeTab === 'store' && <ProductManager appId={appId} db={db} />}
+      {activeTab === 'status' && <NetworkStatusManager db={db} appId={appId} />}
       {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} payments={payments} />}
       {activeTab === 'speedtest' && <SpeedTest />}
       {activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} />}
