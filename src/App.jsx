@@ -137,8 +137,12 @@ const sendCustomEmail = async (type, data) => {
           dynamicSubject = "We received your Ticket";
           break;
       case 'invoice':
-          dynamicSubject = "Your Latest Statement of Account";
+          dynamicSubject = "New Statement of Account Available";
           extraDetails = `Amount Due: ${data.amount}`;
+          break;
+      case 'receipt':
+          dynamicSubject = "Payment Received - Official Receipt";
+          extraDetails = `Ref: ${data.refNumber} | Amount: ${data.amount}`;
           break;
       default:
           dynamicSubject = "New Notification";
@@ -2491,6 +2495,14 @@ const BillingModal = ({ user, onClose, db, appId }) => {
             dueDate: dueDate.toISOString()
         });
 
+        // AUTOMATIC EMAIL: Send Invoice Notification
+        await sendCustomEmail('invoice', {
+            name: user.username,
+            email: user.email,
+            amount: `₱${total.toLocaleString()}`,
+            message: `Dear ${user.username}, your new Statement of Account for ${monthName} has been generated. Please check your dashboard or view the attachment.`
+        });
+
         alert("Invoice Generated Successfully!");
         onClose();
     } catch (e) {
@@ -2596,6 +2608,18 @@ const CashierMode = ({ subscribers, db, appId }) => {
               await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
                   userId: selectedUser.id, username: selectedUser.username, refNumber: newRef, amount: val, date: new Date().toISOString(), status: 'verified', type: 'Bill Payment'
               });
+
+              // AUTOMATIC EMAIL: Send Walk-in Receipt
+              if (selectedUser.email) {
+                  await sendCustomEmail('receipt', {
+                      name: selectedUser.username,
+                      email: selectedUser.email,
+                      amount: `₱${val.toLocaleString()}`, // Note: Use 'val', not 'paidAmount' in this version
+                      refNumber: newRef,
+                      message: `Thank you for your payment at our office. Here is your digital receipt.`
+                  });
+              }
+              
               alert(`Bill Paid! New Balance: ₱${newBalance}`);
           } else {
               // Wallet Top-up Logic
@@ -3102,6 +3126,17 @@ const [expenses, setExpenses] = useState([]);
               refNumber: refNumber, 
               amount: amountPaid || 1500, 
               status: 'Paid'
+          });
+
+          // AUTOMATIC EMAIL: Send Official Receipt
+          // userSnap was fetched earlier in this function
+          const userData = userSnap.data();
+          await sendCustomEmail('receipt', {
+              name: userData.username,
+              email: userData.email,
+              amount: `₱${amountPaid || 1500}`,
+              refNumber: refNumber,
+              message: `We have successfully verified your payment. Your Official Receipt is now available in your dashboard.`
           });
 
           alert("Payment Verified! Official Receipt generated."); 
