@@ -10,7 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@awesome-cordova-plugins/core": "^8.1.0",
+    "@awesome-cordova-plugins/sms": "^8.1.0",
     "@emailjs/browser": "^4.4.1",
+    "cordova-sms-plugin": "^1.0.4",
     "firebase": "^12.6.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.4",

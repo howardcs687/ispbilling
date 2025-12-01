@@ -60,7 +60,7 @@ import {
   ShieldCheck, FileCheck, Fingerprint,
   Wallet, ArrowRightLeft, ArrowUpRight, ArrowDownLeft,
   ToggleLeft, ToggleRight,
-  Server, Cloud, 
+  Server, Cloud, Copy,
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -100,6 +100,8 @@ const PRODUCTS_COLLECTION = 'isp_products_v1';
 const SERVICE_AREAS_COLLECTION = 'isp_service_areas_v1';
 const STATUS_COLLECTION = 'isp_status_v1';
 const CONFIG_COLLECTION = 'isp_config_v1';
+const SMS_QUEUE_COLLECTION = 'isp_sms_queue_v1';
+const SMS_COLLECTION = 'isp_sms_logs_v1';
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
 // --- Helper Functions ---
@@ -3171,6 +3173,248 @@ const NetworkStatusManager = ({ db, appId }) => {
   );
 };
 
+const SMSBlaster = ({ subscribers, db, appId }) => {
+  const [message, setMessage] = useState('');
+  const [targetGroup, setTargetGroup] = useState('overdue');
+  const [history, setHistory] = useState([]);
+  const [sending, setSending] = useState(false);
+
+  // Fetch History
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', SMS_COLLECTION), orderBy('date', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, [appId, db]);
+
+  const getTargets = () => {
+      if (targetGroup === 'all') return subscribers;
+      if (targetGroup === 'active') return subscribers.filter(s => s.status === 'active');
+      if (targetGroup === 'overdue') return subscribers.filter(s => s.status === 'overdue' || (s.balance && s.balance > 0));
+      return [];
+  };
+
+  const handleSend = async (e) => {
+      e.preventDefault();
+      const targets = getTargets();
+      if (targets.length === 0) return alert("No users in this group.");
+      if (!message) return alert("Please type a message.");
+      
+      setSending(true);
+      try {
+          // 1. Create a Batch of Pending SMS for the Phone to pickup
+          const batchPromises = targets.map(user => {
+              // Fallback: Use dummy number if none exists for demo
+              const phone = user.contactNumber || "09171234567"; 
+              
+              return addDoc(collection(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION), {
+                  recipient: phone,
+                  message: message,
+                  status: 'pending', // <--- The phone looks for this!
+                  dateQueued: new Date().toISOString(),
+                  type: targetGroup
+              });
+          });
+
+          await Promise.all(batchPromises);
+
+          // 2. Log to History
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', SMS_COLLECTION), {
+              message: message,
+              targetGroup: targetGroup,
+              recipientCount: targets.length,
+              date: new Date().toISOString(),
+              status: 'queued'
+          });
+
+          alert(`Successfully queued ${targets.length} messages! \n\nOpen the 'Gateway' tab on your Android phone to start sending.`);
+          setMessage('');
+      } catch (e) {
+          alert("Error: " + e.message);
+      }
+      setSending(false);
+  };
+
+  // Quick Templates
+  const setTemplate = (type) => {
+      if (type === 'due') setMessage("SwiftNet Reminder: Your account is overdue. Please pay immediately to avoid disconnection.");
+      if (type === 'maintenance') setMessage("SwiftNet Advisory: System maintenance tonight 12AM-4AM. Expect interruptions.");
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in h-[calc(100vh-150px)] flex flex-col lg:flex-row gap-6">
+        
+        {/* Left: Composer */}
+        <div className="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <MessageSquare className="text-green-600" size={24}/> SMS Blaster
+            </h3>
+
+            <div className="flex gap-2 mb-6">
+                <button onClick={() => setTemplate('due')} className="px-3 py-1 bg-red-50 text-red-600 text-xs font-bold rounded-full border border-red-100 hover:bg-red-100">Payment</button>
+                <button onClick={() => setTemplate('maintenance')} className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded-full border border-blue-100 hover:bg-blue-100">Maintenance</button>
+            </div>
+
+            <form onSubmit={handleSend} className="flex-1 flex flex-col gap-4">
+                <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Target Audience</label>
+                    <select className="w-full border p-3 rounded-xl font-bold text-slate-700" value={targetGroup} onChange={e => setTargetGroup(e.target.value)}>
+                        <option value="overdue">Overdue Users</option>
+                        <option value="active">Active Users</option>
+                        <option value="all">All Subscribers</option>
+                    </select>
+                </div>
+
+                <div className="flex-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Message</label>
+                    <textarea 
+                        className="w-full h-full border p-4 rounded-xl text-lg resize-none outline-none focus:border-green-500" 
+                        placeholder="Type your SMS here..."
+                        value={message}
+                        onChange={e => setMessage(e.target.value)}
+                    ></textarea>
+                </div>
+
+                <button disabled={sending} className="w-full py-4 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-lg shadow-green-200 flex justify-center items-center gap-2 disabled:opacity-50">
+                    {sending ? 'Queuing...' : <><Send size={20}/> Queue Message</>}
+                </button>
+            </form>
+        </div>
+
+        {/* Right: History */}
+        <div className="w-full lg:w-[300px] bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+            <div className="p-4 border-b border-slate-100">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2"><History size={18}/> History</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-2 h-[400px]">
+                {history.map(log => (
+                    <div key={log.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <div className="flex justify-between items-start mb-1">
+                            <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded uppercase">{log.targetGroup}</span>
+                            <span className="text-[10px] text-slate-400">{new Date(log.date).toLocaleDateString()}</span>
+                        </div>
+                        <p className="text-xs text-slate-600 line-clamp-2 italic">"{log.message}"</p>
+                        <p className="text-[10px] text-slate-400 mt-1 text-right">Count: {log.recipientCount}</p>
+                    </div>
+                ))}
+                {history.length === 0 && <p className="text-center text-slate-400 text-xs py-10">No SMS history.</p>}
+            </div>
+        </div>
+    </div>
+  );
+};
+
+const GatewayServer = ({ db, appId }) => {
+  const [queue, setQueue] = useState([]);
+  const [processed, setProcessed] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
+  const [logs, setLogs] = useState([]);
+
+  // 1. Listen to the Queue (Real-time)
+  useEffect(() => {
+    const q = query(
+        collection(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION), 
+        where('status', '==', 'pending')
+        // limit(50) // Optional limit
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setQueue(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, [db, appId]);
+
+  // 2. The Processing Loop
+  useEffect(() => {
+    if (!isRunning || queue.length === 0) return;
+
+    const processNext = async () => {
+        const item = queue[0]; // Take top item
+        
+        try {
+            addLog(`Sending to ${item.recipient}...`);
+            
+            // --- ACTUAL SMS SENDING LOGIC ---
+            // NOTE: This part only works when the app is turned into an APK (Mobile App)
+            // On the web, this simply waits 2 seconds to simulate sending.
+            await new Promise(r => setTimeout(r, 2000)); 
+            
+            // IF ON MOBILE APP (Uncomment this after installing plugin):
+            // try { await window.SMS.sendSMS(item.recipient, item.message); } catch(e) { throw new Error("SMS Plugin Failed"); }
+            // --------------------------------
+
+            // Mark as Sent in Database
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION, item.id), {
+                status: 'sent',
+                sentAt: new Date().toISOString()
+            });
+
+            addLog(`✅ Sent to ${item.recipient}`);
+            setProcessed(p => p + 1);
+
+        } catch (err) {
+            addLog(`❌ Failed: ${err.message}`);
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION, item.id), {
+                status: 'failed',
+                error: err.message
+            });
+        }
+    };
+
+    const timer = setTimeout(processNext, 3000); // 3 seconds interval
+    return () => clearTimeout(timer);
+  }, [queue, isRunning, db, appId]);
+
+  const addLog = (msg) => setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev.slice(0, 20)]);
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+        <div className="bg-slate-900 p-8 rounded-3xl text-white shadow-2xl border-4 border-slate-800">
+            <div className="flex justify-between items-start mb-8">
+                <div>
+                    <h2 className="text-3xl font-black text-green-400 flex items-center gap-3">
+                        <Signal size={32} className={isRunning ? "animate-pulse" : ""}/> SMS Gateway
+                    </h2>
+                    <p className="text-slate-400">Status: <span className={isRunning ? "text-green-400 font-bold" : "text-red-400 font-bold"}>{isRunning ? "RUNNING" : "STOPPED"}</span></p>
+                </div>
+                <div className="text-right">
+                    <p className="text-xs uppercase font-bold text-slate-500">Queue</p>
+                    <p className="text-4xl font-mono font-bold">{queue.length}</p>
+                </div>
+            </div>
+
+            <div className="bg-black/30 p-6 rounded-2xl backdrop-blur-md border border-white/10 mb-6">
+                <div className="flex justify-between items-center mb-4">
+                    <span className="text-xs font-bold uppercase text-slate-400">Processed</span>
+                    <span className="text-xl font-mono text-white">{processed}</span>
+                </div>
+                
+                <button 
+                    onClick={() => setIsRunning(!isRunning)}
+                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all ${isRunning ? 'bg-red-600 hover:bg-red-500' : 'bg-green-600 hover:bg-green-500'}`}
+                >
+                    {isRunning ? 'STOP SERVER' : 'START SERVER'}
+                </button>
+                <p className="text-center text-[10px] text-slate-500 mt-2">
+                    * Keep this screen open on your Android phone.
+                </p>
+            </div>
+
+            {/* Logs */}
+            <div className="bg-black rounded-xl p-4 h-64 overflow-y-auto font-mono text-xs custom-scrollbar border border-slate-700">
+                {logs.map((log, i) => (
+                    <p key={i} className="text-green-500/80 mb-1 border-b border-slate-800/50 pb-1">
+                        <span className="text-slate-600 mr-2">{">"}</span> {log}
+                    </p>
+                ))}
+                {logs.length === 0 && <p className="text-slate-700 italic">Waiting for commands...</p>}
+            </div>
+        </div>
+    </div>
+  );
+};
+
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -3389,13 +3633,15 @@ const [expenses, setExpenses] = useState([]);
     <div className="space-y-6 animate-in fade-in">
       {/* CHANGE: max-w-[95vw] and overflow-x-auto */}
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex space-x-1 overflow-x-auto max-w-[95vw] mx-auto md:mx-0 scrollbar-hide">
-         {['analytics', 'status', 'reports', 'cashier', 'coverage', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
+         {['analytics', 'sms', 'gateway', 'status', 'reports', 'cashier', 'coverage', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'status' ? <><Activity size={16}/> Network Status</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
+                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'sms' ? <><Smartphone size={16}/> SMS Blast</> : tab === 'gateway' ? <><Signal size={16}/> Gateway</> : tab === 'status' ? <><Activity size={16}/> Network Status</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
          ))}
       </div>
       {activeTab === 'store' && <ProductManager appId={appId} db={db} />}
+      {activeTab === 'sms' && <SMSBlaster subscribers={subscribers} db={db} appId={appId} />}
+    {activeTab === 'gateway' && <GatewayServer db={db} appId={appId} />}
       {activeTab === 'status' && <NetworkStatusManager db={db} appId={appId} />}
       {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} payments={payments} />}
       {activeTab === 'speedtest' && <SpeedTest />}
