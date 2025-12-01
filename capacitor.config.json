@@ -1,0 +1,12 @@
+{
+  "appId": "com.swiftnet.app",
+  "appName": "SwiftNet ISP",
+  "webDir": "dist",
+  "server": {
+    "url": "https://www.jwreport.site/",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

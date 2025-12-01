@@ -60,7 +60,7 @@ import {
   ShieldCheck, FileCheck, Fingerprint,
   Wallet, ArrowRightLeft, ArrowUpRight, ArrowDownLeft,
   ToggleLeft, ToggleRight,
-  Server, Cloud, Copy,
+  Server, Cloud, Copy, Phone,
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -2340,14 +2340,15 @@ const Marketplace = ({ user, db, appId }) => {
 
 const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
   const [formData, setFormData] = useState({
-    kycStatus: user.kycStatus || 'none',
     username: user.username || '',
     email: user.email || '',
+    contactNumber: user.contactNumber || '', // <--- NEW FIELD
     accountNumber: user.accountNumber || '',
     plan: user.plan || '',
     address: user.address || '',
     status: user.status || 'active',
-    balance: user.balance || 0
+    balance: user.balance || 0,
+    kycStatus: user.kycStatus || 'none'
   });
   const [loading, setLoading] = useState(false);
 
@@ -2360,6 +2361,10 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
             ...formData,
             balance: parseFloat(formData.balance)
         });
+        
+        // Note: Updating email here only updates the database record, NOT the Authentication login email.
+        // Changing Auth email requires re-authentication which is complex for Admins to do for others.
+        
         alert("Subscriber details updated successfully!");
         onClose();
     } catch (e) {
@@ -2371,7 +2376,7 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
-        <div className="bg-white w-[95%] md:w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-slate-800 p-5 flex justify-between items-center text-white">
                 <h3 className="font-bold text-lg flex items-center gap-2">
                     <Edit size={20} /> Edit Subscriber
@@ -2385,6 +2390,17 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
                         <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Full Name</label>
                         <input className="w-full border p-2 rounded-lg" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required />
                     </div>
+                    
+                    {/* NEW: Contact Info Section */}
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Email Address</label>
+                        <input type="email" className="w-full border p-2 rounded-lg" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Phone Number</label>
+                        <input type="tel" className="w-full border p-2 rounded-lg" placeholder="0917xxxxxxx" value={formData.contactNumber} onChange={e => setFormData({...formData, contactNumber: e.target.value})} />
+                    </div>
+
                     <div>
                         <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Account No.</label>
                         <input className="w-full border p-2 rounded-lg bg-slate-50 font-mono" value={formData.accountNumber} onChange={e => setFormData({...formData, accountNumber: e.target.value})} />
@@ -2413,7 +2429,8 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
                         <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Address</label>
                         <textarea className="w-full border p-2 rounded-lg h-20 resize-none" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})}></textarea>
                     </div>
-                    {/* KYC Section */}
+                    
+                    {/* KYC Section (Preserved) */}
                     {user.kycImage && (
                         <div className="col-span-2 mt-4 pt-4 border-t border-slate-100">
                             <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Identity Verification ({user.kycType})</label>
@@ -2421,15 +2438,9 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
                                 <img src={user.kycImage} alt="KYC" className="w-32 h-24 object-cover rounded-lg border border-slate-300 bg-white cursor-pointer" onClick={() => window.open(user.kycImage, '_blank')} />
                                 <div className="flex-1">
                                     <p className="font-bold text-sm text-slate-800 mb-1">Status: <span className="uppercase text-blue-600">{formData.kycStatus}</span></p>
-                                    <p className="text-xs text-slate-500 mb-2">Submitted: {user.kycDate ? new Date(user.kycDate).toLocaleDateString() : 'N/A'}</p>
-                                    
-                                    <div className="flex gap-2">
-                                        <button type="button" onClick={() => setFormData({...formData, kycStatus: 'verified'})} className={`px-3 py-1 rounded text-xs font-bold border ${formData.kycStatus === 'verified' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-green-600 border-green-600'}`}>
-                                            Approve
-                                        </button>
-                                        <button type="button" onClick={() => setFormData({...formData, kycStatus: 'rejected'})} className={`px-3 py-1 rounded text-xs font-bold border ${formData.kycStatus === 'rejected' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-600 border-red-600'}`}>
-                                            Reject
-                                        </button>
+                                    <div className="flex gap-2 mt-2">
+                                        <button type="button" onClick={() => setFormData({...formData, kycStatus: 'verified'})} className={`px-3 py-1 rounded text-xs font-bold border ${formData.kycStatus === 'verified' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-green-600 border-green-600'}`}>Approve</button>
+                                        <button type="button" onClick={() => setFormData({...formData, kycStatus: 'rejected'})} className={`px-3 py-1 rounded text-xs font-bold border ${formData.kycStatus === 'rejected' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-600 border-red-600'}`}>Reject</button>
                                     </div>
                                 </div>
                             </div>
@@ -3205,8 +3216,12 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
       try {
           // 1. Create a Batch of Pending SMS for the Phone to pickup
           const batchPromises = targets.map(user => {
-              // Fallback: Use dummy number if none exists for demo
-              const phone = user.contactNumber || "09171234567"; 
+            
+              // LIVE MODE: Use the real number. If missing, skip this user.
+              const phone = user.contactNumber; 
+              
+              // Only queue if it exists and looks like a valid number (at least 10 digits)
+              if (!phone || phone.length < 10) return null; 
               
               return addDoc(collection(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION), {
                   recipient: phone,

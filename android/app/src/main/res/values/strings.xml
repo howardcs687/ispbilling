@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SwiftNet ISP</string>
+    <string name="title_activity_main">SwiftNet ISP</string>
+    <string name="package_name">com.swiftnet.app</string>
+    <string name="custom_url_scheme">com.swiftnet.app</string>
+</resources>
