@@ -3350,20 +3350,28 @@ const GatewayServer = ({ db, appId }) => {
         try {
             addLog(`Sending to ${item.recipient}...`);
             
-            // --- ACTUAL SMS SENDING LOGIC ---
-            // NOTE: This part only works when the app is turned into an APK (Mobile App)
-            // On the web, this simply waits 2 seconds to simulate sending.
-            await new Promise(r => setTimeout(r, 2000)); 
+           // --- LIVE SMS LOGIC ---
             
-            // IF ON MOBILE APP (Uncomment this after installing plugin):
-            // try { await window.SMS.sendSMS(item.recipient, item.message); } catch(e) { throw new Error("SMS Plugin Failed"); }
-            // --------------------------------
-
-            // Mark as Sent in Database
-            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION, item.id), {
-                status: 'sent',
-                sentAt: new Date().toISOString()
-            });
+            // 1. Check if we are running on a Phone (not a website)
+            if (window.SMS) {
+                try {
+                    // This command tells the Android Phone to send the text physically
+                    await new Promise((resolve, reject) => {
+                        window.SMS.sendSMS(
+                            item.recipient, 
+                            item.message, 
+                            () => resolve("Sent"), // Success
+                            (err) => reject(err)   // Failure
+                        );
+                    });
+                } catch (e) {
+                    throw new Error("SMS Plugin Failed: " + e);
+                }
+            } else {
+                console.warn("SMS Plugin not found. Are you running this on a phone?");
+                // Keep the simulation delay ONLY if testing on web so it doesn't crash
+                await new Promise(r => setTimeout(r, 2000)); 
+            }
 
             addLog(`✅ Sent to ${item.recipient}`);
             setProcessed(p => p + 1);
