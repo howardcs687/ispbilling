@@ -1081,16 +1081,20 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
   const [preview, setPreview] = useState(null);
   const [base64Image, setBase64Image] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isImageReady, setIsImageReady] = useState(false); // New safety state
 
   // Magic Function: Compress image to text
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    // 1. Show preview immediately
     setPreview(URL.createObjectURL(file));
+    setIsImageReady(false); // Disable submit button while processing
 
     const reader = new FileReader();
-    reader.readAsDataURL(file);
+
+    // 2. DEFINE listener FIRST (Fixes the bug)
     reader.onload = (event) => {
         const img = new Image();
         img.src = event.target.result;
@@ -1098,22 +1102,38 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
             const canvas = document.createElement('canvas');
             const MAX_WIDTH = 600; // Resize to 600px width
             const scaleSize = MAX_WIDTH / img.width;
-            canvas.width = MAX_WIDTH;
-            canvas.height = img.height * scaleSize;
+            
+            // Fix aspect ratio calculation
+            if (img.width > MAX_WIDTH) {
+                canvas.width = MAX_WIDTH;
+                canvas.height = img.height * scaleSize;
+            } else {
+                canvas.width = img.width;
+                canvas.height = img.height;
+            }
 
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
             const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
             setBase64Image(compressedBase64);
+            setIsImageReady(true); // Re-enable submit button
         };
     };
+
+    // 3. EXECUTE read LAST
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!amount || !refNumber) return alert("Please fill in all fields.");
-    if (!base64Image) return alert("Please attach a screenshot.");
+    
+    // Safety check
+    if (!base64Image) {
+        if (preview && !isImageReady) return alert("Image is still processing. Please wait a moment.");
+        return alert("Please attach a screenshot.");
+    }
     
     setLoading(true);
 
@@ -1177,7 +1197,11 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
                     {preview ? (
                         <div className="relative">
                             <img src={preview} alt="Preview" className="mx-auto h-32 object-contain rounded-lg shadow-sm" />
-                            <p className="text-xs text-green-600 font-bold mt-2">Ready to submit</p>
+                            {isImageReady ? (
+                                <p className="text-xs text-green-600 font-bold mt-2">Ready to submit</p>
+                            ) : (
+                                <p className="text-xs text-blue-600 font-bold mt-2 animate-pulse">Processing image...</p>
+                            )}
                         </div>
                     ) : (
                         <div>
@@ -1187,9 +1211,9 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
                     )}
                 </div>
 
-                <button disabled={loading} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:opacity-50 flex justify-center items-center gap-2">
+                <button disabled={loading || (preview && !isImageReady)} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:opacity-50 flex justify-center items-center gap-2">
                     {loading ? <RefreshCw className="animate-spin" size={18}/> : <CheckCircle size={18}/>}
-                    {loading ? 'Compressing & Sending...' : 'Submit Proof'}
+                    {loading ? 'Sending...' : (preview && !isImageReady) ? 'Compressing...' : 'Submit Proof'}
                 </button>
             </form>
             <button onClick={onClose} className="w-full mt-2 text-slate-400 text-xs font-bold hover:text-slate-600">Cancel</button>
@@ -1316,37 +1340,54 @@ const KYCModal = ({ user, onClose, db, appId }) => {
   const [base64Image, setBase64Image] = useState(null);
   const [idType, setIdType] = useState('National ID');
   const [loading, setLoading] = useState(false);
+  const [isImageReady, setIsImageReady] = useState(false); // New state to track processing
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     
+    // 1. Set Preview immediately
     setPreview(URL.createObjectURL(file));
+    setIsImageReady(false); // Reset ready state
     
     const reader = new FileReader();
-    reader.readAsDataURL(file);
+
+    // 2. DEFINE the listener FIRST (Fixes the bug)
     reader.onload = (event) => {
         const img = new Image();
         img.src = event.target.result;
+        
         img.onload = () => {
             const canvas = document.createElement('canvas');
             const MAX_WIDTH = 800; 
             const scaleSize = MAX_WIDTH / img.width;
-            canvas.width = MAX_WIDTH;
-            canvas.height = img.height * scaleSize;
+            
+            // Calculate new dimensions (keeping aspect ratio)
+            if (img.width > MAX_WIDTH) {
+                canvas.width = MAX_WIDTH;
+                canvas.height = img.height * scaleSize;
+            } else {
+                canvas.width = img.width;
+                canvas.height = img.height;
+            }
 
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
+            // 3. Set the state with the compressed image
             const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
             setBase64Image(compressedBase64);
+            setIsImageReady(true); // Mark as ready
         };
     };
+
+    // 3. EXECUTE the read LAST
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!base64Image) return alert("Please upload an ID.");
+    if (!base64Image) return alert("Please wait for the image to process or upload again.");
     setLoading(true);
 
     try {
@@ -1392,19 +1433,23 @@ const KYCModal = ({ user, onClose, db, appId }) => {
                 </div>
 
                 <div className="border-2 border-dashed border-slate-300 rounded-xl h-48 flex flex-col items-center justify-center hover:bg-slate-50 relative overflow-hidden cursor-pointer transition-colors">
-                     <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleFileChange} />
-                     {preview ? (
-                         <img src={preview} className="w-full h-full object-contain" alt="ID Preview" />
-                     ) : (
-                         <div className="text-center">
-                            <Fingerprint size={48} className="text-slate-300 mb-2 mx-auto"/>
-                            <p className="text-sm font-bold text-slate-500">Tap to upload ID photo</p>
-                         </div>
-                     )}
+                      <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleFileChange} />
+                      {preview ? (
+                          <div className="relative w-full h-full">
+                            <img src={preview} className="w-full h-full object-contain" alt="ID Preview" />
+                            {/* Visual indicator that processing is done */}
+                            {isImageReady && <div className="absolute bottom-2 right-2 bg-green-500 text-white text-[10px] px-2 py-1 rounded-full font-bold shadow">Ready</div>}
+                          </div>
+                      ) : (
+                          <div className="text-center">
+                             <Fingerprint size={48} className="text-slate-300 mb-2 mx-auto"/>
+                             <p className="text-sm font-bold text-slate-500">Tap to upload ID photo</p>
+                          </div>
+                      )}
                 </div>
 
-                <button disabled={loading} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:opacity-50">
-                    {loading ? 'Encrypting & Sending...' : 'Submit Verification'}
+                <button disabled={loading || (preview && !isImageReady)} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:opacity-50 disabled:bg-slate-400">
+                    {loading ? 'Encrypting & Sending...' : (preview && !isImageReady) ? 'Processing Image...' : 'Submit Verification'}
                 </button>
             </form>
         </div>
