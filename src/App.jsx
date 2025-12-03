@@ -3848,7 +3848,12 @@ const [expenses, setExpenses] = useState([]);
                    {/* 👇 NEW: BUTTON TO VIEW THE IMAGE 👇 */}
                    {p.proofImage ? (
                        <button 
-                          onClick={() => window.open(p.proofImage, '_blank')} 
+                          onClick={() => {
+    const win = window.open("");
+    win.document.write(
+        `<iframe src="${p.proofImage}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`
+    );
+}}
                           className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 border border-blue-200 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-all"
                        >
                           <Image size={16}/> View Proof
