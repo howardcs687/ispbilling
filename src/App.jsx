@@ -3379,7 +3379,6 @@ const GatewayServer = ({ db, appId }) => {
     const q = query(
         collection(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION), 
         where('status', '==', 'pending')
-        // limit(50) // Optional limit
     );
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -3399,11 +3398,8 @@ const GatewayServer = ({ db, appId }) => {
             addLog(`Sending to ${item.recipient}...`);
             
            // --- LIVE SMS LOGIC ---
-            
-            // 1. Check if we are running on a Phone (not a website)
             if (window.SMS) {
                 try {
-                    // This command tells the Android Phone to send the text physically
                     await new Promise((resolve, reject) => {
                         window.SMS.sendSMS(
                             item.recipient, 
@@ -3417,9 +3413,14 @@ const GatewayServer = ({ db, appId }) => {
                 }
             } else {
                 console.warn("SMS Plugin not found. Are you running this on a phone?");
-                // Keep the simulation delay ONLY if testing on web so it doesn't crash
-                await new Promise(r => setTimeout(r, 2000)); 
+                await new Promise(r => setTimeout(r, 1000)); // Simulating delay
             }
+
+            // 👇👇 THIS WAS MISSING! FIXES THE INFINITE LOOP 👇👇
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION, item.id), {
+                status: 'sent',
+                sentAt: new Date().toISOString()
+            });
 
             addLog(`✅ Sent to ${item.recipient}`);
             setProcessed(p => p + 1);
@@ -3822,7 +3823,59 @@ const [expenses, setExpenses] = useState([]);
          </div>
       )}
        {activeTab === 'plans' && <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 className="font-bold mb-4">Manage Plans</h3><div className="space-y-2">{plans.map(p=><div key={p.id} className="flex justify-between items-center border-b pb-2"><span>{p.name}</span><button onClick={()=>handleDeletePlan(p.id)} className="text-red-500"><Trash2 size={14}/></button></div>)}</div><form className="mt-4 flex gap-2" onSubmit={handleAddPlan}><input className="border p-2 rounded text-sm" placeholder="New Plan" value={newPlanName} onChange={e=>setNewPlanName(e.target.value)}/><button className="bg-blue-600 text-white px-4 py-2 rounded text-sm">Add</button></form></div>}
-       {activeTab === 'payments' && <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 className="font-bold mb-4">Payments</h3><div className="space-y-2">{payments.map(p=><div key={p.id} className="flex justify-between border-b pb-2"><span>{p.username}</span><span className="font-mono text-blue-600">{p.refNumber}</span><span className="text-xs text-slate-400">{new Date(p.date).toLocaleDateString()}</span><span className={`px-2 py-1 rounded text-xs font-bold uppercase ${p.status === 'verified' ? 'bg-green-200 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{p.status || 'pending'}</span>{p.status !== 'verified' && (<button onClick={() => handleVerifyPayment(p.id, p.userId, 1500, p.refNumber)} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-blue-700 transition-colors">Verify</button>)}</div>)}</div></div>}
+       {activeTab === 'payments' && (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <h3 className="font-bold mb-4 text-slate-800">Payments & Verifications</h3>
+          <div className="space-y-3">
+            {payments.map(p => (
+              <div key={p.id} className="flex flex-col md:flex-row justify-between items-center border-b border-slate-100 pb-3 last:border-0 hover:bg-slate-50 p-2 rounded-lg transition-colors">
+                
+                {/* 1. Subscriber Details */}
+                <div className="mb-2 md:mb-0 w-full md:w-auto">
+                  <span className="font-bold text-slate-800 block">{p.username}</span>
+                  <span className="text-xs text-slate-400">{new Date(p.date).toLocaleString()}</span>
+                </div>
+
+                {/* 2. Payment Details */}
+                <div className="flex items-center gap-4 w-full md:w-auto mb-2 md:mb-0">
+                   <span className="font-mono text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded text-sm">{p.refNumber}</span>
+                   <span className="font-bold text-slate-700">₱{parseFloat(p.amount || 0).toLocaleString()}</span>
+                </div>
+
+                {/* 3. Actions & Proof Image */}
+                <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                   
+                   {/* 👇 NEW: BUTTON TO VIEW THE IMAGE 👇 */}
+                   {p.proofImage ? (
+                       <button 
+                          onClick={() => window.open(p.proofImage, '_blank')} 
+                          className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 border border-blue-200 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-all"
+                       >
+                          <Image size={16}/> View Proof
+                       </button>
+                   ) : (
+                       <span className="text-xs text-slate-400 italic">No Image</span>
+                   )}
+
+                   <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${p.status === 'verified' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                      {p.status || 'pending'}
+                   </span>
+
+                   {p.status !== 'verified' && (
+                      <button 
+                        onClick={() => handleVerifyPayment(p.id, p.userId, p.amount, p.refNumber)} 
+                        className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-green-700 transition-colors shadow-sm"
+                      >
+                         Verify
+                      </button>
+                   )}
+                </div>
+              </div>
+            ))}
+            {payments.length === 0 && <p className="text-center text-slate-400 py-8">No payments found.</p>}
+          </div>
+        </div>
+      )}
        {activeTab === 'speedtest' && <SpeedTest />}
        {showCreateJobModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
