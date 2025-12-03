@@ -3238,6 +3238,14 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
   const [history, setHistory] = useState([]);
   const [sending, setSending] = useState(false);
 
+  // --- 🔐 PHILSMS CONFIGURATION 🔐 ---
+  // 1. Log in to https://app.philsms.com/
+  // 2. Go to Developers > API Keys to get this.
+  const API_KEY = "3690|94gOfQSGHC0j8VJsDLSBzsKVjgTVVQKluktM4yjJ "; 
+  
+  // 3. Sender ID (If you haven't registered one, try 'PhilSMS' or leave blank)
+  const SENDER_ID = "PhilSMS"; 
+
   // Fetch History
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', SMS_COLLECTION), orderBy('date', 'desc'));
@@ -3254,52 +3262,91 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
       return [];
   };
 
+  // --- THE NEW SENDING FUNCTION (API) ---
+  const sendViaPhilSMS = async (phone, msg) => {
+      try {
+          // 1. Format Phone: 09171234567 -> 639171234567
+          let cleanPhone = phone.replace(/[^0-9]/g, '');
+          if (cleanPhone.startsWith('0')) cleanPhone = '63' + cleanPhone.substring(1);
+
+          // 2. Prepare Data
+          const payload = {
+              recipient: cleanPhone,
+              sender_id: SENDER_ID,
+              type: 'plain',
+              message: msg
+          };
+
+          // 3. Send Request
+          // Note: We use a POST request to their API endpoint
+          const response = await fetch("https://app.philsms.com/api/v3/sms/send", {
+              method: 'POST',
+              headers: {
+                  'Authorization': `Bearer ${API_KEY}`,
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json'
+              },
+              body: JSON.stringify(payload)
+          });
+
+          const data = await response.json();
+          
+          if (response.ok) return { success: true };
+          else return { success: false, error: data.message || "API Error" };
+
+      } catch (error) {
+          console.error("SMS Error:", error);
+          return { success: false, error: error.message };
+      }
+  };
+
   const handleSend = async (e) => {
       e.preventDefault();
       const targets = getTargets();
       if (targets.length === 0) return alert("No users in this group.");
       if (!message) return alert("Please type a message.");
       
+      // Calculate estimated cost (Assuming approx 0.50 per text)
+      if(!confirm(`Send to ${targets.length} users? (Est. Cost: ₱${(targets.length * 0.5).toFixed(2)})`)) return;
+
       setSending(true);
-      try {
-          // 1. Create a Batch of Pending SMS for the Phone to pickup
-          const batchPromises = targets.map(user => {
-            
-              // LIVE MODE: Use the real number. If missing, skip this user.
-              const phone = user.contactNumber; 
-              
-              // Only queue if it exists and looks like a valid number (at least 10 digits)
-              if (!phone || phone.length < 10) return null; 
-              
-              return addDoc(collection(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION), {
-                  recipient: phone,
-                  message: message,
-                  status: 'pending', // <--- The phone looks for this!
-                  dateQueued: new Date().toISOString(),
-                  type: targetGroup
-              });
-          });
+      let successCount = 0;
+      let failCount = 0;
 
-          await Promise.all(batchPromises);
+      // Loop and Send
+      for (const user of targets) {
+          // Skip invalid numbers
+          if (!user.contactNumber || user.contactNumber.length < 10) {
+              failCount++;
+              continue; 
+          }
 
-          // 2. Log to History
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', SMS_COLLECTION), {
-              message: message,
-              targetGroup: targetGroup,
-              recipientCount: targets.length,
-              date: new Date().toISOString(),
-              status: 'queued'
-          });
-
-          alert(`Successfully queued ${targets.length} messages! \n\nOpen the 'Gateway' tab on your Android phone to start sending.`);
-          setMessage('');
-      } catch (e) {
-          alert("Error: " + e.message);
+          const result = await sendViaPhilSMS(user.contactNumber, message);
+          
+          if (result.success) successCount++;
+          else failCount++;
+          
+          // Small delay to be polite to the API (200ms)
+          await new Promise(r => setTimeout(r, 200)); 
       }
+
+      // Log Result to Database
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', SMS_COLLECTION), {
+          message: message,
+          targetGroup: targetGroup,
+          recipientCount: targets.length,
+          successCount: successCount,
+          failCount: failCount,
+          date: new Date().toISOString(),
+          status: 'sent_via_api'
+      });
+
+      alert(`Campaign Done!\n✅ Sent: ${successCount}\n❌ Failed: ${failCount}`);
+      setMessage('');
       setSending(false);
   };
 
-  // Quick Templates
+  // Templates
   const setTemplate = (type) => {
       if (type === 'due') setMessage("SwiftNet Reminder: Your account is overdue. Please pay immediately to avoid disconnection.");
       if (type === 'maintenance') setMessage("SwiftNet Advisory: System maintenance tonight 12AM-4AM. Expect interruptions.");
@@ -3307,11 +3354,10 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in h-[calc(100vh-150px)] flex flex-col lg:flex-row gap-6">
-        
         {/* Left: Composer */}
         <div className="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
             <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                <MessageSquare className="text-green-600" size={24}/> SMS Blaster
+                <MessageSquare className="text-blue-600" size={24}/> SMS Blaster (PhilSMS API)
             </h3>
 
             <div className="flex gap-2 mb-6">
@@ -3332,15 +3378,15 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
                 <div className="flex-1">
                     <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Message</label>
                     <textarea 
-                        className="w-full h-full border p-4 rounded-xl text-lg resize-none outline-none focus:border-green-500" 
+                        className="w-full h-full border p-4 rounded-xl text-lg resize-none outline-none focus:border-blue-500" 
                         placeholder="Type your SMS here..."
                         value={message}
                         onChange={e => setMessage(e.target.value)}
                     ></textarea>
                 </div>
 
-                <button disabled={sending} className="w-full py-4 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-lg shadow-green-200 flex justify-center items-center gap-2 disabled:opacity-50">
-                    {sending ? 'Queuing...' : <><Send size={20}/> Queue Message</>}
+                <button disabled={sending} className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 flex justify-center items-center gap-2 disabled:opacity-50">
+                    {sending ? 'Sending via Cloud...' : <><Send size={20}/> Send Blast</>}
                 </button>
             </form>
         </div>
@@ -3354,11 +3400,13 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
                 {history.map(log => (
                     <div key={log.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                         <div className="flex justify-between items-start mb-1">
-                            <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded uppercase">{log.targetGroup}</span>
+                            <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded uppercase">{log.targetGroup}</span>
                             <span className="text-[10px] text-slate-400">{new Date(log.date).toLocaleDateString()}</span>
                         </div>
                         <p className="text-xs text-slate-600 line-clamp-2 italic">"{log.message}"</p>
-                        <p className="text-[10px] text-slate-400 mt-1 text-right">Count: {log.recipientCount}</p>
+                        <p className="text-[10px] text-slate-400 mt-1 text-right">
+                            <span className="text-green-600">Sent: {log.successCount}</span> | <span className="text-red-500">Fail: {log.failCount}</span>
+                        </p>
                     </div>
                 ))}
                 {history.length === 0 && <p className="text-center text-slate-400 text-xs py-10">No SMS history.</p>}
@@ -3368,151 +3416,7 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
   );
 };
 
-const GatewayServer = ({ db, appId }) => {
-  const [queue, setQueue] = useState([]);
-  const [processed, setProcessed] = useState(0);
-  const [isRunning, setIsRunning] = useState(false);
-  const [logs, setLogs] = useState([]);
-  const [permissionStatus, setPermissionStatus] = useState("Checking...");
 
-  // 1. Force Permission Request on Mount
-  useEffect(() => {
-    const requestPermissions = async () => {
-        if (window.SMS) {
-            // Check if we already have permission
-            window.SMS.hasPermission(
-                (hasPermission) => {
-                    if (hasPermission) {
-                        setPermissionStatus("✅ Granted");
-                        addLog("SMS Permission is active.");
-                    } else {
-                        // If not, ASK for it
-                        setPermissionStatus("⚠️ Requesting...");
-                        addLog("Requesting SMS Permission...");
-                        window.SMS.requestPermission(
-                            () => {
-                                setPermissionStatus("✅ Granted");
-                                addLog("Permission Granted!");
-                            }, 
-                            (err) => {
-                                setPermissionStatus("❌ Denied");
-                                addLog("Permission Denied: " + err);
-                                alert("You MUST allow SMS permissions for this app to work. Go to Settings > Apps.");
-                            }
-                        );
-                    }
-                }, 
-                (err) => addLog("Error checking permission: " + err)
-            );
-        } else {
-            setPermissionStatus("Simulation Mode (Web)");
-        }
-    };
-
-    requestPermissions();
-  }, []);
-
-  // 2. Listen to the Queue
-  useEffect(() => {
-    const q = query(
-        collection(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION), 
-        where('status', '==', 'pending')
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setQueue(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-    return () => unsubscribe();
-  }, [db, appId]);
-
-  // 3. Processing Loop
-  useEffect(() => {
-    if (!isRunning || queue.length === 0) return;
-
-    const processNext = async () => {
-        const item = queue[0];
-        
-        try {
-            addLog(`Target: ${item.recipient}...`);
-            
-            if (window.SMS) {
-                await new Promise((resolve, reject) => {
-                    window.SMS.sendSMS(
-                        item.recipient, 
-                        item.message, 
-                        () => resolve("Sent"), 
-                        (err) => reject(err)
-                    );
-                });
-            } else {
-                console.warn("⚠️ NO SMS PLUGIN");
-                await new Promise(r => setTimeout(r, 2000));
-            }
-
-            // Mark as Sent
-            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION, item.id), {
-                status: 'sent',
-                sentAt: new Date().toISOString()
-            });
-
-            addLog(`✅ Message Sent`);
-            setProcessed(p => p + 1);
-
-        } catch (err) {
-            addLog(`❌ Failed: ${err}`);
-            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION, item.id), {
-                status: 'failed',
-                error: err.toString()
-            });
-        }
-    };
-
-    const timer = setTimeout(processNext, 2000); 
-    return () => clearTimeout(timer);
-  }, [queue, isRunning, db, appId]);
-
-  const addLog = (msg) => setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev.slice(0, 20)]);
-
-  return (
-    <div className="space-y-6 animate-in fade-in">
-        <div className="bg-slate-900 p-8 rounded-3xl text-white shadow-2xl border-4 border-slate-800">
-            <div className="flex justify-between items-start mb-8">
-                <div>
-                    <h2 className="text-3xl font-black text-green-400 flex items-center gap-3">
-                        <Signal size={32} className={isRunning ? "animate-pulse" : ""}/> SMS Gateway
-                    </h2>
-                    <div className="flex gap-4 mt-2">
-                        <p className="text-slate-400">Server: <span className={isRunning ? "text-green-400 font-bold" : "text-red-400 font-bold"}>{isRunning ? "RUNNING" : "STOPPED"}</span></p>
-                        <p className="text-slate-400">Permission: <span className="text-white font-bold">{permissionStatus}</span></p>
-                    </div>
-                </div>
-                <div className="text-right">
-                    <p className="text-xs uppercase font-bold text-slate-500">Queue</p>
-                    <p className="text-4xl font-mono font-bold">{queue.length}</p>
-                </div>
-            </div>
-
-            <div className="bg-black/30 p-6 rounded-2xl backdrop-blur-md border border-white/10 mb-6">
-                <div className="flex justify-between items-center mb-4">
-                    <span className="text-xs font-bold uppercase text-slate-400">Processed Today</span>
-                    <span className="text-xl font-mono text-white">{processed}</span>
-                </div>
-                
-                <button 
-                    onClick={() => setIsRunning(!isRunning)}
-                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all ${isRunning ? 'bg-red-600 hover:bg-red-50' : 'bg-green-600 hover:bg-green-50'}`}
-                >
-                    {isRunning ? 'STOP SERVER' : 'START SERVER'}
-                </button>
-            </div>
-
-            <div className="bg-black rounded-xl p-4 h-40 overflow-y-auto font-mono text-xs border border-slate-700">
-                {logs.map((log, i) => <p key={i} className="text-green-500/80 mb-1">{log}</p>)}
-                {logs.length === 0 && <p className="text-slate-700 italic">Waiting to start...</p>}
-            </div>
-        </div>
-    </div>
-  );
-};
 
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
@@ -3732,15 +3636,14 @@ const [expenses, setExpenses] = useState([]);
     <div className="space-y-6 animate-in fade-in">
       {/* CHANGE: max-w-[95vw] and overflow-x-auto */}
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex space-x-1 overflow-x-auto max-w-[95vw] mx-auto md:mx-0 scrollbar-hide">
-         {['analytics', 'sms', 'gateway', 'status', 'reports', 'cashier', 'coverage', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
+         {['analytics', 'sms', 'status', 'reports', 'cashier', 'coverage', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'sms' ? <><Smartphone size={16}/> SMS Blast</> : tab === 'gateway' ? <><Signal size={16}/> Gateway</> : tab === 'status' ? <><Activity size={16}/> Network Status</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
+                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'sms' ? <><Smartphone size={16}/> SMS Blast</> : tab === 'status' ? <><Activity size={16}/> Network Status</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
          ))}
       </div>
       {activeTab === 'store' && <ProductManager appId={appId} db={db} />}
       {activeTab === 'sms' && <SMSBlaster subscribers={subscribers} db={db} appId={appId} />}
-    {activeTab === 'gateway' && <GatewayServer db={db} appId={appId} />}
       {activeTab === 'status' && <NetworkStatusManager db={db} appId={appId} />}
       {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} payments={payments} />}
       {activeTab === 'speedtest' && <SpeedTest />}
