@@ -3373,68 +3373,100 @@ const GatewayServer = ({ db, appId }) => {
   const [processed, setProcessed] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [logs, setLogs] = useState([]);
+  const [permissionStatus, setPermissionStatus] = useState("Checking...");
 
-  // 1. Listen to the Queue (Real-time)
+  // 1. Force Permission Request on Mount
+  useEffect(() => {
+    const requestPermissions = async () => {
+        if (window.SMS) {
+            // Check if we already have permission
+            window.SMS.hasPermission(
+                (hasPermission) => {
+                    if (hasPermission) {
+                        setPermissionStatus("✅ Granted");
+                        addLog("SMS Permission is active.");
+                    } else {
+                        // If not, ASK for it
+                        setPermissionStatus("⚠️ Requesting...");
+                        addLog("Requesting SMS Permission...");
+                        window.SMS.requestPermission(
+                            () => {
+                                setPermissionStatus("✅ Granted");
+                                addLog("Permission Granted!");
+                            }, 
+                            (err) => {
+                                setPermissionStatus("❌ Denied");
+                                addLog("Permission Denied: " + err);
+                                alert("You MUST allow SMS permissions for this app to work. Go to Settings > Apps.");
+                            }
+                        );
+                    }
+                }, 
+                (err) => addLog("Error checking permission: " + err)
+            );
+        } else {
+            setPermissionStatus("Simulation Mode (Web)");
+        }
+    };
+
+    requestPermissions();
+  }, []);
+
+  // 2. Listen to the Queue
   useEffect(() => {
     const q = query(
         collection(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION), 
         where('status', '==', 'pending')
     );
-    
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setQueue(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
     return () => unsubscribe();
   }, [db, appId]);
 
-  // 2. The Processing Loop
+  // 3. Processing Loop
   useEffect(() => {
     if (!isRunning || queue.length === 0) return;
 
     const processNext = async () => {
-        const item = queue[0]; // Take top item
+        const item = queue[0];
         
         try {
-            addLog(`Sending to ${item.recipient}...`);
+            addLog(`Target: ${item.recipient}...`);
             
-           // --- LIVE SMS LOGIC ---
             if (window.SMS) {
-                try {
-                    await new Promise((resolve, reject) => {
-                        window.SMS.sendSMS(
-                            item.recipient, 
-                            item.message, 
-                            () => resolve("Sent"), // Success
-                            (err) => reject(err)   // Failure
-                        );
-                    });
-                } catch (e) {
-                    throw new Error("SMS Plugin Failed: " + e);
-                }
+                await new Promise((resolve, reject) => {
+                    window.SMS.sendSMS(
+                        item.recipient, 
+                        item.message, 
+                        () => resolve("Sent"), 
+                        (err) => reject(err)
+                    );
+                });
             } else {
-                console.warn("SMS Plugin not found. Are you running this on a phone?");
-                await new Promise(r => setTimeout(r, 1000)); // Simulating delay
+                console.warn("⚠️ NO SMS PLUGIN");
+                await new Promise(r => setTimeout(r, 2000));
             }
 
-            // 👇👇 THIS WAS MISSING! FIXES THE INFINITE LOOP 👇👇
+            // Mark as Sent
             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION, item.id), {
                 status: 'sent',
                 sentAt: new Date().toISOString()
             });
 
-            addLog(`✅ Sent to ${item.recipient}`);
+            addLog(`✅ Message Sent`);
             setProcessed(p => p + 1);
 
         } catch (err) {
-            addLog(`❌ Failed: ${err.message}`);
+            addLog(`❌ Failed: ${err}`);
             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', SMS_QUEUE_COLLECTION, item.id), {
                 status: 'failed',
-                error: err.message
+                error: err.toString()
             });
         }
     };
 
-    const timer = setTimeout(processNext, 3000); // 3 seconds interval
+    const timer = setTimeout(processNext, 2000); 
     return () => clearTimeout(timer);
   }, [queue, isRunning, db, appId]);
 
@@ -3448,7 +3480,10 @@ const GatewayServer = ({ db, appId }) => {
                     <h2 className="text-3xl font-black text-green-400 flex items-center gap-3">
                         <Signal size={32} className={isRunning ? "animate-pulse" : ""}/> SMS Gateway
                     </h2>
-                    <p className="text-slate-400">Status: <span className={isRunning ? "text-green-400 font-bold" : "text-red-400 font-bold"}>{isRunning ? "RUNNING" : "STOPPED"}</span></p>
+                    <div className="flex gap-4 mt-2">
+                        <p className="text-slate-400">Server: <span className={isRunning ? "text-green-400 font-bold" : "text-red-400 font-bold"}>{isRunning ? "RUNNING" : "STOPPED"}</span></p>
+                        <p className="text-slate-400">Permission: <span className="text-white font-bold">{permissionStatus}</span></p>
+                    </div>
                 </div>
                 <div className="text-right">
                     <p className="text-xs uppercase font-bold text-slate-500">Queue</p>
@@ -3458,29 +3493,21 @@ const GatewayServer = ({ db, appId }) => {
 
             <div className="bg-black/30 p-6 rounded-2xl backdrop-blur-md border border-white/10 mb-6">
                 <div className="flex justify-between items-center mb-4">
-                    <span className="text-xs font-bold uppercase text-slate-400">Processed</span>
+                    <span className="text-xs font-bold uppercase text-slate-400">Processed Today</span>
                     <span className="text-xl font-mono text-white">{processed}</span>
                 </div>
                 
                 <button 
                     onClick={() => setIsRunning(!isRunning)}
-                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all ${isRunning ? 'bg-red-600 hover:bg-red-500' : 'bg-green-600 hover:bg-green-500'}`}
+                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all ${isRunning ? 'bg-red-600 hover:bg-red-50' : 'bg-green-600 hover:bg-green-50'}`}
                 >
                     {isRunning ? 'STOP SERVER' : 'START SERVER'}
                 </button>
-                <p className="text-center text-[10px] text-slate-500 mt-2">
-                    * Keep this screen open on your Android phone.
-                </p>
             </div>
 
-            {/* Logs */}
-            <div className="bg-black rounded-xl p-4 h-64 overflow-y-auto font-mono text-xs custom-scrollbar border border-slate-700">
-                {logs.map((log, i) => (
-                    <p key={i} className="text-green-500/80 mb-1 border-b border-slate-800/50 pb-1">
-                        <span className="text-slate-600 mr-2">{">"}</span> {log}
-                    </p>
-                ))}
-                {logs.length === 0 && <p className="text-slate-700 italic">Waiting for commands...</p>}
+            <div className="bg-black rounded-xl p-4 h-40 overflow-y-auto font-mono text-xs border border-slate-700">
+                {logs.map((log, i) => <p key={i} className="text-green-500/80 mb-1">{log}</p>)}
+                {logs.length === 0 && <p className="text-slate-700 italic">Waiting to start...</p>}
             </div>
         </div>
     </div>
