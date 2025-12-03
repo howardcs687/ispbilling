@@ -3241,7 +3241,7 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
   // --- 🔐 PHILSMS CONFIGURATION 🔐 ---
   // 1. Log in to https://app.philsms.com/
   // 2. Go to Developers > API Keys to get this.
-  const API_KEY = "3690|94gOfQSGHC0j8VJsDLSBzsKVjgTVVQKluktM4yjJ "; 
+  const API_KEY = "562|h4VtnMitlLvfe34SQRMvk2YY6uE5rTEFnSd17nGObc7181eb"; 
   
   // 3. Sender ID (If you haven't registered one, try 'PhilSMS' or leave blank)
   const SENDER_ID = "PhilSMS"; 
