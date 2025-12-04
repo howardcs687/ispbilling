@@ -3237,13 +3237,10 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
   const [targetGroup, setTargetGroup] = useState('overdue');
   const [history, setHistory] = useState([]);
   const [sending, setSending] = useState(false);
+  const [testNumber, setTestNumber] = useState(''); // New Test Field
 
   // --- 🔐 PHILSMS CONFIGURATION 🔐 ---
-  // 1. Log in to https://app.philsms.com/
-  // 2. Go to Developers > API Keys to get this.
   const API_KEY = "562|h4VtnMitlLvfe34SQRMvk2YY6uE5rTEFnSd17nGObc7181eb"; 
-  
-  // 3. Sender ID (If you haven't registered one, try 'PhilSMS' or leave blank)
   const SENDER_ID = "PhilSMS"; 
 
   // Fetch History
@@ -3255,21 +3252,28 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
     return () => unsubscribe();
   }, [appId, db]);
 
+  // Filter Users
   const getTargets = () => {
-      if (targetGroup === 'all') return subscribers;
-      if (targetGroup === 'active') return subscribers.filter(s => s.status === 'active');
-      if (targetGroup === 'overdue') return subscribers.filter(s => s.status === 'overdue' || (s.balance && s.balance > 0));
-      return [];
+      let targets = [];
+      if (targetGroup === 'all') targets = subscribers;
+      else if (targetGroup === 'active') targets = subscribers.filter(s => s.status === 'active');
+      else if (targetGroup === 'overdue') targets = subscribers.filter(s => s.status === 'overdue' || (s.balance && s.balance > 0));
+      
+      // Filter out users who DON'T have a contact number
+      return targets.filter(t => t.contactNumber && t.contactNumber.length > 9);
   };
 
-  // --- THE NEW SENDING FUNCTION (API) ---
+  const validTargets = getTargets();
+
+  // --- SENDING LOGIC ---
   const sendViaPhilSMS = async (phone, msg) => {
       try {
-          // 1. Format Phone: 09171234567 -> 639171234567
+          // 1. Format Phone: Clean 0917... to 63917...
           let cleanPhone = phone.replace(/[^0-9]/g, '');
           if (cleanPhone.startsWith('0')) cleanPhone = '63' + cleanPhone.substring(1);
+          if (cleanPhone.startsWith('9')) cleanPhone = '63' + cleanPhone; // Handle case where user types 917...
 
-          // 2. Prepare Data
+          // 2. Prepare Payload
           const payload = {
               recipient: cleanPhone,
               sender_id: SENDER_ID,
@@ -3277,9 +3281,10 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
               message: msg
           };
 
+          console.log("Attempting send to:", cleanPhone);
+
           // 3. Send Request
-          // Note: We use a POST request to their API endpoint
-          const response = await fetch("https://app.philsms.com/api/v3/sms/send", {
+          const response = await fetch("https://cors-anywhere.herokuapp.com/https://app.philsms.com/api/v3/sms/send", {
               method: 'POST',
               headers: {
                   'Authorization': `Bearer ${API_KEY}`,
@@ -3291,62 +3296,77 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
 
           const data = await response.json();
           
-          if (response.ok) return { success: true };
-          else return { success: false, error: data.message || "API Error" };
+          if (!response.ok) {
+              console.error("PhilSMS Error:", data);
+              return { success: false, error: data.message || "API Error" };
+          }
+          
+          return { success: true, data };
 
       } catch (error) {
-          console.error("SMS Error:", error);
+          console.error("Network/CORS Error:", error);
+          // DETECT CORS ERROR
+          if (error.message.includes('Failed to fetch')) {
+             return { success: false, error: "CORS Error: Install 'Allow CORS' extension or use a backend." };
+          }
           return { success: false, error: error.message };
       }
   };
 
+  // --- SEND TEST MESSAGE ---
+  const handleTestSend = async (e) => {
+      e.preventDefault();
+      if(!testNumber || !message) return alert("Enter a phone number and message.");
+      setSending(true);
+      const result = await sendViaPhilSMS(testNumber, message);
+      setSending(false);
+
+      if(result.success) alert("Test Sent Successfully!");
+      else alert("Test Failed: " + result.error);
+  };
+
+  // --- SEND BULK BLAST ---
   const handleSend = async (e) => {
       e.preventDefault();
-      const targets = getTargets();
-      if (targets.length === 0) return alert("No users in this group.");
+      if (validTargets.length === 0) return alert("No users in this group have valid phone numbers saved.");
       if (!message) return alert("Please type a message.");
       
-      // Calculate estimated cost (Assuming approx 0.50 per text)
-      if(!confirm(`Send to ${targets.length} users? (Est. Cost: ₱${(targets.length * 0.5).toFixed(2)})`)) return;
+      if(!confirm(`Send to ${validTargets.length} users? (Est. Cost: ₱${(validTargets.length * 0.5).toFixed(2)})`)) return;
 
       setSending(true);
       let successCount = 0;
       let failCount = 0;
+      let lastError = "";
 
-      // Loop and Send
-      for (const user of targets) {
-          // Skip invalid numbers
-          if (!user.contactNumber || user.contactNumber.length < 10) {
-              failCount++;
-              continue; 
-          }
-
+      for (const user of validTargets) {
           const result = await sendViaPhilSMS(user.contactNumber, message);
-          
           if (result.success) successCount++;
-          else failCount++;
-          
-          // Small delay to be polite to the API (200ms)
-          await new Promise(r => setTimeout(r, 200)); 
+          else {
+              failCount++;
+              lastError = result.error;
+          }
+          // Small delay to prevent rate limiting
+          await new Promise(r => setTimeout(r, 500)); 
       }
 
-      // Log Result to Database
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', SMS_COLLECTION), {
           message: message,
           targetGroup: targetGroup,
-          recipientCount: targets.length,
+          recipientCount: validTargets.length,
           successCount: successCount,
           failCount: failCount,
           date: new Date().toISOString(),
-          status: 'sent_via_api'
+          status: 'processed'
       });
 
-      alert(`Campaign Done!\n✅ Sent: ${successCount}\n❌ Failed: ${failCount}`);
+      let alertMsg = `Campaign Done!\n✅ Sent: ${successCount}\n❌ Failed: ${failCount}`;
+      if(failCount > 0) alertMsg += `\n\nLast Error: ${lastError}`;
+      
+      alert(alertMsg);
       setMessage('');
       setSending(false);
   };
 
-  // Templates
   const setTemplate = (type) => {
       if (type === 'due') setMessage("SwiftNet Reminder: Your account is overdue. Please pay immediately to avoid disconnection.");
       if (type === 'maintenance') setMessage("SwiftNet Advisory: System maintenance tonight 12AM-4AM. Expect interruptions.");
@@ -3355,12 +3375,30 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
   return (
     <div className="space-y-6 animate-in fade-in h-[calc(100vh-150px)] flex flex-col lg:flex-row gap-6">
         {/* Left: Composer */}
-        <div className="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+        <div className="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-y-auto">
             <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                <MessageSquare className="text-blue-600" size={24}/> SMS Blaster (PhilSMS API)
+                <MessageSquare className="text-blue-600" size={24}/> SMS Blaster
             </h3>
 
-            <div className="flex gap-2 mb-6">
+            {/* Test Section */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
+                <p className="text-xs font-bold text-slate-500 uppercase mb-2">Test Connection</p>
+                <div className="flex gap-2">
+                    <input 
+                        type="text" 
+                        placeholder="0917xxxxxxx" 
+                        className="border p-2 rounded-lg text-sm flex-1"
+                        value={testNumber}
+                        onChange={e => setTestNumber(e.target.value)}
+                    />
+                    <button onClick={handleTestSend} disabled={sending} className="bg-slate-800 text-white px-4 rounded-lg text-sm font-bold">
+                        {sending ? '...' : 'Test Send'}
+                    </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Check console (F12) if test fails.</p>
+            </div>
+
+            <div className="flex gap-2 mb-4">
                 <button onClick={() => setTemplate('due')} className="px-3 py-1 bg-red-50 text-red-600 text-xs font-bold rounded-full border border-red-100 hover:bg-red-100">Payment</button>
                 <button onClick={() => setTemplate('maintenance')} className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded-full border border-blue-100 hover:bg-blue-100">Maintenance</button>
             </div>
@@ -3373,20 +3411,23 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
                         <option value="active">Active Users</option>
                         <option value="all">All Subscribers</option>
                     </select>
+                    <p className="text-xs text-blue-600 mt-1 font-bold">
+                        {validTargets.length} users found with phone numbers.
+                    </p>
                 </div>
 
                 <div className="flex-1">
                     <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Message</label>
                     <textarea 
-                        className="w-full h-full border p-4 rounded-xl text-lg resize-none outline-none focus:border-blue-500" 
+                        className="w-full h-32 border p-4 rounded-xl text-lg resize-none outline-none focus:border-blue-500" 
                         placeholder="Type your SMS here..."
                         value={message}
                         onChange={e => setMessage(e.target.value)}
                     ></textarea>
                 </div>
 
-                <button disabled={sending} className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 flex justify-center items-center gap-2 disabled:opacity-50">
-                    {sending ? 'Sending via Cloud...' : <><Send size={20}/> Send Blast</>}
+                <button disabled={sending || validTargets.length === 0} className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 flex justify-center items-center gap-2 disabled:opacity-50 disabled:bg-slate-400">
+                    {sending ? 'Sending...' : <><Send size={20}/> Send Blast ({validTargets.length})</>}
                 </button>
             </form>
         </div>
@@ -3415,8 +3456,6 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
     </div>
   );
 };
-
-
 
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
