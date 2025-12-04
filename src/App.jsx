@@ -3284,7 +3284,7 @@ const SMSBlaster = ({ subscribers, db, appId }) => {
           console.log("Attempting send to:", cleanPhone);
 
           // 3. Send Request
-          const response = await fetch("https://cors-anywhere.herokuapp.com/https://app.philsms.com/api/v3/sms/send", {
+          const response = await fetch("https://app.philsms.com/api/v3/sms/send", {
               method: 'POST',
               headers: {
                   'Authorization': `Bearer ${API_KEY}`,
