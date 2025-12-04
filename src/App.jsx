@@ -3513,6 +3513,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [billingUser, setBillingUser] = useState(null);
   const [showStaffModal, setShowStaffModal] = useState(false);
 
+  // --- 1. Fetch Plans ---
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -3523,20 +3524,21 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
     return () => unsubscribe();
   }, []);
 
+  // --- 2. Fetch Technicians ---
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), where('role', '==', 'technician'));
     const unsubscribe = onSnapshot(q, (snapshot) => { setTechnicians(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); });
     return () => unsubscribe();
   }, []);
   
-  // Fetch Outages
+  // --- 3. Fetch Outages ---
   useEffect(() => {
       const q = query(collection(db, 'artifacts', appId, 'public', 'data', OUTAGES_COLLECTION), orderBy('date', 'desc'));
       const unsubscribe = onSnapshot(q, (s) => setOutages(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       return () => unsubscribe();
   }, []);
 
-  // Fetch Expenses
+  // --- 4. Fetch Expenses ---
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', EXPENSES_COLLECTION), orderBy('date', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -3544,6 +3546,33 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
     });
     return () => unsubscribe();
   }, [appId, db]);
+
+  // --- 5. Ticket Fetching (Moved to top level) ---
+  // This was the specific block causing the error previously
+  useEffect(() => {
+    // Only run if admin or cashier
+    if (!user || (user.role !== 'admin' && user.role !== 'cashier')) return;
+
+    const ticketCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'isp_tickets_v1');
+    
+    const unsubscribe = onSnapshot(ticketCollectionRef, (snapshot) => {
+      const fetchedTickets = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+      
+      // Sort manually in Javascript instead of Firestore
+      const sortedTickets = fetchedTickets.sort((a,b) => new Date(b.date) - new Date(a.date));
+      
+      // Assuming setTickets is passed as prop or you need to manage it locally. 
+      // NOTE: In your original code, 'tickets' was a prop, but you were trying to set it?
+      // Since 'tickets' is passed from the Parent App component, you usually don't fetch it here again.
+      // However, if you want to force fetch it here, you need a local state.
+      // For now, I will assume you want to use the prop, but if you need to fetch:
+      // setTickets(sortedTickets); <--- You cannot do this if tickets is a prop.
+    });
+    return () => unsubscribe();
+  }, [appId, db, user]);
+
+  // ... (Rest of your handler functions: handleStatusChange, handleChangePassword, etc. keep them exactly as they were) ...
+  // Since the code is very long, ensure you keep all your const handle... functions here.
 
   const handleStatusChange = async (userId, newStatus) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { status: newStatus }); } catch (e) { console.error(e); } };
   const handleChangePassword = async (e) => { e.preventDefault(); if (adminNewPass.length < 6) return alert("Min 6 chars"); try { await updatePassword(auth.currentUser, adminNewPass); alert("Success"); setShowPasswordModal(false); } catch (e) { alert(e.message); } };
@@ -3781,35 +3810,35 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                 </div>
 
                 <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-                   
-                   {p.proofImage ? (
-                       <button 
-                          onClick={() => {
+                    
+                    {p.proofImage ? (
+                        <button 
+                           onClick={() => {
     const win = window.open("");
     win.document.write(
         `<iframe src="${p.proofImage}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`
     );
 }}
-                          className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 border border-blue-200 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-all"
+                           className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 border border-blue-200 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-all"
+                        >
+                           <Image size={16}/> View Proof
+                        </button>
+                    ) : (
+                        <span className="text-xs text-slate-400 italic">No Image</span>
+                    )}
+
+                    <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${p.status === 'verified' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                       {p.status || 'pending'}
+                    </span>
+
+                    {p.status !== 'verified' && (
+                       <button 
+                         onClick={() => handleVerifyPayment(p.id, p.userId, p.amount, p.refNumber)} 
+                         className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-green-700 transition-colors shadow-sm"
                        >
-                          <Image size={16}/> View Proof
+                           Verify
                        </button>
-                   ) : (
-                       <span className="text-xs text-slate-400 italic">No Image</span>
-                   )}
-
-                   <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${p.status === 'verified' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                      {p.status || 'pending'}
-                   </span>
-
-                   {p.status !== 'verified' && (
-                      <button 
-                        onClick={() => handleVerifyPayment(p.id, p.userId, p.amount, p.refNumber)} 
-                        className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-green-700 transition-colors shadow-sm"
-                      >
-                          Verify
-                      </button>
-                   )}
+                    )}
                 </div>
               </div>
             ))}
@@ -3841,14 +3870,14 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
        {showPasswordModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><h3 className="font-bold mb-4">Change Password</h3><input className="w-full border p-2 rounded mb-4" type="password" placeholder="New Password" value={adminNewPass} onChange={e=>setAdminNewPass(e.target.value)}/><div className="flex justify-end gap-2"><button onClick={()=>setShowPasswordModal(false)} className="text-slate-500">Cancel</button><button onClick={handleChangePassword} className="bg-blue-600 text-white px-4 py-2 rounded">Update</button></div></div></div>)}
        {showDateModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold">Change Due Date</h3><button onClick={() => setShowDateModal(null)} className="text-white/80 hover:text-white"><X size={24} /></button></div><form onSubmit={handleUpdateDueDate} className="p-6 space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">New Due Date</label><input type="date" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} /></div><button type="submit" className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">Update Date</button></form></div></div>)}
        {editingUser && (
-    <EditSubscriberModal 
-        user={editingUser} 
-        plans={plans} 
-        db={db} 
-        appId={appId} 
-        onClose={() => setEditingUser(null)} 
-    />
-)}
+        <EditSubscriberModal 
+            user={editingUser} 
+            plans={plans} 
+            db={db} 
+            appId={appId} 
+            onClose={() => setEditingUser(null)} 
+        />
+        )}
        {showNotifyModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Bell size={18} /> Notify {notifyData.targetName}</h3><button onClick={() => setShowNotifyModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div><form onSubmit={handleSendNotification}><div className="space-y-3"><div><label className="text-xs font-bold text-slate-500 uppercase">Title</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" placeholder="e.g. Payment Received" value={notifyData.title} onChange={(e) => setNotifyData({...notifyData, title: e.target.value})} required /></div><div><label className="text-xs font-bold text-slate-500 uppercase">Message</label><textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 h-24 resize-none" placeholder="Write your message here..." value={notifyData.message} onChange={(e) => setNotifyData({...notifyData, message: e.target.value})} required ></textarea></div><button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">Send Notification</button></div></form></div></div>)}
        {/* Billing Modal Render */}
      {billingUser && (
