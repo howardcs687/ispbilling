@@ -1660,6 +1660,246 @@ const NetworkStatusWidget = ({ db, appId }) => {
   );
 };
 
+const SmartDiagnostics = ({ user, db, appId, onTicketCreate }) => {
+  const [stage, setStage] = useState('start'); 
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const addLog = (text) => setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text }]);
+
+  const handleStart = () => {
+    setStage('checking');
+    setLogs([]);
+    addLog("Initializing Router Diagnostic...");
+    
+    setTimeout(() => {
+        addLog("Checking Account Status... Active");
+        
+        if (user.balance > 0) {
+            addLog("⚠️ Alert: Service Restricted due to Balance.");
+            setTimeout(() => setStage('billing_issue'), 1000);
+        } else {
+            setTimeout(() => setStage('modem_check'), 1500);
+        }
+    }, 1500);
+  };
+
+  const handleLightIssue = (lightName) => {
+      if (lightName === 'wireless') {
+          // WIRELESS light is OFF -> WiFi Radio is broken/off
+          addLog("⚠️ Issue: WiFi Signal is Missing.");
+          addLog("Diagnosis: Router WiFi radio is disabled or broken.");
+          setStage('wifi_issue');
+      } else if (lightName === 'internet') {
+          // INTERNET light is OFF -> Connection to Tower is lost
+          addLog("❌ Critical: No Internet Connection Detected.");
+          addLog("Diagnosis: Cable from antenna disconnected or Tower Signal lost.");
+          setStage('no_internet');
+      } else {
+          // All Green
+          addLog("✅ Device Indicators: Normal");
+          setStage('restart');
+      }
+  };
+
+  const handleRestartConfirm = () => {
+      setLoading(true);
+      setTimeout(() => {
+          setLoading(false);
+          setStage('final_check');
+      }, 3000); 
+  };
+
+  const handleAutoFile = async (issueType) => {
+      setLoading(true);
+      const ticketId = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      let subject = "Internet Issue";
+      let priority = "Normal";
+      
+      // LOGIC FIXED HERE
+      if (issueType === 'signal_loss') { subject = "🔴 URGENT: Internet Light OFF (Signal Lost)"; priority = "High"; }
+      if (issueType === 'wifi_radio') { subject = "Router Issue: No WiFi Signal"; priority = "Medium"; }
+      if (issueType === 'slow') { subject = "Slow Internet Speed"; priority = "Low"; }
+
+      const fullLog = logs.map(l => `[${l.time}] ${l.text}`).join('\n');
+
+      try {
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+              ticketId,
+              userId: user.uid,
+              username: user.username,
+              subject: subject,
+              message: `AUTO-TECH DIAGNOSTIC REPORT:\n\n${fullLog}\n\nUser Issue: ${issueType}`,
+              status: 'open',
+              priority: priority,
+              date: new Date().toISOString()
+          });
+          alert(`Ticket #${ticketId} Auto-Filed!`);
+          setStage('start'); 
+      } catch (e) {
+          alert("Error filing ticket.");
+      }
+      setLoading(false);
+  };
+
+  return (
+    <div className="bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-700 text-slate-100 font-mono animate-in fade-in">
+        {/* Terminal Header */}
+        <div className="bg-slate-950 p-4 border-b border-slate-800 flex justify-between items-center">
+            <div className="flex gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            </div>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Router Diagnostics v3.0</div>
+        </div>
+
+        <div className="p-8 min-h-[400px] flex flex-col relative">
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(17,24,39,0.95),rgba(17,24,39,0.95)),url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-50 pointer-events-none"></div>
+
+            {stage === 'start' && (
+                <div className="flex-1 flex flex-col items-center justify-center text-center z-10">
+                    <div className="w-24 h-24 bg-blue-500/10 rounded-full flex items-center justify-center mb-6 border border-blue-500/30">
+                        <Wifi size={48} className="text-blue-400" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-2">Connection Troubleshooter</h3>
+                    <p className="text-slate-400 max-w-md mb-8">Scan your router for WiFi broadcast or internet signal issues.</p>
+                    <button onClick={handleStart} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-blue-900/50 transition-all hover:scale-105 active:scale-95 flex items-center gap-2">
+                        <Activity size={18} /> Start Diagnostics
+                    </button>
+                </div>
+            )}
+
+            {stage === 'checking' && (
+                <div className="flex-1 flex flex-col justify-end z-10">
+                    <div className="space-y-2 font-mono text-sm">
+                        {logs.map((log, i) => (
+                            <div key={i} className="text-green-400 animate-in slide-in-from-left-2">
+                                <span className="text-slate-500 mr-2">[{log.time}]</span>
+                                {log.text}
+                            </div>
+                        ))}
+                        <div className="text-blue-400 animate-pulse">_ Analyzing router status...</div>
+                    </div>
+                </div>
+            )}
+
+            {stage === 'billing_issue' && (
+                <div className="flex-1 flex flex-col items-center justify-center text-center z-10">
+                    <div className="bg-red-500/20 p-4 rounded-full mb-4"><AlertCircle size={40} className="text-red-500" /></div>
+                    <h3 className="text-xl font-bold text-white">Service Suspended</h3>
+                    <p className="text-slate-400 mb-6">Your internet is restricted due to an unpaid balance.</p>
+                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6 w-full max-w-xs">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-slate-400">Total Due</span>
+                            <span className="text-green-400 font-bold">₱{user.balance?.toFixed(2)}</span>
+                        </div>
+                    </div>
+                    <button onClick={() => window.location.reload()} className="text-white underline text-sm">Refresh Status</button>
+                </div>
+            )}
+
+            {stage === 'modem_check' && (
+                <div className="flex-1 flex flex-col items-center justify-center text-center z-10 animate-in zoom-in-95">
+                    <h3 className="text-xl font-bold text-white mb-2">Check Router Lights</h3>
+                    <p className="text-slate-400 mb-8 text-sm">Look at your device. Are all 3 lights ON?</p>
+                    
+                    {/* VISUALIZER: POWER | WIFI | INTERNET */}
+                    <div className="flex gap-6 mb-10 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+                        {/* POWER */}
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="w-4 h-4 rounded-full bg-green-500 shadow-[0_0_15px_#22c55e]"></div>
+                            <span className="text-[10px] font-bold text-slate-400 tracking-wider">POWER</span>
+                        </div>
+                        {/* WIRELESS (The user's WiFi) */}
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="w-4 h-4 rounded-full bg-green-500 animate-pulse shadow-[0_0_15px_#22c55e]"></div>
+                            <span className="text-[10px] font-bold text-slate-400 tracking-wider">WIRELESS</span>
+                        </div>
+                        {/* INTERNET (The link to ISP) */}
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="w-4 h-4 rounded-full bg-green-500 animate-pulse shadow-[0_0_15px_#22c55e]"></div>
+                            <span className="text-[10px] font-bold text-slate-400 tracking-wider">INTERNET</span>
+                        </div>
+                    </div>
+
+                    <p className="text-slate-300 mb-4 font-bold">Which light is OFF or RED?</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full">
+                        <button onClick={() => handleLightIssue('wireless')} className="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white p-3 rounded-lg text-sm font-bold">
+                            "WIRELESS" is OFF
+                        </button>
+                        <button onClick={() => handleLightIssue('internet')} className="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white p-3 rounded-lg text-sm font-bold">
+                            "INTERNET" is OFF
+                        </button>
+                        <button onClick={() => handleLightIssue('none')} className="bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg text-sm font-bold">
+                            All Lights GREEN
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {stage === 'wifi_issue' && (
+                <div className="flex-1 flex flex-col items-center justify-center text-center z-10">
+                    <div className="w-16 h-16 bg-orange-500/20 rounded-full flex items-center justify-center mb-4">
+                        <Wifi size={32} className="text-orange-500" />
+                    </div>
+                    <h3 className="text-xl font-bold text-white">WiFi Radio Issue</h3>
+                    <p className="text-slate-400 mb-6 max-w-sm text-sm">
+                        The "Wireless" light is off. This means your router isn't broadcasting a signal for your phone to connect to.
+                    </p>
+                    <button disabled={loading} onClick={() => handleAutoFile('wifi_radio')} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-xl font-bold w-full max-w-sm flex items-center justify-center gap-2">
+                        {loading ? 'Processing...' : 'Report Broken WiFi'}
+                    </button>
+                </div>
+            )}
+
+            {stage === 'no_internet' && (
+                <div className="flex-1 flex flex-col items-center justify-center text-center z-10">
+                    <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-4 animate-bounce">
+                        <Globe size={32} className="text-red-500" />
+                    </div>
+                    <h3 className="text-xl font-bold text-white">Signal Lost to Tower</h3>
+                    <p className="text-slate-400 mb-6 max-w-sm text-sm">
+                        The "Internet" light is off. Check the black cable coming from the antenna outside. If it's plugged in, our tower signal might be blocked.
+                    </p>
+                    <button disabled={loading} onClick={() => handleAutoFile('signal_loss')} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-bold w-full max-w-sm flex items-center justify-center gap-2">
+                        {loading ? 'Processing...' : <><Hammer size={18}/> Report Signal Loss</>}
+                    </button>
+                </div>
+            )}
+
+            {stage === 'restart' && (
+                <div className="flex-1 flex flex-col items-center justify-center text-center z-10">
+                    <RefreshCw size={40} className="text-blue-400 mb-4 animate-spin-slow" />
+                    <h3 className="text-xl font-bold text-white">Refresh Connection</h3>
+                    <p className="text-slate-400 mb-6 max-w-sm text-sm">
+                        Your lights look okay. Please unplug the power adapter for 10 seconds, then plug it back in to refresh your IP.
+                    </p>
+                    <button onClick={handleRestartConfirm} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold">
+                        I have restarted it
+                    </button>
+                </div>
+            )}
+
+            {stage === 'final_check' && (
+                <div className="flex-1 flex flex-col items-center justify-center text-center z-10">
+                    <h3 className="text-xl font-bold text-white mb-4">Did that fix it?</h3>
+                    <div className="flex gap-4">
+                        <button onClick={() => setStage('start')} className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2">
+                            <CheckCircle size={18}/> Yes, It's Working!
+                        </button>
+                        <button onClick={() => handleAutoFile('slow')} className="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-xl font-bold">
+                            No, still slow/broken
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    </div>
+  );
+};
+
 // 3. Subscriber Dashboard
 const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair, outages }) => {
   const [activeTab, setActiveTab] = useState('overview'); 
@@ -1773,9 +2013,9 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
-        {['overview', 'wallet', 'shop', 'my_id', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
+        {['overview', 'auto_tech', 'wallet', 'shop', 'my_id', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'wallet' ? <><Wallet size={16}/> Wallet</> : tab === 'shop' ? <><ShoppingBag size={16}/> Shop</> : tab === 'my_id' ? <><CreditCard size={16}/> My ID</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'documents' ? <><FileText size={16}/> Documents</> : tab === 'rewards' ? <><Gift size={16}/> Rewards</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
+              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'auto_tech' ? <><Zap size={16}/> Auto-Tech</> : tab === 'wallet' ? <><Wallet size={16}/> Wallet</> : tab === 'shop' ? <><ShoppingBag size={16}/> Shop</> : tab === 'my_id' ? <><CreditCard size={16}/> My ID</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'documents' ? <><FileText size={16}/> Documents</> : tab === 'rewards' ? <><Gift size={16}/> Rewards</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
            </button>
         ))}
       </div>
@@ -1871,6 +2111,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           </div>
         </div>
       )}
+      {activeTab === 'auto_tech' && <SmartDiagnostics user={userData} db={db} appId={appId} />}
       {activeTab === 'wallet' && <SwiftWallet user={userData} db={db} appId={appId} />}
       {activeTab === 'shop' && <Marketplace user={userData} db={db} appId={appId} />}
       {activeTab === 'my_id' && <DigitalID user={userData} />}
