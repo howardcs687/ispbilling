@@ -1717,7 +1717,6 @@ const SmartDiagnostics = ({ user, db, appId, onTicketCreate }) => {
       let subject = "Internet Issue";
       let priority = "Normal";
       
-      // LOGIC FIXED HERE
       if (issueType === 'signal_loss') { subject = "🔴 URGENT: Internet Light OFF (Signal Lost)"; priority = "High"; }
       if (issueType === 'wifi_radio') { subject = "Router Issue: No WiFi Signal"; priority = "Medium"; }
       if (issueType === 'slow') { subject = "Slow Internet Speed"; priority = "Low"; }
@@ -1725,7 +1724,8 @@ const SmartDiagnostics = ({ user, db, appId, onTicketCreate }) => {
       const fullLog = logs.map(l => `[${l.time}] ${l.text}`).join('\n');
 
       try {
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+          // Hardcoded 'isp_tickets_v1' to ensure it hits the exact Admin collection
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_tickets_v1'), {
               ticketId,
               userId: user.uid,
               username: user.username,
@@ -1733,12 +1733,17 @@ const SmartDiagnostics = ({ user, db, appId, onTicketCreate }) => {
               message: `AUTO-TECH DIAGNOSTIC REPORT:\n\n${fullLog}\n\nUser Issue: ${issueType}`,
               status: 'open',
               priority: priority,
-              date: new Date().toISOString()
+              date: new Date().toISOString(),
+              timestamp: Date.now(), // Helps with sorting
+              isApplication: false,
+              isPlanChange: false
           });
-          alert(`Ticket #${ticketId} Auto-Filed!`);
+          
+          alert(`Ticket #${ticketId} Auto-Filed Successfully! Check the 'Support' tab to see it.`);
           setStage('start'); 
       } catch (e) {
-          alert("Error filing ticket.");
+          console.error("Ticket File Error:", e);
+          alert("Error filing ticket: " + e.message);
       }
       setLoading(false);
   };
@@ -3973,7 +3978,22 @@ export default function App() {
        onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), s => setSubscribers(s.docs.map(d => ({id: d.id, ...d.data()}))));
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), orderBy('date', 'desc')), s => setPayments(s.docs.map(d => ({id: d.id, ...d.data()}))));
        onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), orderBy('dateFiled', 'desc')), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()}))));
-       onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), orderBy('date', 'desc')), s => setTickets(s.docs.map(d => ({id: d.id, ...d.data()}))));
+       // Fix for Ticket Fetching
+  useEffect(() => {
+    const ticketCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'isp_tickets_v1');
+    
+    // We removed orderBy('date', 'desc') temporarily to ensure all tickets appear
+    // If you want sorting back, ensure ALL tickets in your database have a valid 'date' field
+    const unsubscribe = onSnapshot(ticketCollectionRef, (snapshot) => {
+      const fetchedTickets = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+      
+      // Sort manually in Javascript instead of Firestore (prevents database index errors)
+      const sortedTickets = fetchedTickets.sort((a,b) => new Date(b.date) - new Date(a.date));
+      
+      setTickets(sortedTickets);
+    });
+    return () => unsubscribe();
+  }, [appId, db]);
     } 
     else if (user.role === 'technician') {
         const q = query(
