@@ -4074,161 +4074,287 @@ const TechnicianDashboard = ({ repairs, onTechUpdate }) => {
     );
 };
 
+// --- SHARED PUBLIC NAVBAR ---
+const PublicNavbar = ({ onNavigate, onLogin, activePage }) => (
+  <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="flex justify-between items-center h-20">
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => onNavigate('landing')}>
+          <div className="bg-red-600 p-2 rounded-lg">
+            <Wifi className="text-white h-6 w-6" />
+          </div>
+          <span className="font-black text-2xl tracking-tighter text-slate-900">
+            SwiftNet<span className="text-red-600">Home</span>
+          </span>
+        </div>
+        <div className="hidden md:flex items-center gap-8 font-bold text-sm text-slate-600">
+          {['plans', 'coverage', 'support', 'about'].map((item) => (
+            <button 
+              key={item}
+              onClick={() => onNavigate(item)}
+              className={`uppercase transition-colors ${activePage === item ? 'text-red-600' : 'hover:text-red-600'}`}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+        <button onClick={onLogin} className="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-lg shadow-red-200">
+          My Account
+        </button>
+      </div>
+    </div>
+  </nav>
+);
+
+// --- 1. SUPPORT PAGE ---
+const SupportPage = ({ onNavigate, onLogin }) => (
+  <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
+    <PublicNavbar onNavigate={onNavigate} onLogin={onLogin} activePage="support" />
+    <div className="max-w-4xl mx-auto px-4 py-16">
+      <div className="text-center mb-16">
+        <h1 className="text-4xl font-black text-slate-900 mb-4">How can we help?</h1>
+        <p className="text-slate-500 text-lg">Our technical team is on standby 24/7.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 text-center">
+          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600"><Phone size={24}/></div>
+          <h3 className="font-bold text-lg mb-2">Call Us</h3>
+          <p className="text-slate-500">0968-385-9759</p>
+          <p className="text-slate-400 text-sm mt-1">Mon-Sun, 8AM - 8PM</p>
+        </div>
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 text-center">
+          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600"><Mail size={24}/></div>
+          <h3 className="font-bold text-lg mb-2">Email Support</h3>
+          <p className="text-slate-500">support@swiftnet.com</p>
+          <p className="text-slate-400 text-sm mt-1">Response within 24 hours</p>
+        </div>
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 text-center">
+          <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4 text-orange-600"><MapPin size={24}/></div>
+          <h3 className="font-bold text-lg mb-2">Visit Office</h3>
+          <p className="text-slate-500">Pasay City, Metro Manila</p>
+          <p className="text-slate-400 text-sm mt-1">Walk-ins Welcome</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
+        <div className="bg-slate-900 p-6 text-white">
+          <h3 className="font-bold text-xl">Frequently Asked Questions</h3>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {[
+            { q: "How do I pay my bill?", a: "You can pay via GCash, Maya, or Bank Transfer directly from your user dashboard." },
+            { q: "What is the lock-in period?", a: "Our standard fiber plans come with a 24-month lock-in period." },
+            { q: "My internet is slow, what do I do?", a: "Try restarting your modem for 10 seconds. If the issue persists, create a ticket in your dashboard." }
+          ].map((faq, i) => (
+            <div key={i} className="p-6">
+              <h4 className="font-bold text-slate-800 mb-2">{faq.q}</h4>
+              <p className="text-slate-600">{faq.a}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// --- 2. COVERAGE PAGE ---
+const CoveragePage = ({ onNavigate, onLogin, db, appId }) => {
+  const [areas, setAreas] = useState([]);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_service_areas_v1'));
+    const unsub = onSnapshot(q, (s) => setAreas(s.docs.map(d => d.data())));
+    return () => unsub();
+  }, [db, appId]);
+
+  const filtered = areas.filter(a => 
+    a.city.toLowerCase().includes(search.toLowerCase()) || 
+    a.barangay.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
+      <PublicNavbar onNavigate={onNavigate} onLogin={onLogin} activePage="coverage" />
+      <div className="max-w-7xl mx-auto px-4 py-12">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-black text-slate-900 mb-4">Service Availability</h1>
+          <p className="text-slate-500">Check if SwiftNet Fiber is available in your area.</p>
+        </div>
+
+        <div className="max-w-md mx-auto mb-12 relative">
+          <Search className="absolute left-4 top-3.5 text-slate-400" size={20}/>
+          <input 
+            className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-red-500 outline-none"
+            placeholder="Search Barangay or City..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((area, i) => (
+            <div key={i} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-slate-800">{area.barangay}</h3>
+                <p className="text-xs text-slate-500 uppercase tracking-widest">{area.city}</p>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${area.status === 'Available' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                {area.status}
+              </span>
+            </div>
+          ))}
+          {filtered.length === 0 && <p className="col-span-full text-center text-slate-400">No areas found matching your search.</p>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- 3. PLANS PAGE ---
+const PlansPage = ({ onNavigate, onLogin, plans }) => (
+  <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
+    <PublicNavbar onNavigate={onNavigate} onLogin={onLogin} activePage="plans" />
+    <div className="max-w-7xl mx-auto px-4 py-16">
+      <div className="text-center mb-16">
+        <h1 className="text-4xl font-black text-slate-900 mb-4">Unstoppable Fiber Plans</h1>
+        <p className="text-slate-500">Choose the speed that fits your lifestyle.</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {plans.map((plan, idx) => (
+          <div key={idx} className="bg-white rounded-3xl p-8 shadow-xl border border-slate-100 hover:-translate-y-2 transition-transform duration-300">
+            <h3 className="text-xl font-bold text-slate-500 uppercase tracking-widest mb-4">{plan.name}</h3>
+            <div className="text-5xl font-black text-slate-900 mb-6">{plan.speed}</div>
+            <div className="text-3xl font-bold text-red-600 mb-8">₱{plan.price}<span className="text-sm text-slate-400">/mo</span></div>
+            <ul className="space-y-4 mb-8">
+              {plan.features?.map((f, i) => (
+                <li key={i} className="flex items-center gap-3 text-slate-600"><Check size={18} className="text-green-500"/> {f}</li>
+              ))}
+            </ul>
+            <button onClick={onLogin} className="w-full py-4 rounded-xl font-bold text-white bg-slate-900 hover:bg-red-600 transition-colors">Apply Now</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+// --- 4. ABOUT PAGE ---
+const AboutPage = ({ onNavigate, onLogin }) => (
+  <div className="min-h-screen bg-white font-sans text-slate-800">
+    <PublicNavbar onNavigate={onNavigate} onLogin={onLogin} activePage="about" />
+    <div className="max-w-3xl mx-auto px-4 py-16">
+      <h1 className="text-4xl font-black text-slate-900 mb-6">About SwiftNet</h1>
+      <p className="text-lg text-slate-600 mb-6 leading-relaxed">
+        SwiftNet is a premier Internet Service Provider dedicated to bridging the digital divide in the Philippines. Founded in 2023, we started with a simple mission: to provide affordable, reliable, and high-speed fiber internet to underserved communities.
+      </p>
+      <p className="text-lg text-slate-600 mb-6 leading-relaxed">
+        We believe that internet access is a right, not a privilege. By utilizing the latest Fiber-to-the-Home (FTTH) technology, we ensure that our subscribers enjoy seamless connectivity for work, education, and entertainment.
+      </p>
+      <h2 className="text-2xl font-bold text-slate-900 mt-12 mb-4">Our Mission</h2>
+      <p className="text-slate-600 mb-6">To empower every household with world-class internet connectivity.</p>
+      <h2 className="text-2xl font-bold text-slate-900 mt-12 mb-4">Our Vision</h2>
+      <p className="text-slate-600">To be the most trusted and customer-centric ISP in the region.</p>
+    </div>
+  </div>
+);
+
+// --- 5. PRIVACY POLICY PAGE ---
+const PrivacyPage = ({ onNavigate, onLogin }) => (
+  <div className="min-h-screen bg-white font-sans text-slate-800">
+    <PublicNavbar onNavigate={onNavigate} onLogin={onLogin} activePage="privacy" />
+    <div className="max-w-3xl mx-auto px-4 py-16">
+      <h1 className="text-3xl font-bold text-slate-900 mb-8">Privacy Policy</h1>
+      <div className="space-y-6 text-slate-600 text-sm leading-relaxed">
+        <p><strong>Last Updated: December 2025</strong></p>
+        <p>At SwiftNet, we respect your privacy and are committed to protecting your personal data.</p>
+        <h3 className="text-lg font-bold text-slate-800">1. Information We Collect</h3>
+        <p>We collect information you provide directly to us, such as your name, email address, phone number, and installation address when you apply for a subscription.</p>
+        <h3 className="text-lg font-bold text-slate-800">2. How We Use Your Information</h3>
+        <p>We use your data to provide, maintain, and improve our services, process payments, and communicate with you about your account.</p>
+        <h3 className="text-lg font-bold text-slate-800">3. Data Security</h3>
+        <p>We implement appropriate technical and organizational measures to protect your personal data against unauthorized access.</p>
+      </div>
+    </div>
+  </div>
+);
+
 // --- NEW LANDING PAGE COMPONENT (PLDT STYLE) ---
-const LandingPage = ({ onLoginClick, plans }) => {
-  // Default plans if none are loaded from DB yet
+const LandingPage = ({ onLoginClick, onNavigate, plans }) => {
+  // Default fallback plans if none loaded
   const displayPlans = plans && plans.length > 0 ? plans : [
-    { name: 'Fiber Unli 1699', speed: '200 Mbps', price: '1,699', features: ['Unlimited Data', 'Free Modem', 'Landline Included'] },
-    { name: 'Fiber Unli 2099', speed: '400 Mbps', price: '2,099', features: ['Unlimited Data', 'Mesh Wifi', 'Priority Support'] },
-    { name: 'Fiber Unli 2699', speed: '600 Mbps', price: '2,699', features: ['Unlimited Data', '2x Mesh Wifi', 'Streaming Box'] },
+    { name: 'Fiber Starter', speed: '50 Mbps', price: '999', features: ['Unlimited Data', 'Free Installation'] },
+    { name: 'Fiber Pro', speed: '100 Mbps', price: '1499', features: ['Unlimited Data', 'Priority Support'] },
   ];
 
   return (
     <div className="min-h-screen bg-white font-sans text-slate-800">
-      {/* 1. NAVBAR */}
-      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
-            <div className="flex items-center gap-2">
-              <div className="bg-red-600 p-2 rounded-lg">
-                <Wifi className="text-white h-6 w-6" />
-              </div>
-              <span className="font-black text-2xl tracking-tighter text-slate-900">
-                SwiftNet<span className="text-red-600">Home</span>
-              </span>
-            </div>
-            <div className="hidden md:flex items-center gap-8 font-bold text-sm text-slate-600">
-              <a href="#plans" className="hover:text-red-600 transition-colors">Internet Plans</a>
-              <a href="#support" className="hover:text-red-600 transition-colors">Support</a>
-              <a href="#coverage" className="hover:text-red-600 transition-colors">Coverage</a>
-            </div>
-            <button 
-              onClick={onLoginClick}
-              className="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-lg shadow-red-200"
-            >
-              My Account / Login
-            </button>
-          </div>
-        </div>
-      </nav>
+      {/* USE SHARED NAVBAR */}
+      <PublicNavbar onNavigate={onNavigate} onLogin={onLoginClick} activePage="landing" />
 
-      {/* 2. HERO SECTION */}
+      {/* HERO */}
       <div className="relative bg-slate-900 overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-40"></div>
         <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/80 to-transparent"></div>
-        
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 lg:py-48 flex items-center">
           <div className="max-w-2xl">
             <h1 className="text-5xl lg:text-7xl font-black text-white mb-6 leading-tight">
               Experience <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-500">Unstoppable</span> Speed.
             </h1>
             <p className="text-xl text-slate-300 mb-8 leading-relaxed">
-              Connect your home to the fastest fiber network. Stream in 4K, game without lag, and work efficiently with SwiftNet Home Fiber.
+              Connect your home to the fastest fiber network. Stream in 4K, game without lag, and work efficiently.
             </p>
             <div className="flex gap-4">
-              <a href="#plans" className="bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-full font-bold text-lg transition-all shadow-xl hover:shadow-red-500/20">
+              <button onClick={() => onNavigate('plans')} className="bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-full font-bold text-lg transition-all shadow-xl hover:shadow-red-500/20">
                 View Plans
-              </a>
-              <button onClick={onLoginClick} className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white px-8 py-4 rounded-full font-bold text-lg transition-all">
-                Manage Account
+              </button>
+              <button onClick={() => onNavigate('coverage')} className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white px-8 py-4 rounded-full font-bold text-lg transition-all">
+                Check Availability
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 3. PLANS SECTION */}
-      <div id="plans" className="py-24 bg-slate-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl lg:text-4xl font-black text-slate-900 mb-4">Find the Perfect Plan for You</h2>
-            <p className="text-slate-500">No data caps. Consistent speeds. 24/7 Support.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {displayPlans.map((plan, idx) => (
-              <div key={idx} className="bg-white rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all border border-slate-100 relative group hover:-translate-y-2 duration-300">
-                {idx === 1 && <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-red-600 text-white text-xs font-bold px-4 py-1 rounded-full uppercase tracking-wider shadow-lg">Best Seller</div>}
-                
-                <h3 className="text-xl font-bold text-slate-500 uppercase tracking-widest mb-4">{plan.name}</h3>
-                <div className="flex items-baseline mb-6">
-                  <span className="text-5xl font-black text-slate-900">{plan.speed || '100 Mbps'}</span>
-                </div>
-                
-                <div className="text-3xl font-bold text-red-600 mb-8">
-                  ₱{plan.price || '1,699'}<span className="text-sm text-slate-400 font-medium">/mo</span>
-                </div>
-
-                <ul className="space-y-4 mb-8">
-                  {(plan.features || ['Unlimited Data', 'High Speed', 'Fiber Technology']).map((feat, i) => (
-                    <li key={i} className="flex items-center gap-3 text-slate-600 font-medium">
-                      <div className="bg-green-100 p-1 rounded-full text-green-600"><Check size={14} strokeWidth={3} /></div>
-                      {feat}
-                    </li>
-                  ))}
-                </ul>
-
-                <button onClick={onLoginClick} className="w-full py-4 rounded-xl font-bold text-white bg-slate-900 hover:bg-red-600 transition-colors">
-                  Apply Now
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 4. FEATURES GRID */}
+      {/* FEATURES PREVIEW */}
       <div className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto bg-red-50 rounded-2xl flex items-center justify-center text-red-600 mb-6">
-                <Wifi size={32} />
-              </div>
-              <h4 className="font-bold text-xl mb-2">Whole Home WiFi</h4>
-              <p className="text-slate-500 leading-relaxed">Dead spots are a thing of the past with our advanced mesh technology.</p>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl font-black text-slate-900 mb-12">Why Choose SwiftNet?</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="p-6">
+              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4"><Zap size={32}/></div>
+              <h3 className="font-bold text-xl mb-2">Lightning Fast</h3>
+              <p className="text-slate-500">Up to 1Gbps dedicated fiber speeds.</p>
             </div>
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 mb-6">
-                <Zap size={32} />
-              </div>
-              <h4 className="font-bold text-xl mb-2">Gaming Optimized</h4>
-              <p className="text-slate-500 leading-relaxed">Low latency routing ensures you stay ahead of the competition.</p>
+            <div className="p-6">
+              <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4"><ShieldCheck size={32}/></div>
+              <h3 className="font-bold text-xl mb-2">Secure & Reliable</h3>
+              <p className="text-slate-500">99.9% Uptime guarantee with secure routing.</p>
             </div>
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 mb-6">
-                <PlayCircle size={32} />
-              </div>
-              <h4 className="font-bold text-xl mb-2">4K Streaming</h4>
-              <p className="text-slate-500 leading-relaxed">Buffer-free entertainment for the whole family on multiple devices.</p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600 mb-6">
-                <ShieldCheck size={32} />
-              </div>
-              <h4 className="font-bold text-xl mb-2">Secure Network</h4>
-              <p className="text-slate-500 leading-relaxed">Enterprise-grade security to keep your personal data safe.</p>
+            <div className="p-6">
+              <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4"><Headphones size={32}/></div>
+              <h3 className="font-bold text-xl mb-2">24/7 Support</h3>
+              <p className="text-slate-500">Real human support whenever you need it.</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 5. FOOTER */}
+      {/* FOOTER (With links wired up) */}
       <footer className="bg-slate-900 text-slate-400 py-12 border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="col-span-1 md:col-span-2">
-            <span className="font-black text-2xl tracking-tighter text-white block mb-4">
-              SwiftNet<span className="text-red-600">ISP</span>
-            </span>
-            <p className="max-w-xs">Connecting communities with the speed of light. The Philippines' fastest growing fiber network.</p>
+            <span className="font-black text-2xl tracking-tighter text-white block mb-4">SwiftNet<span className="text-red-600">ISP</span></span>
+            <p className="max-w-xs">Connecting communities with the speed of light.</p>
           </div>
           <div>
             <h5 className="text-white font-bold mb-4 uppercase text-sm tracking-wider">Quick Links</h5>
             <ul className="space-y-2 text-sm">
-              <li><a href="#" className="hover:text-white">About Us</a></li>
-              <li><a href="#" className="hover:text-white">Our Plans</a></li>
-              <li><a href="#" className="hover:text-white">Check Coverage</a></li>
-              <li><a href="#" className="hover:text-white">Privacy Policy</a></li>
+              <li><button onClick={() => onNavigate('about')} className="hover:text-white">About Us</button></li>
+              <li><button onClick={() => onNavigate('plans')} className="hover:text-white">Our Plans</button></li>
+              <li><button onClick={() => onNavigate('coverage')} className="hover:text-white">Check Coverage</button></li>
+              <li><button onClick={() => onNavigate('privacy')} className="hover:text-white">Privacy Policy</button></li>
             </ul>
           </div>
           <div>
@@ -4236,28 +4362,24 @@ const LandingPage = ({ onLoginClick, plans }) => {
             <ul className="space-y-2 text-sm">
               <li className="flex items-center gap-2"><Phone size={14}/> 0968-385-9759</li>
               <li className="flex items-center gap-2"><Mail size={14}/> ramoshowardkingsley58@gmail.com</li>
-              <li className="flex items-center gap-2"><MapPin size={14}/> Pasay City, Metro Manila</li>
             </ul>
           </div>
-        </div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 pt-8 border-t border-slate-800 text-center text-xs">
-          &copy; 2025 SwiftNet ISP. All rights reserved.
         </div>
       </footer>
     </div>
   );
 };
-
 // 6. Main App Logic
 // 6. Main App Logic
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  
-  // --- NEW STATE FOR LANDING PAGE ---
   const [showLogin, setShowLogin] = useState(false);
-  const [plans, setPlans] = useState([]); // Moved plans up here to share with Landing Page
+  
+  // --- NEW STATE FOR PUBLIC NAVIGATION ---
+  const [publicPage, setPublicPage] = useState('landing'); // 'landing', 'support', 'coverage', 'plans', 'about', 'privacy'
 
+  const [plans, setPlans] = useState([]);
   const [subscribers, setSubscribers] = useState([]);
   const [mySubscriberData, setMySubscriberData] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
@@ -4360,7 +4482,12 @@ export default function App() {
 
   const handleLogout = async () => {
       await signOut(auth);
-      setShowLogin(false); // Reset to landing page on logout
+      setShowLogin(false);
+      setPublicPage('landing'); // Go back to landing page
+  };
+
+  const handleLoginClick = () => {
+    setShowLogin(true);
   };
 
   const handlePayment = async (id, refNumber) => {
@@ -4395,37 +4522,53 @@ export default function App() {
       } catch(e) { console.error(e); alert("Failed to confirm."); }
   };
 
+  // --- RENDER LOGIC ---
+
   if (loading) return <div className="min-h-screen flex items-center justify-center text-red-600 font-bold bg-white">Loading SwiftNet Home...</div>;
 
-  // --- LOGIC: If not logged in and not clicking login, show LANDING PAGE ---
-  if (!user && !showLogin) {
-      return <LandingPage onLoginClick={() => setShowLogin(true)} plans={plans} />;
+  // 1. If User is Logged In -> Show Dashboard
+  if (user) {
+    return (
+      <Layout user={user} onLogout={handleLogout}>
+        {user.role === 'admin' ? (
+          <AdminDashboard subscribers={subscribers} announcements={announcements} payments={payments} tickets={tickets} repairs={repairs} user={user} />
+        ) : user.role === 'cashier' ? (
+          <CashierDashboard subscribers={subscribers} db={db} appId={appId} />
+        ) : user.role === 'technician' ? (
+          <TechnicianDashboard repairs={repairs} onTechUpdate={handleTechUpdateStatus} />
+        ) : (
+          <SubscriberDashboard userData={mySubscriberData || {}} onPay={handlePayment} announcements={announcements} notifications={notifications} tickets={tickets} repairs={repairs} onConfirmRepair={handleConfirmRepair} />
+        )}
+      </Layout>
+    );
   }
 
-  // --- LOGIC: If not logged in but clicked Login, show LOGIN FORM ---
-  if (!user && showLogin) {
-      return (
-        <div className="relative">
-            <Login onLogin={() => {}} />
-            <button onClick={() => setShowLogin(false)} className="fixed top-6 right-6 text-white bg-black/20 hover:bg-black/40 p-2 rounded-full z-50">
-                <X size={24} />
-            </button>
-        </div>
-      );
+  // 2. If User is NOT Logged In but clicked "Login" -> Show Login Modal
+  if (showLogin) {
+    return (
+      <div className="relative">
+        <Login onLogin={() => {}} />
+        <button onClick={() => setShowLogin(false)} className="fixed top-6 right-6 text-white bg-black/20 hover:bg-black/40 p-2 rounded-full z-50">
+          <X size={24} />
+        </button>
+      </div>
+    );
   }
 
-  // --- LOGIC: If logged in, show DASHBOARD ---
-  return (
-    <Layout user={user} onLogout={handleLogout}>
-      {user.role === 'admin' ? (
-        <AdminDashboard subscribers={subscribers} announcements={announcements} payments={payments} tickets={tickets} repairs={repairs} user={user} />
-      ) : user.role === 'cashier' ? (
-        <CashierDashboard subscribers={subscribers} db={db} appId={appId} />
-      ) : user.role === 'technician' ? (
-        <TechnicianDashboard repairs={repairs} onTechUpdate={handleTechUpdateStatus} />
-      ) : (
-        <SubscriberDashboard userData={mySubscriberData || {}} onPay={handlePayment} announcements={announcements} notifications={notifications} tickets={tickets} repairs={repairs} onConfirmRepair={handleConfirmRepair} />
-      )}
-    </Layout>
-  );
+  // 3. If User is NOT Logged In -> Show Public Pages based on State
+  switch (publicPage) {
+    case 'support':
+      return <SupportPage onNavigate={setPublicPage} onLogin={handleLoginClick} />;
+    case 'coverage':
+      return <CoveragePage onNavigate={setPublicPage} onLogin={handleLoginClick} db={db} appId={appId} />;
+    case 'plans':
+      return <PlansPage onNavigate={setPublicPage} onLogin={handleLoginClick} plans={plans} />;
+    case 'about':
+      return <AboutPage onNavigate={setPublicPage} onLogin={handleLoginClick} />;
+    case 'privacy':
+      return <PrivacyPage onNavigate={setPublicPage} onLogin={handleLoginClick} />;
+    default:
+      // Default to Landing Page
+      return <LandingPage onLoginClick={handleLoginClick} onNavigate={setPublicPage} plans={plans} />;
+  }
 }
