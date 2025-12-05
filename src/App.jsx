@@ -37,7 +37,6 @@ import { 
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import SignatureCanvas from 'react-signature-canvas';
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { 
   Wifi, CreditCard, User, LogOut, Shield, CheckCircle, AlertCircle, 
   Smartphone, Activity, Search, Menu, X, Plus, Settings, Trash2, Zap, 
@@ -76,7 +75,6 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
   measurementId: "G-7S6DBEDDMP"
 };
 
-const genAI = new GoogleGenerativeAI("AIzaSyDcgcNxJCMtQQlEyTaEbkONoQbpOm7psH4");
 
 // Initialize Default App
 const app = initializeApp(firebaseConfig);
@@ -954,7 +952,6 @@ const Layout = ({ children, user, onLogout }) => {
         {children}
       </main>
 
-      {user && user.role === 'subscriber' && <AIChatSupport user={user} />}
       
       <BackgroundMusic />
     </div>
