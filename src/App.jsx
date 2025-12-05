@@ -61,6 +61,7 @@ import {
   Wallet, ArrowRightLeft, ArrowUpRight, ArrowDownLeft,
   ToggleLeft, ToggleRight,
   Server, Cloud, Copy, Phone,
+  Headphones,
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
