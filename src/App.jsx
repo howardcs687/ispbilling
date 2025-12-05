@@ -3478,6 +3478,59 @@ const NetworkStatusManager = ({ db, appId }) => {
   );
 };
 
+const PlanManageModal = ({ plan, onClose, onSave }) => {
+  const [formData, setFormData] = useState({
+    name: plan?.name || '',
+    price: plan?.price || '',
+    speed: plan?.speed || '',
+    features: plan?.features ? plan.features.join(', ') : '' // Convert array to string for editing
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({
+      ...formData,
+      // Convert comma-separated string back to array
+      features: formData.features.split(',').map(f => f.trim()).filter(f => f !== '') 
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="font-bold text-slate-800 text-xl">{plan ? 'Edit Plan' : 'Create New Plan'}</h3>
+          <button onClick={onClose}><X className="text-slate-400 hover:text-slate-600" /></button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Plan Name</label>
+            <input className="w-full border p-3 rounded-xl" placeholder="e.g. Fiber Unli 1699" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Price (₱)</label>
+              <input type="number" className="w-full border p-3 rounded-xl" placeholder="1699" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} required />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Speed</label>
+              <input className="w-full border p-3 rounded-xl" placeholder="200 Mbps" value={formData.speed} onChange={e => setFormData({...formData, speed: e.target.value})} required />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Features (Comma separated)</label>
+            <textarea className="w-full border p-3 rounded-xl h-24" placeholder="Unlimited Data, Free Modem, Netflix Ready" value={formData.features} onChange={e => setFormData({...formData, features: e.target.value})} />
+          </div>
+          <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all">
+            {plan ? 'Update Plan' : 'Create Plan'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs, user }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -3494,6 +3547,8 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [replyText, setReplyText] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
   const [plans, setPlans] = useState([]);
+  const [editingPlan, setEditingPlan] = useState(null); // The plan object being edited
+  const [isPlanModalOpen, setIsPlanModalOpen] = useState(false); // Controls modal visibility
   const [newPlanName, setNewPlanName] = useState('');
   const [technicians, setTechnicians] = useState([]); 
   const [newUser, setNewUser] = useState({ email: '', password: '', username: '', accountNumber: '', plan: '' });
@@ -3579,7 +3634,32 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const handleAddSubscriber = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "Secondary"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newUser.email, newUser.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newUser.username, email: newUser.email, accountNumber: newUser.accountNumber, plan: newUser.plan || (plans[0] ? plans[0].name : 'Basic'), balance: 0, status: 'active', role: 'subscriber', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddModal(false); alert("Success"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
   const handleAddAdmin = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "SecondaryAdmin"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newAdmin.email, newAdmin.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newAdmin.username, email: newAdmin.email, role: 'admin', accountNumber: 'ADMIN', plan: 'N/A', balance: 0, status: 'active', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddAdminModal(false); alert("Admin created"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
   const handleAddTechnician = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "SecondaryTech"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newTech.email, newTech.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newTech.username, email: newTech.email, role: 'technician', accountNumber: 'TECH', plan: 'N/A', balance: 0, status: 'active', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddTechModal(false); alert("Technician created!"); } catch(e) { alert(e.message); } setIsCreatingUser(false); };
-  const handleAddPlan = async (e) => { e.preventDefault(); if(!newPlanName) return; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION), { name: newPlanName }); setNewPlanName(''); };
+  const openNewPlanModal = () => {
+    setEditingPlan(null);
+    setIsPlanModalOpen(true);
+  };
+
+  const openEditPlanModal = (plan) => {
+    setEditingPlan(plan);
+    setIsPlanModalOpen(true);
+  };
+
+  const handleSavePlan = async (planData) => {
+    try {
+      if (editingPlan) {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION, editingPlan.id), planData);
+        alert("Plan updated successfully!");
+      } else {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION), planData);
+        alert("New plan created!");
+      }
+      setIsPlanModalOpen(false);
+      setEditingPlan(null);
+    } catch (e) {
+      console.error(e);
+      alert("Error saving plan: " + e.message);
+    }
+  };
   const handleDeletePlan = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION, id)); };
   const handlePostAnnouncement = async (e) => { e.preventDefault(); if(!newAnnouncement.title) return; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), { ...newAnnouncement, date: new Date().toISOString() }); setShowAnnounceModal(false); };
   const handleUpdateDueDate = async (e) => { e.preventDefault(); if (!showDateModal || !newDueDate) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, showDateModal.id); await updateDoc(docRef, { dueDate: new Date(newDueDate).toISOString() }); alert("Due date updated successfully!"); setShowDateModal(null); } catch(e) { console.error(e); alert("Failed to update date: " + e.message); } };
@@ -3791,7 +3871,59 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
             <div className="pt-8 border-t border-slate-200"><h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><Clock size={18}/> Job History</h3>{historyRepairs && historyRepairs.length > 0 ? (<div className="grid grid-cols-1 md:grid-cols-2 gap-4">{historyRepairs.map(repair => (<RepairStatusCard key={repair.id} repair={repair} isSubscriber={false} />))}</div>) : <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-100 text-slate-400 text-sm">No completed history.</div>}</div>
          </div>
       )}
-       {activeTab === 'plans' && <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><h3 className="font-bold mb-4">Manage Plans</h3><div className="space-y-2">{plans.map(p=><div key={p.id} className="flex justify-between items-center border-b pb-2"><span>{p.name}</span><button onClick={()=>handleDeletePlan(p.id)} className="text-red-500"><Trash2 size={14}/></button></div>)}</div><form className="mt-4 flex gap-2" onSubmit={handleAddPlan}><input className="border p-2 rounded text-sm" placeholder="New Plan" value={newPlanName} onChange={e=>setNewPlanName(e.target.value)}/><button className="bg-blue-600 text-white px-4 py-2 rounded text-sm">Add</button></form></div>}
+        {activeTab === 'plans' && (
+  <div className="space-y-6">
+    <div className="flex justify-between items-center">
+      <div>
+        <h2 className="text-2xl font-bold text-slate-800">Internet Plans</h2>
+        <p className="text-sm text-slate-500">These plans appear on the Landing Page.</p>
+      </div>
+      <button onClick={openNewPlanModal} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-blue-700 shadow-lg">
+        <Plus size={18}/> Add Plan
+      </button>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {plans.map((p) => (
+        <div key={p.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 relative group hover:shadow-md transition-all">
+          <div className="flex justify-between items-start mb-4">
+            <h3 className="font-bold text-xl text-slate-800">{p.name}</h3>
+            <div className="flex gap-2">
+              <button onClick={() => openEditPlanModal(p)} className="text-slate-400 hover:text-blue-600"><Edit size={18}/></button>
+              <button onClick={() => handleDeletePlan(p.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={18}/></button>
+            </div>
+          </div>
+          
+          <div className="text-3xl font-black text-blue-600 mb-2">
+            ₱{p.price || '0'}<span className="text-sm text-slate-400 font-medium">/mo</span>
+          </div>
+          <div className="font-bold text-slate-700 mb-4 flex items-center gap-2">
+            <Zap size={16} className="text-yellow-500"/> {p.speed || 'N/A'}
+          </div>
+
+          <div className="space-y-2 border-t border-slate-100 pt-4">
+            {p.features && p.features.map((feat, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm text-slate-600">
+                <Check size={14} className="text-green-500"/> {feat}
+              </div>
+            ))}
+            {(!p.features || p.features.length === 0) && <span className="text-xs text-slate-400 italic">No features listed</span>}
+          </div>
+        </div>
+      ))}
+      {plans.length === 0 && <p className="col-span-full text-center text-slate-400 py-10">No plans configured yet.</p>}
+    </div>
+
+    {/* Render the Modal */}
+    {isPlanModalOpen && (
+      <PlanManageModal 
+        plan={editingPlan} 
+        onClose={() => setIsPlanModalOpen(false)} 
+        onSave={handleSavePlan} 
+      />
+    )}
+  </div>
+)}
        {activeTab === 'payments' && (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
           <h3 className="font-bold mb-4 text-slate-800">Payments & Verifications</h3>
