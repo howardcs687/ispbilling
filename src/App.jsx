@@ -61,7 +61,7 @@ import {
   Wallet, ArrowRightLeft, ArrowUpRight, ArrowDownLeft,
   ToggleLeft, ToggleRight,
   Server, Cloud, Copy, Phone,
-  Headphones, Bot, Sparkles, 
+  Headphones,
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -74,7 +74,6 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
   appId: "1:811380345374:web:cf70cc43c6037280867c0f",
   measurementId: "G-7S6DBEDDMP"
 };
-
 
 // Initialize Default App
 const app = initializeApp(firebaseConfig);
@@ -106,7 +105,10 @@ const SMS_QUEUE_COLLECTION = 'isp_sms_queue_v1';
 const SMS_COLLECTION = 'isp_sms_logs_v1';
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
-
+// --- Helper Functions ---
+// --- Email Configuration ---
+// REPLACE THESE WITH YOUR ACTUAL EMAILJS KEYS
+// --- Email Configuration (Master Template Version) ---
 const EMAIL_CONFIG = {
   serviceID: 'service_rku0sea',       // Get from EmailJS Dashboard
   publicKey: 'gULI8936r5B6AVPx1',       // Get from Account > API Keys
@@ -671,155 +673,6 @@ const BackgroundMusic = () => {
   );
 };
 
-const AIChatSupport = ({ user }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [messages, setMessages] = useState([
-    { 
-      id: 1, 
-      text: `Hi ${user.username}! I'm SwiftBot (Powered by Howard). I can answer questions about your billing, technical issues, or account details.`, 
-      sender: 'bot' 
-    }
-  ]);
-
-  const messagesEndRef = React.useRef(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isOpen]);
-
-  const handleSend = async (e) => {
-    e.preventDefault();
-    if (!input.trim()) return;
-
-    // 1. Display User Message
-    const userText = input;
-    setMessages(prev => [...prev, { id: Date.now(), text: userText, sender: 'user' }]);
-    setInput('');
-    setIsTyping(true);
-
-    try {
-        // 2. Prepare the "Brain" (System Prompt)
-        // We feed the AI the user's live data so it acts like a real agent.
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-        
-        const systemContext = `
-          You are SwiftBot, a helpful and polite customer support AI for an internet provider called SwiftNet.
-          
-          CURRENT USER DATA:
-          - Name: ${user.username}
-          - Plan: ${user.plan || 'No Plan'}
-          - Balance: ₱${user.balance?.toLocaleString() || 0}
-          - Account Status: ${user.status}
-          - Account Number: ${user.accountNumber}
-          
-          INSTRUCTIONS:
-          - Answer the user's question concisely (under 3 sentences if possible).
-          - If they ask about their bill, explicitly mention their current balance from the data above.
-          - If they have internet problems, suggest checking the 'Auto-Tech' tab or restarting their router.
-          - Be empathetic but professional.
-          
-          User Question: "${userText}"
-        `;
-
-        // 3. Call the Real API
-        const result = await model.generateContent(systemContext);
-        const response = await result.response;
-        const text = response.text();
-
-        // 4. Display AI Response
-        setMessages(prev => [...prev, { id: Date.now() + 1, text: text, sender: 'bot' }]);
-    } catch (error) {
-        console.error("AI Error:", error);
-        setMessages(prev => [...prev, { id: Date.now() + 1, text: "I'm having trouble connecting to the server right now. Please try again.", sender: 'bot' }]);
-    } finally {
-        setIsTyping(false);
-    }
-  };
-
-  return (
-    <>
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-50 bg-gradient-to-tr from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white p-4 rounded-full shadow-2xl transition-all hover:scale-110 flex items-center justify-center border-2 border-white/20"
-      >
-        {isOpen ? <X size={24}/> : <Bot size={24}/>}
-      </button>
-
-      {isOpen && (
-        <div className="fixed bottom-24 right-6 z-50 w-80 md:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in slide-in-from-bottom-10 fade-in duration-300 max-h-[600px]">
-          
-          {/* Header */}
-          <div className="bg-slate-900 p-4 flex items-center gap-3 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/20 rounded-full blur-xl"></div>
-            <div className="bg-white/10 p-2 rounded-lg backdrop-blur-sm z-10">
-                <Sparkles size={20} className="text-yellow-300"/>
-            </div>
-            <div className="z-10">
-                <h3 className="font-bold text-white text-sm">SwiftBot AI</h3>
-                <p className="text-slate-400 text-[10px] flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> 
-                    Live Agent (AI)
-                </p>
-            </div>
-          </div>
-
-          {/* Messages Area */}
-          <div className="flex-1 bg-slate-50 p-4 overflow-y-auto h-80 space-y-4 custom-scrollbar">
-            {messages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    {msg.sender === 'bot' && (
-                        <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 mr-2 flex-shrink-0 border border-indigo-200">
-                            <Bot size={16}/>
-                        </div>
-                    )}
-                    <div className={`max-w-[80%] p-3 text-sm rounded-2xl shadow-sm leading-relaxed ${msg.sender === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white border border-slate-200 text-slate-700 rounded-tl-none'}`}>
-                        {msg.text}
-                    </div>
-                </div>
-            ))}
-            {isTyping && (
-                <div className="flex justify-start">
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 mr-2 border border-indigo-200"><Bot size={16}/></div>
-                    <div className="bg-white border border-slate-200 p-3 rounded-2xl rounded-tl-none shadow-sm flex gap-1 items-center">
-                        <span className="text-xs text-slate-400 font-bold mr-2">Thinking</span>
-                        <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></div>
-                        <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-100"></div>
-                        <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-200"></div>
-                    </div>
-                </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input Area */}
-          <form onSubmit={handleSend} className="p-3 bg-white border-t border-slate-100 flex gap-2">
-            <input 
-                className="flex-1 bg-slate-100 border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                placeholder="Type your concern..."
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                disabled={isTyping}
-            />
-            <button 
-                type="submit" 
-                disabled={!input.trim() || isTyping}
-                className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                <Send size={18} />
-            </button>
-          </form>
-        </div>
-      )}
-    </>
-  );
-};
-
 const Layout = ({ children, user, onLogout }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // Initialize dark mode from localStorage or default to false
@@ -951,7 +804,6 @@ const Layout = ({ children, user, onLogout }) => {
       <main className="flex-grow w-full px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {children}
       </main>
-
       
       <BackgroundMusic />
     </div>
