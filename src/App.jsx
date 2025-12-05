@@ -4569,7 +4569,7 @@ export default function App() {
     case 'privacy':
       return <PrivacyPage onNavigate={setPublicPage} onLogin={handleLoginClick} />;
     default:
-      // Default to Landing Page
+ 
       return <LandingPage onLoginClick={handleLoginClick} onNavigate={setPublicPage} plans={plans} />;
   }
 }
