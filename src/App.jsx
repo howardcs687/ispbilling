@@ -69,7 +69,7 @@ import {
   Headphones,
 } from 'lucide-react';
 
-// --- Firebase Configuration ---
+// --- Firebase Configuration --
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
   apiKey: "AIzaSyDMPhjrmo-TnAoVoIBedOimkaUswrLZNp8",
   authDomain: "swiftnet-isp.firebaseapp.com",
