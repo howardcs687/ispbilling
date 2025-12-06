@@ -3610,6 +3610,89 @@ const PlanManageModal = ({ plan, onClose, onSave }) => {
   );
 };
 
+// --- USER TRAFFIC TABLE COMPONENT ---
+const UserTrafficTable = ({ app }) => {
+  const [users, setUsers] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    const db = getDatabase(app);
+    const queuesRef = ref(db, 'monitor/queues');
+
+    const unsubscribe = onValue(queuesRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            // Convert object { "User1": {...}, "User2": {...} } to Array
+            const userList = Object.keys(data).map(key => ({
+                name: key,
+                ...data[key]
+            }));
+            setUsers(userList);
+        }
+    });
+    return () => unsubscribe();
+  }, [app]);
+
+  const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  return (
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mt-6 animate-in fade-in">
+        <div className="flex justify-between items-center mb-4">
+            <div>
+                <h3 className="font-bold text-slate-800">Live Subscriber Monitor</h3>
+                <p className="text-xs text-slate-500">Real-time stats from MikroTik Simple Queues.</p>
+            </div>
+            <input 
+                placeholder="Search User..." 
+                className="border p-2 rounded-lg text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+            />
+        </div>
+
+        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+            <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-500 sticky top-0">
+                    <tr>
+                        <th className="p-3">Subscriber Name</th>
+                        <th className="p-3 text-right">Download (Live)</th>
+                        <th className="p-3 text-right">Upload (Live)</th>
+                        <th className="p-3 text-right">Total Usage (Session)</th>
+                        <th className="p-3 text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {filteredUsers.map((user, i) => (
+                        <tr key={i} className="hover:bg-blue-50 transition-colors">
+                            <td className="p-3 font-bold text-slate-700">{user.name}</td>
+                            <td className="p-3 text-right font-mono text-blue-600 font-bold">
+                                {user.dl} <span className="text-xs text-slate-400">Mbps</span>
+                            </td>
+                            <td className="p-3 text-right font-mono text-green-600 font-bold">
+                                {user.ul} <span className="text-xs text-slate-400">Mbps</span>
+                            </td>
+                            <td className="p-3 text-right font-mono text-slate-800">
+                                {(user.usage / 1024).toFixed(2)} <span className="text-xs text-slate-400">GB</span>
+                            </td>
+                            <td className="p-3 text-center">
+                                {user.dl > 0.1 || user.ul > 0.1 ? (
+                                    <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-[10px] font-bold uppercase animate-pulse">Online</span>
+                                ) : (
+                                    <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded-full text-[10px] font-bold uppercase">Idle</span>
+                                )}
+                            </td>
+                        </tr>
+                    ))}
+                    {filteredUsers.length === 0 && (
+                        <tr><td colSpan="5" className="p-8 text-center text-slate-400">No active queues found in MikroTik.</td></tr>
+                    )}
+                </tbody>
+            </table>
+        </div>
+    </div>
+  );
+};
+
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs, user }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -3898,7 +3981,8 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                <div className="flex justify-between items-center">
                    <div><h2 className="text-2xl font-bold text-slate-800">Network Status Center</h2><p className="text-sm text-slate-500">Manage service outages and maintenance alerts.</p></div>
                </div>
-
+              {/* NEW: The Individual User Table */}
+              <UserTrafficTable app={app} />
                <LiveTrafficWidget />
                
                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
