@@ -3490,6 +3490,10 @@ const NetworkStatusManager = ({ db, appId }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in">
+
+      {/* --- NEW: ADDED LIVE USER TABLE HERE --- */}
+        <UserTrafficTable app={app} />
+        
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
                 <Activity className="text-blue-600"/> Network Control Center
