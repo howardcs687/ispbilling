@@ -4214,32 +4214,44 @@ const CoveragePage = ({ onNavigate, onLogin, db, appId }) => {
 };
 
 // --- 3. PLANS PAGE ---
-const PlansPage = ({ onNavigate, onLogin, plans }) => (
-  <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
-    <PublicNavbar onNavigate={onNavigate} onLogin={onLogin} activePage="plans" />
-    <div className="max-w-7xl mx-auto px-4 py-16">
-      <div className="text-center mb-16">
-        <h1 className="text-4xl font-black text-slate-900 mb-4">Unstoppable Fiber Plans</h1>
-        <p className="text-slate-500">Choose the speed that fits your lifestyle.</p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {plans.map((plan, idx) => (
-          <div key={idx} className="bg-white rounded-3xl p-8 shadow-xl border border-slate-100 hover:-translate-y-2 transition-transform duration-300">
-            <h3 className="text-xl font-bold text-slate-500 uppercase tracking-widest mb-4">{plan.name}</h3>
-            <div className="text-5xl font-black text-slate-900 mb-6">{plan.speed}</div>
-            <div className="text-3xl font-bold text-red-600 mb-8">₱{plan.price}<span className="text-sm text-slate-400">/mo</span></div>
-            <ul className="space-y-4 mb-8">
-              {plan.features?.map((f, i) => (
-                <li key={i} className="flex items-center gap-3 text-slate-600"><Check size={18} className="text-green-500"/> {f}</li>
-              ))}
-            </ul>
-            <button onClick={onLogin} className="w-full py-4 rounded-xl font-bold text-white bg-slate-900 hover:bg-red-600 transition-colors">Apply Now</button>
-          </div>
-        ))}
+const PlansPage = ({ onNavigate, onLogin, plans }) => {
+  
+  // 🔴 PASTE YOUR GOOGLE FORM LINK HERE
+  const GOOGLE_FORM_LINK = "https://docs.google.com/forms/d/e/1FAIpQLSf6mi60XHqiD7cVTBGJGSl8a7-HWXM3uy9wL7C1eTbWvQNLXA/viewform?usp=header"; 
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
+      <PublicNavbar onNavigate={onNavigate} onLogin={onLogin} activePage="plans" />
+      <div className="max-w-7xl mx-auto px-4 py-16">
+        <div className="text-center mb-16">
+          <h1 className="text-4xl font-black text-slate-900 mb-4">Unstoppable Fiber Plans</h1>
+          <p className="text-slate-500">Choose the speed that fits your lifestyle.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {plans.map((plan, idx) => (
+            <div key={idx} className="bg-white rounded-3xl p-8 shadow-xl border border-slate-100 hover:-translate-y-2 transition-transform duration-300">
+              <h3 className="text-xl font-bold text-slate-500 uppercase tracking-widest mb-4">{plan.name}</h3>
+              <div className="text-5xl font-black text-slate-900 mb-6">{plan.speed}</div>
+              <div className="text-3xl font-bold text-red-600 mb-8">₱{plan.price}<span className="text-sm text-slate-400">/mo</span></div>
+              <ul className="space-y-4 mb-8">
+                {plan.features?.map((f, i) => (
+                  <li key={i} className="flex items-center gap-3 text-slate-600"><Check size={18} className="text-green-500"/> {f}</li>
+                ))}
+              </ul>
+              {/* --- UPDATE: Changed onClick to open Google Form --- */}
+              <button 
+                onClick={() => window.open(GOOGLE_FORM_LINK, '_blank')} 
+                className="w-full py-4 rounded-xl font-bold text-white bg-slate-900 hover:bg-red-600 transition-colors"
+              >
+                Apply Now
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 // --- 4. ABOUT PAGE ---
 const AboutPage = ({ onNavigate, onLogin }) => (
