@@ -3896,6 +3896,9 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                <div className="flex justify-between items-center">
                    <div><h2 className="text-2xl font-bold text-slate-800">Network Status Center</h2><p className="text-sm text-slate-500">Manage service outages and maintenance alerts.</p></div>
                </div>
+
+               <LiveTrafficWidget />
+               
                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                    <h3 className="font-bold mb-4">Post New Outage/Alert</h3>
                    <form onSubmit={handlePostOutage} className="flex gap-4 items-end">
