@@ -73,7 +73,7 @@ import {
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
   apiKey: "AIzaSyDMPhjrmo-TnAoVoIBedOimkaUswrLZNp8",
   authDomain: "swiftnet-isp.firebaseapp.com",
-  databaseURL: "https://YOUR-FIREBASE-DB-URL-HERE.firebasedatabase.app",
+  databaseURL: "https://swiftnet-isp-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "swiftnet-isp",
   storageBucket: "swiftnet-isp.firebasestorage.app",
   messagingSenderId: "811380345374",
