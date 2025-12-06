@@ -3496,6 +3496,8 @@ const NetworkStatusManager = ({ db, appId }) => {
             </h3>
 
             <div className="space-y-6">
+
+              <LiveTrafficWidget />
                 {/* Local Network */}
                 <div>
                     <div className="flex items-center gap-2 mb-2">
