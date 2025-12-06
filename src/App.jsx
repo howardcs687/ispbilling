@@ -66,7 +66,7 @@ import {
   Wallet, ArrowRightLeft, ArrowUpRight, ArrowDownLeft,
   ToggleLeft, ToggleRight,
   Server, Cloud, Copy, Phone,
-  Headphones,
+  Headphones, ArrowDownCircle, HardDrive,
 } from 'lucide-react';
 
 // --- Firebase Configuration --
@@ -3615,6 +3615,10 @@ const UserTrafficTable = ({ app }) => {
   const [users, setUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Define visual max limits for the bars (adjust these to match your average plan speeds)
+  const MAX_SPEED_SCALE = 50; // 50 Mbps = 100% bar width
+  const MAX_USAGE_SCALE = 100; // 100 GB = 100% bar width
+
   useEffect(() => {
     const db = getDatabase(app);
     const queuesRef = ref(db, 'monitor/queues');
@@ -3622,12 +3626,14 @@ const UserTrafficTable = ({ app }) => {
     const unsubscribe = onValue(queuesRef, (snapshot) => {
         const data = snapshot.val();
         if (data) {
-            // Convert object { "User1": {...}, "User2": {...} } to Array
             const userList = Object.keys(data).map(key => ({
-                name: key,
+                name: key.replace(/[<>]/g, ''), // Remove < > brackets for cleaner look
                 ...data[key]
             }));
-            setUsers(userList);
+            // Sort by active usage (Download speed) descending
+            setUsers(userList.sort((a, b) => b.dl - a.dl));
+        } else {
+            setUsers([]);
         }
     });
     return () => unsubscribe();
@@ -3635,56 +3641,103 @@ const UserTrafficTable = ({ app }) => {
 
   const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
+  // Helper Component for Bars
+  const SpeedBar = ({ value, colorClass, bgClass }) => {
+      // Calculate width percentage, cap at 100%
+      const width = Math.min((value / MAX_SPEED_SCALE) * 100, 100);
+      return (
+          <div className="w-full h-2 bg-slate-100 rounded-full mt-1 overflow-hidden">
+              <div 
+                  className={`h-full rounded-full transition-all duration-500 ${colorClass}`} 
+                  style={{ width: `${width}%` }}
+              ></div>
+          </div>
+      );
+  };
+
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mt-6 animate-in fade-in">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-6">
             <div>
-                <h3 className="font-bold text-slate-800">Live Subscriber Monitor</h3>
-                <p className="text-xs text-slate-500">Real-time stats from MikroTik Simple Queues.</p>
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                    <Activity size={20} className="text-blue-600"/> Live PPP Connections
+                </h3>
+                <p className="text-xs text-slate-500">Real-time bandwidth usage per subscriber.</p>
             </div>
             <input 
-                placeholder="Search User..." 
-                className="border p-2 rounded-lg text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Search Subscriber..." 
+                className="border p-2.5 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500 w-64"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
             />
         </div>
 
-        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-            <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-500 sticky top-0">
+        <div className="overflow-x-auto max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+            <table className="w-full text-left text-sm border-collapse">
+                <thead className="bg-slate-50 text-slate-500 sticky top-0 z-10 shadow-sm">
                     <tr>
-                        <th className="p-3">Subscriber Name</th>
-                        <th className="p-3 text-right">Download (Live)</th>
-                        <th className="p-3 text-right">Upload (Live)</th>
-                        <th className="p-3 text-right">Total Usage (Session)</th>
-                        <th className="p-3 text-center">Status</th>
+                        <th className="p-4 rounded-tl-xl font-bold uppercase text-xs tracking-wider">Subscriber</th>
+                        <th className="p-4 font-bold uppercase text-xs tracking-wider w-48">Download (Live)</th>
+                        <th className="p-4 font-bold uppercase text-xs tracking-wider w-48">Upload (Live)</th>
+                        <th className="p-4 font-bold uppercase text-xs tracking-wider w-48">Session Usage</th>
+                        <th className="p-4 rounded-tr-xl font-bold uppercase text-xs tracking-wider text-right">Uptime</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                     {filteredUsers.map((user, i) => (
-                        <tr key={i} className="hover:bg-blue-50 transition-colors">
-                            <td className="p-3 font-bold text-slate-700">{user.name}</td>
-                            <td className="p-3 text-right font-mono text-blue-600 font-bold">
-                                {user.dl} <span className="text-xs text-slate-400">Mbps</span>
+                        <tr key={i} className="hover:bg-blue-50/50 transition-colors group">
+                            <td className="p-4">
+                                <div className="font-bold text-slate-700 text-sm">{user.name}</div>
+                                <div className="text-[10px] text-slate-400 font-mono flex items-center gap-2">
+                                    {user.ip} <span className="w-1 h-1 rounded-full bg-slate-300"></span> {user.mac}
+                                </div>
                             </td>
-                            <td className="p-3 text-right font-mono text-green-600 font-bold">
-                                {user.ul} <span className="text-xs text-slate-400">Mbps</span>
+                            
+                            {/* DOWNLOAD BAR */}
+                            <td className="p-4">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className={`font-mono font-bold ${user.dl > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
+                                        {user.dl} <span className="text-[10px] text-slate-400">Mbps</span>
+                                    </span>
+                                    <ArrowDownCircle size={14} className={user.dl > 0 ? 'text-blue-500' : 'text-slate-200'}/>
+                                </div>
+                                <SpeedBar value={user.dl} colorClass="bg-blue-500" />
                             </td>
-                            <td className="p-3 text-right font-mono text-slate-800">
-                                {(user.usage / 1024).toFixed(2)} <span className="text-xs text-slate-400">GB</span>
+
+                            {/* UPLOAD BAR */}
+                            <td className="p-4">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className={`font-mono font-bold ${user.ul > 0 ? 'text-green-600' : 'text-slate-400'}`}>
+                                        {user.ul} <span className="text-[10px] text-slate-400">Mbps</span>
+                                    </span>
+                                    <ArrowUpCircle size={14} className={user.ul > 0 ? 'text-green-500' : 'text-slate-200'}/>
+                                </div>
+                                <SpeedBar value={user.ul} colorClass="bg-green-500" />
                             </td>
-                            <td className="p-3 text-center">
-                                {user.dl > 0.1 || user.ul > 0.1 ? (
-                                    <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-[10px] font-bold uppercase animate-pulse">Online</span>
-                                ) : (
-                                    <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded-full text-[10px] font-bold uppercase">Idle</span>
-                                )}
+
+                            {/* USAGE BAR */}
+                            <td className="p-4">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <HardDrive size={14} className="text-slate-400"/>
+                                    <span className="font-bold text-slate-700">
+                                        {user.usage > 1024 ? (user.usage/1024).toFixed(2) + " GB" : user.usage + " MB"}
+                                    </span>
+                                </div>
+                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                    {/* Converts MB to GB for the scale (user.usage / 1024) / 100GB Max * 100% */}
+                                    <div className="h-full bg-slate-400 rounded-full" style={{width: `${Math.min((user.usage/1024/MAX_USAGE_SCALE)*100, 100)}%`}}></div>
+                                </div>
+                            </td>
+
+                            <td className="p-4 text-right">
+                                <span className="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded">
+                                    {user.uptime}
+                                </span>
                             </td>
                         </tr>
                     ))}
                     {filteredUsers.length === 0 && (
-                        <tr><td colSpan="5" className="p-8 text-center text-slate-400">No active queues found in MikroTik.</td></tr>
+                        <tr><td colSpan="5" className="p-12 text-center text-slate-400">Waiting for data from MikroTik...</td></tr>
                     )}
                 </tbody>
             </table>
