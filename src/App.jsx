@@ -4127,13 +4127,13 @@ const SupportPage = ({ onNavigate, onLogin }) => (
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 text-center">
           <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600"><Mail size={24}/></div>
           <h3 className="font-bold text-lg mb-2">Email Support</h3>
-          <p className="text-slate-500">support@swiftnet.com</p>
+          <p className="text-slate-500">ramoshowardkingsley58@gmail.com</p>
           <p className="text-slate-400 text-sm mt-1">Response within 24 hours</p>
         </div>
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 text-center">
           <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4 text-orange-600"><MapPin size={24}/></div>
           <h3 className="font-bold text-lg mb-2">Visit Office</h3>
-          <p className="text-slate-500">Pasay City, Metro Manila</p>
+          <p className="text-slate-500">Santa Ana, Cagayan</p>
           <p className="text-slate-400 text-sm mt-1">Walk-ins Welcome</p>
         </div>
       </div>
