@@ -34,6 +34,7 @@ import { 
   getDocs,
   increment 
 } from 'firebase/firestore';
+import { getDatabase, ref, onValue } from "firebase/database";
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import SignatureCanvas from 'react-signature-canvas';
@@ -68,6 +69,7 @@ import {
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
   apiKey: "AIzaSyDMPhjrmo-TnAoVoIBedOimkaUswrLZNp8",
   authDomain: "swiftnet-isp.firebaseapp.com",
+  databaseURL: "https://YOUR-FIREBASE-DB-URL-HERE.firebasedatabase.app",
   projectId: "swiftnet-isp",
   storageBucket: "swiftnet-isp.firebasestorage.app",
   messagingSenderId: "811380345374",
@@ -1906,6 +1908,75 @@ const SmartDiagnostics = ({ user, db, appId, onTicketCreate }) => {
   );
 };
 
+// --- LIVE TRAFFIC WIDGET ---
+const LiveTrafficWidget = () => {
+  // Uses the global 'app' variable initialized at the top
+  const [data, setData] = useState([]);
+  const [currentSpeed, setCurrentSpeed] = useState({ rx: 0, tx: 0 });
+
+  useEffect(() => {
+    const db = getDatabase(app);
+    const trafficRef = ref(db, 'monitor/traffic');
+
+    const unsubscribe = onValue(trafficRef, (snapshot) => {
+        const traffic = snapshot.val();
+        if (traffic) {
+            const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            setCurrentSpeed({ rx: traffic.rx, tx: traffic.tx });
+            setData(prev => {
+                const newData = [...prev, { name: now, download: traffic.rx, upload: traffic.tx }];
+                if (newData.length > 20) newData.shift();
+                return newData;
+            });
+        }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  return (
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 animate-in fade-in w-full">
+        <div className="flex justify-between items-center mb-6">
+            <div>
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                    <Activity className="text-blue-600" size={20}/> Live Network Load
+                </h3>
+                <p className="text-xs text-slate-500">Real-time usage across the entire network.</p>
+            </div>
+            <div className="flex gap-4">
+                <div className="text-right">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Download</p>
+                    <p className="text-xl font-black text-blue-600">{currentSpeed.rx} <span className="text-xs text-slate-500">Mbps</span></p>
+                </div>
+                <div className="text-right">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Upload</p>
+                    <p className="text-xl font-black text-green-500">{currentSpeed.tx} <span className="text-xs text-slate-500">Mbps</span></p>
+                </div>
+            </div>
+        </div>
+        <div className="h-48 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data}>
+                    <defs>
+                        <linearGradient id="colorRx" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="colorTx" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                        </linearGradient>
+                    </defs>
+                    <YAxis hide domain={[0, 'auto']} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                    <Area type="monotone" dataKey="download" stroke="#2563eb" strokeWidth={2} fillOpacity={1} fill="url(#colorRx)" isAnimationActive={false} />
+                    <Area type="monotone" dataKey="upload" stroke="#22c55e" strokeWidth={2} fillOpacity={1} fill="url(#colorTx)" isAnimationActive={false} />
+                </AreaChart>
+            </ResponsiveContainer>
+        </div>
+    </div>
+  );
+};
+
 // 3. Subscriber Dashboard
 const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair, outages }) => {
   const [activeTab, setActiveTab] = useState('overview'); 
@@ -2030,6 +2101,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
         <div className="space-y-8">
 
             <NetworkStatusWidget db={db} appId={appId} />
+            <LiveTrafficWidget />
             
           {/* Welcome Banner */}
           <div className="relative overflow-hidden rounded-3xl bg-slate-900 text-white p-8 shadow-2xl">
@@ -4329,6 +4401,12 @@ const LandingPage = ({ onLoginClick, onNavigate, plans }) => {
           </div>
         </div>
       </div>
+
+      <div className="py-12 bg-slate-50 border-b border-slate-200">
+  <div className="max-w-4xl mx-auto px-4">
+    <LiveTrafficWidget />
+  </div>
+</div>
 
       {/* FEATURES PREVIEW */}
       <div className="py-24 bg-white">
