@@ -1030,7 +1030,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 
 // --- CONFIGURATION ---
-const GEMINI_API_KEY = "AIzaSyDcgcNxJCMtQQlEyTaEbkONoQbpOm7psH4"; // <--- PASTE KEY HERE
+const GEMINI_API_KEY = "AIzaSyC-PTQ5TZtpEQq0oHeCnyPwd57GDTldNEQ"; // <--- PASTE KEY HERE
 
 const GeminiChatWidget = ({ user }) => {
   const [isOpen, setIsOpen] = useState(false);
