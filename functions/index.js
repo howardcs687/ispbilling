@@ -1,56 +1,80 @@
-const { onRequest } = require("firebase-functions/v2/https");
-const admin = require("firebase-admin");
+// functions/index.js
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
+const MikroNode = require('mikronode');
 
 admin.initializeApp();
-const db = admin.firestore();
 
-// This is the specific URL your router will hit
-exports.syncMikrotik = onRequest(async (req, res) => {
-  const secretKey = req.query.key;
-  
-  // 1. Security Check (Change this password!)
-  if (secretKey !== "SWIFTNET_SECRET_123") {
-    return res.status(403).send("Unauthorized Access");
-  }
+// 🔒 SECURITY WARNING: ideally use functions.config() for these in production
+const ROUTER_CONFIG = {
+    host: 'hff095p2aa9.sn.mynetname.net', // e.g., 'myisp.sn.mynetname.net'
+    port: 8728, // Default API port (Make sure this is open!)
+    user: 'swiftnet_bot',
+    password: 'swiftnet_bot'
+};
 
-  // 2. The Router sends data in the 'body'
-  // Structure: { username: "john", download: 123456, upload: 123456 }
-  const { username, download, upload } = req.body;
-
-  if (!username) return res.status(400).send("Missing username");
-
-  try {
-    // 3. Convert Bytes to Gigabytes (GB)
-    // MikroTik sends bytes. We divide by 1073741824 to get GB.
-    const dl_gb = (download / (1024 * 1024 * 1024));
-    const ul_gb = (upload / (1024 * 1024 * 1024));
-
-    // 4. Find the User in your Database
-    // We look for a user whose 'username' matches the queue name
-    const usersRef = db.collection('artifacts').doc('swiftnet-isp').collection('public').doc('data').collection('isp_users_v1');
-    const q = usersRef.where('username', '==', username);
-    const snapshot = await q.get();
-
-    if (snapshot.empty) {
-        console.log(`User ${username} not found in DB.`);
-        return res.send("User not found");
+exports.toggleSubscriber = functions.https.onCall(async (data, context) => {
+    // 1. Security Check: Ensure the person clicking the button is logged in
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'You must be logged in.');
     }
 
-    const docId = snapshot.docs[0].id;
+    const { username, action } = data; // action will be 'cut' or 'restore'
+    
+    // 2. Connect to MikroTik
+    // We create a new connection for every request
+    const device = new MikroNode(ROUTER_CONFIG.host, ROUTER_CONFIG.port);
+    
+    try {
+        const [login] = await device.connect();
+        const conn = await login(ROUTER_CONFIG.user, ROUTER_CONFIG.password);
+        const channel = conn.openChannel("api"); // Open API channel
 
-    // 5. Update the Database
-    await db.doc(`artifacts/swiftnet-isp/public/data/isp_users_v1/${docId}`).update({
-        usage: {
-            download: dl_gb,
-            upload: ul_gb,
-            lastUpdated: new Date().toISOString()
+        console.log(`Processing ${action} command for user: ${username}`);
+
+        if (action === 'cut') {
+            // STEP A: Find the PPP Secret ID
+            channel.write('/ppp/secret/print', { '?name': username });
+            const secretData = await channel.read();
+            const secretId = secretData.data[0]?.[".id"];
+
+            // STEP B: Disable the Secret (Prevents future login)
+            if (secretId) {
+                await channel.write('/ppp/secret/set', { '.id': secretId, 'disabled': 'yes' });
+            }
+
+            // STEP C: Find the Active Connection ID
+            channel.write('/ppp/active/print', { '?name': username });
+            const activeData = await channel.read();
+            const activeId = activeData.data[0]?.[".id"];
+
+            // STEP D: Kick the user immediately
+            if (activeId) {
+                await channel.write('/ppp/active/remove', { '.id': activeId });
+            }
+            
+            device.close();
+            return { success: true, message: `Subscriber ${username} has been CUT.` };
+
+        } else if (action === 'restore') {
+            // STEP A: Find the PPP Secret ID
+            channel.write('/ppp/secret/print', { '?name': username });
+            const secretData = await channel.read();
+            const secretId = secretData.data[0]?.[".id"];
+
+            // STEP B: Enable the Secret
+            if (secretId) {
+                await channel.write('/ppp/secret/set', { '.id': secretId, 'disabled': 'no' });
+            }
+            
+            device.close();
+            return { success: true, message: `Subscriber ${username} has been RESTORED.` };
         }
-    });
 
-    res.send(`Synced ${username}: ${dl_gb.toFixed(2)} GB`);
-
-  } catch (error) {
-    console.error("Sync Error:", error);
-    res.status(500).send(error.message);
-  }
+    } catch (error) {
+        console.error("MikroTik Connection Error:", error);
+        // Clean up connection if it failed halfway
+        if(device) device.close(); 
+        throw new functions.https.HttpsError('internal', 'Router Connection Failed: ' + error.message);
+    }
 });

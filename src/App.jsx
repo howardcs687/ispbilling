@@ -5,6 +5,7 @@ import {
   AreaChart, Area // <--- These were missing!
 } from 'recharts';
 import { initializeApp, deleteApp } from 'firebase/app';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getAnalytics } from "firebase/analytics";
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -3786,6 +3787,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [editingUser, setEditingUser] = useState(null);
   const [billingUser, setBillingUser] = useState(null);
   const [showStaffModal, setShowStaffModal] = useState(false);
+  const functions = getFunctions(app);
 
   // --- 1. Fetch Plans ---
   useEffect(() => {
@@ -3848,7 +3850,48 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   // ... (Rest of your handler functions: handleStatusChange, handleChangePassword, etc. keep them exactly as they were) ...
   // Since the code is very long, ensure you keep all your const handle... functions here.
 
-  const handleStatusChange = async (userId, newStatus) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { status: newStatus }); } catch (e) { console.error(e); } };
+  const handleStatusChange = async (targetUser, newStatus) => {
+      // 1. Determine action
+      const action = newStatus === 'active' ? 'restore' : 'cut';
+      const confirmMsg = action === 'cut' 
+          ? `⚠️ DISCONNECT WARNING ⚠️\n\nAre you sure you want to CUT ${targetUser.username}?\nThis will kick them from the MikroTik router immediately.` 
+          : `Are you sure you want to RESTORE ${targetUser.username}?`;
+
+      if (!confirm(confirmMsg)) return;
+
+      // 2. Show loading (simple alert for now, you can make a spinner later)
+      const loadingToast = alert(`Connecting to Router... Processing ${action}... Please do not close this.`);
+
+      try {
+          // 3. Prepare the Cloud Function
+          const toggleSubscriber = httpsCallable(functions, 'toggleSubscriber');
+
+          // 4. Send command to Backend
+          const result = await toggleSubscriber({ 
+              username: targetUser.username, // MAKE SURE this matches the PPP Secret name exactly
+              action: action 
+          });
+
+          console.log("Router Response:", result.data.message);
+
+          // 5. If Router success, Update Database (Firestore)
+          // This keeps your UI in sync with the Router
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, targetUser.id), { 
+              status: newStatus 
+          });
+
+          alert(`Success! ${result.data.message}`);
+
+      } catch (e) {
+          console.error(e);
+          // Fallback: If router fails (e.g., router is offline), allow manual DB update
+          if(confirm(`❌ Router Error: ${e.message}\n\nThe router might be offline or unreachable.\n\nDo you want to force update the database status to '${newStatus}' anyway?`)) {
+               await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, targetUser.id), { 
+                  status: newStatus 
+              });
+          }
+      }
+  };
   const handleChangePassword = async (e) => { e.preventDefault(); if (adminNewPass.length < 6) return alert("Min 6 chars"); try { await updatePassword(auth.currentUser, adminNewPass); alert("Success"); setShowPasswordModal(false); } catch (e) { alert(e.message); } };
   const handleAddSubscriber = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "Secondary"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newUser.email, newUser.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newUser.username, email: newUser.email, accountNumber: newUser.accountNumber, plan: newUser.plan || (plans[0] ? plans[0].name : 'Basic'), balance: 0, status: 'active', role: 'subscriber', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddModal(false); alert("Success"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
   const handleAddAdmin = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "SecondaryAdmin"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newAdmin.email, newAdmin.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newAdmin.username, email: newAdmin.email, role: 'admin', accountNumber: 'ADMIN', plan: 'N/A', balance: 0, status: 'active', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddAdminModal(false); alert("Admin created"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
