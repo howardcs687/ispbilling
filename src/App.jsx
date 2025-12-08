@@ -1055,7 +1055,8 @@ const GeminiChatWidget = ({ user }) => {
     try {
       // 2. Initialize Gemini
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
       // 3. Define the AI Persona (System Prompt)
       const systemContext = `
