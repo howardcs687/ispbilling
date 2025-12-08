@@ -3787,7 +3787,8 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [editingUser, setEditingUser] = useState(null);
   const [billingUser, setBillingUser] = useState(null);
   const [showStaffModal, setShowStaffModal] = useState(false);
-  const functions = getFunctions(app);
+  // If your functions are in Asia (likely), you must specify it here
+  const functions = getFunctions(app, 'us-central1');
 
   // --- 1. Fetch Plans ---
   useEffect(() => {
@@ -3850,8 +3851,10 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   // ... (Rest of your handler functions: handleStatusChange, handleChangePassword, etc. keep them exactly as they were) ...
   // Since the code is very long, ensure you keep all your const handle... functions here.
 
+  // ... inside AdminDashboard component ...
+
   const handleStatusChange = async (targetUser, newStatus) => {
-      // 1. Determine action
+      // 1. Determine action (Keep this part)
       const action = newStatus === 'active' ? 'restore' : 'cut';
       const confirmMsg = action === 'cut' 
           ? `⚠️ DISCONNECT WARNING ⚠️\n\nAre you sure you want to CUT ${targetUser.username}?\nThis will kick them from the MikroTik router immediately.` 
@@ -3859,23 +3862,31 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
 
       if (!confirm(confirmMsg)) return;
 
-      // 2. Show loading (simple alert for now, you can make a spinner later)
-      const loadingToast = alert(`Connecting to Router... Processing ${action}... Please do not close this.`);
+      // --- REPLACE EVERYTHING BELOW THIS LINE INSIDE THE FUNCTION ---
+
+      // 1. Check if user is actually authenticated before calling
+      if (!auth.currentUser) {
+          alert("Session expired. Please reload the page.");
+          return;
+      }
+
+      // 2. Prepare the function
+      // NOTE: Ensure 'functions' is defined with the correct region at the top of AdminDashboard
+      const toggleSubscriber = httpsCallable(functions, 'toggleSubscriber'); 
 
       try {
-          // 3. Prepare the Cloud Function
-          const toggleSubscriber = httpsCallable(functions, 'toggleSubscriber');
-
-          // 4. Send command to Backend
+          // 3. Send command (Wait for it)
+          // We removed the alert() because it pauses the code and can mess up the await
+          console.log(`Connecting to Router... Processing ${action}...`);
+          
           const result = await toggleSubscriber({ 
-              username: targetUser.username, // MAKE SURE this matches the PPP Secret name exactly
+              username: targetUser.username, 
               action: action 
           });
 
           console.log("Router Response:", result.data.message);
 
-          // 5. If Router success, Update Database (Firestore)
-          // This keeps your UI in sync with the Router
+          // 4. If Router success, Update Database (Firestore)
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, targetUser.id), { 
               status: newStatus 
           });
