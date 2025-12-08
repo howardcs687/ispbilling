@@ -3788,7 +3788,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [billingUser, setBillingUser] = useState(null);
   const [showStaffModal, setShowStaffModal] = useState(false);
   // If your functions are in Asia (likely), you must specify it here
-  const functions = getFunctions(app, 'us-central1');
+  const functions = getFunctions(app, 'asia-southeast1');
 
   // --- 1. Fetch Plans ---
   useEffect(() => {
@@ -3854,7 +3854,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   // ... inside AdminDashboard component ...
 
   const handleStatusChange = async (targetUser, newStatus) => {
-      // 1. Determine action (Keep this part)
+      // 1. Determine action
       const action = newStatus === 'active' ? 'restore' : 'cut';
       const confirmMsg = action === 'cut' 
           ? `⚠️ DISCONNECT WARNING ⚠️\n\nAre you sure you want to CUT ${targetUser.username}?\nThis will kick them from the MikroTik router immediately.` 
@@ -3862,23 +3862,20 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
 
       if (!confirm(confirmMsg)) return;
 
-      // --- REPLACE EVERYTHING BELOW THIS LINE INSIDE THE FUNCTION ---
-
-      // 1. Check if user is actually authenticated before calling
+      // --- SECURITY CHECK ---
       if (!auth.currentUser) {
-          alert("Session expired. Please reload the page.");
+          alert("Session expired. You are not logged in.");
           return;
       }
 
-      // 2. Prepare the function
-      // NOTE: Ensure 'functions' is defined with the correct region at the top of AdminDashboard
-      const toggleSubscriber = httpsCallable(functions, 'toggleSubscriber'); 
-
       try {
-          // 3. Send command (Wait for it)
-          // We removed the alert() because it pauses the code and can mess up the await
-          console.log(`Connecting to Router... Processing ${action}...`);
+          // 2. Prepare the command
+          console.log(`Connecting to Router (asia-southeast1)... Processing ${action}...`);
           
+          // Call the Cloud Function
+          const toggleSubscriber = httpsCallable(functions, 'toggleSubscriber'); 
+          
+          // 3. Send and Wait (Await ensures we don't alert too early)
           const result = await toggleSubscriber({ 
               username: targetUser.username, 
               action: action 
@@ -3886,7 +3883,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
 
           console.log("Router Response:", result.data.message);
 
-          // 4. If Router success, Update Database (Firestore)
+          // 4. If successful, update the database to match
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, targetUser.id), { 
               status: newStatus 
           });
@@ -3894,12 +3891,20 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
           alert(`Success! ${result.data.message}`);
 
       } catch (e) {
-          console.error(e);
-          // Fallback: If router fails (e.g., router is offline), allow manual DB update
-          if(confirm(`❌ Router Error: ${e.message}\n\nThe router might be offline or unreachable.\n\nDo you want to force update the database status to '${newStatus}' anyway?`)) {
-               await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, targetUser.id), { 
-                  status: newStatus 
-              });
+          console.error("Operation Failed:", e);
+          
+          // Handle specific error codes
+          if (e.code === 'unauthenticated') {
+              alert("Error: You are not logged in or your session expired.");
+          } else if (e.code === 'not-found') {
+              alert("Error: Function not found. Check if your function is deployed to 'asia-southeast1'.");
+          } else {
+              // Fallback: If router fails (offline), allow manual DB update
+              if(confirm(`❌ Router Error: ${e.message}\n\nThe router might be offline.\n\nForce update database status to '${newStatus}' anyway?`)) {
+                   await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, targetUser.id), { 
+                      status: newStatus 
+                  });
+              }
           }
       }
   };
