@@ -7,8 +7,8 @@ admin.initializeApp();
 
 // 🔒 SECURITY WARNING: ideally use functions.config() for these in production
 const ROUTER_CONFIG = {
-    host: 'remoteanyx888.jrandombytes.com:31177', // e.g., 'myisp.sn.mynetname.net'
-    port: 10443, // Default API port (Make sure this is open!)
+    host: 'hff095p2aa9.sn.mynetname.net', // e.g., 'myisp.sn.mynetname.net'
+    port: 8728, // Default API port (Make sure this is open!)
     user: 'swiftnet_bot',
     password: 'swiftnet_bot'
 };
