@@ -1024,6 +1024,160 @@ const BackgroundMusic = () => {
   );
 };
 
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { Bot, Send, MessageCircle, X, Loader2 } from 'lucide-react';
+
+// --- CONFIGURATION ---
+const GEMINI_API_KEY = "AIzaSyDcgcNxJCMtQQlEyTaEbkONoQbpOm7psH4"; // <--- PASTE KEY HERE
+
+const GeminiChatWidget = ({ user }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [messages, setMessages] = useState([
+    { role: 'model', text: `Hi ${user?.username || 'there'}! I'm the SwiftNet AI. Ask me about plans, repairs, or billing.` }
+  ]);
+
+  // Initialize Chat Logic
+  const handleSend = async (e) => {
+    e.preventDefault();
+    if (!input.trim() || !GEMINI_API_KEY) return;
+
+    const userMessage = input;
+    setInput('');
+    setLoading(true);
+
+    // 1. Add User Message to UI
+    setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
+
+    try {
+      // 2. Initialize Gemini
+      const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      // 3. Define the AI Persona (System Prompt)
+      const systemContext = `
+        You are the helpful customer support AI for SwiftNet ISP. 
+        Your goal is to assist subscribers with internet issues, billing, and plans.
+        
+        Knowledge Base:
+        - Plans: Fiber 1699 (Unli), Fiber 999 (500GB cap).
+        - Technical: Red LOS light means fiber cut (file repair). Slow internet -> restart router.
+        - Billing: We accept GCash and Maya. Due date is usually the 15th.
+        - App Features: Users can file tickets, view bills, and request repairs in this dashboard.
+        
+        Current User: ${user?.username || 'Guest'} (${user?.plan || 'Unknown Plan'}).
+        
+        Keep answers concise (under 50 words) and friendly. 
+        If you can't solve it, tell them to file a ticket in the 'Support' tab.
+      `;
+
+      // 4. Construct History for Context Awareness
+      // We map our UI messages to Gemini's format
+      const history = messages.map(m => ({
+        role: m.role,
+        parts: [{ text: m.text }]
+      }));
+
+      // 5. Send to Gemini
+      const chat = model.startChat({
+        history: [
+            { role: "user", parts: [{ text: systemContext }] }, // Inject persona first
+            { role: "model", parts: [{ text: "Understood. I am SwiftNet AI." }] },
+            ...history
+        ],
+      });
+
+      const result = await chat.sendMessage(userMessage);
+      const response = result.response.text();
+
+      // 6. Add AI Response to UI
+      setMessages(prev => [...prev, { role: 'model', text: response }]);
+
+    } catch (error) {
+      console.error("Gemini Error:", error);
+      setMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting to the server right now. Please try again." }]);
+    }
+
+    setLoading(false);
+  };
+
+  return (
+    <>
+      {/* Floating Toggle Button */}
+      <button 
+        onClick={() => setIsOpen(!isOpen)} 
+        className="fixed bottom-6 right-6 z-[60] bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-full shadow-2xl hover:scale-105 transition-transform border-2 border-white/20"
+      >
+        {isOpen ? <X size={24}/> : <MessageCircle size={24}/>}
+      </button>
+
+      {/* Chat Window */}
+      {isOpen && (
+        <div className="fixed bottom-24 right-6 z-[60] w-80 md:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in slide-in-from-bottom-5 duration-300">
+          
+          {/* Header */}
+          <div className="bg-slate-900 p-4 flex items-center gap-3">
+             <div className="bg-gradient-to-tr from-blue-500 to-purple-500 p-2 rounded-lg">
+                <Bot size={20} className="text-white" />
+             </div>
+             <div>
+                <h3 className="font-bold text-white text-sm">SwiftNet Assistant</h3>
+                <p className="text-[10px] text-blue-200 flex items-center gap-1">
+                   <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span> Powered by Gemini
+                </p>
+             </div>
+          </div>
+
+          {/* Messages Area */}
+          <div className="h-80 overflow-y-auto p-4 bg-slate-50 space-y-3 flex flex-col">
+            {messages.map((m, i) => (
+              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] p-3 text-sm shadow-sm ${
+                    m.role === 'user' 
+                    ? 'bg-blue-600 text-white rounded-2xl rounded-tr-sm' 
+                    : 'bg-white border border-slate-200 text-slate-700 rounded-2xl rounded-tl-sm'
+                }`}>
+                  {m.text}
+                </div>
+              </div>
+            ))}
+            {loading && (
+               <div className="flex justify-start">
+                  <div className="bg-slate-200 text-slate-500 p-3 rounded-2xl rounded-tl-sm flex items-center gap-2 text-xs">
+                     <Loader2 size={14} className="animate-spin"/> Typing...
+                  </div>
+               </div>
+            )}
+          </div>
+
+          {/* Input Area */}
+          <form onSubmit={handleSend} className="p-3 bg-white border-t border-slate-100 flex gap-2">
+            <input 
+              className="flex-1 bg-slate-100 border-0 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              placeholder="Type your question..."
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              disabled={loading}
+            />
+            <button 
+                disabled={loading || !input.trim()} 
+                className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-xl disabled:opacity-50 transition-colors"
+            >
+                <Send size={18}/>
+            </button>
+          </form>
+
+          {/* Footer Note */}
+          <div className="bg-slate-50 p-2 text-center">
+             <p className="text-[10px] text-slate-400">AI can make mistakes. Contact support for urgent issues.</p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 const Layout = ({ children, user, onLogout }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // Initialize dark mode from localStorage or default to false
@@ -1155,6 +1309,8 @@ const Layout = ({ children, user, onLogout }) => {
       <main className="flex-grow w-full px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {children}
       </main>
+      
+      <GeminiChatWidget user={user} />
       
       <BackgroundMusic />
     </div>
