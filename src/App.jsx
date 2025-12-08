@@ -5,7 +5,6 @@ import {
   AreaChart, Area // <--- These were missing!
 } from 'recharts';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getAnalytics } from "firebase/analytics";
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -67,7 +66,7 @@ import {
   Wallet, ArrowRightLeft, ArrowUpRight, ArrowDownLeft,
   ToggleLeft, ToggleRight,
   Server, Cloud, Copy, Phone,
-  Headphones, ArrowDownCircle, HardDrive,
+  Headphones, ArrowDownCircle, HardDrive, PhoneCall, Video, CloudRain, Info, XCircle, LifeBuoy,
 } from 'lucide-react';
 
 // --- Firebase Configuration --
@@ -186,6 +185,328 @@ L.Icon.Default.mergeOptions({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
+
+const WeatherWidget = () => {
+  const [weather, setWeather] = useState(null);
+
+  useEffect(() => {
+    // Fetches real weather for Santa Ana, Cagayan (Lat: 18.47, Lng: 122.15)
+    fetch('https://api.open-meteo.com/v1/forecast?latitude=18.4728&longitude=122.1557&current_weather=true')
+      .then(res => res.json())
+      .then(data => setWeather(data.current_weather))
+      .catch(err => console.error("Weather error", err));
+  }, []);
+
+  if (!weather) return null;
+
+  return (
+    <div className="bg-gradient-to-br from-blue-400 to-blue-600 text-white p-4 rounded-xl shadow-lg flex items-center justify-between mb-6">
+      <div>
+        <div className="flex items-center gap-2">
+            <MapPin size={14} className="text-blue-100"/>
+            <span className="text-xs font-bold uppercase text-blue-100">Santa Ana, Cagayan</span>
+        </div>
+        <div className="text-3xl font-black mt-1">{weather.temperature}°C</div>
+        <div className="text-sm font-medium opacity-90 flex items-center gap-1">
+            <CloudRain size={14}/> Wind: {weather.windspeed} km/h
+        </div>
+      </div>
+      <Sun size={48} className="text-yellow-300 animate-pulse"/>
+    </div>
+  );
+};
+
+const MaintenanceBanner = ({ targetDate }) => {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      const distance = new Date(targetDate) - now;
+      
+      if (distance < 0) {
+        setTimeLeft('EXPIRED');
+        clearInterval(interval);
+        return;
+      }
+
+      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+      setTimeLeft(`${hours}h ${minutes}m ${seconds}s`);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [targetDate]);
+
+  if (timeLeft === 'EXPIRED') return null;
+
+  return (
+    <div className="bg-orange-600 text-white px-4 py-3 rounded-xl shadow-md mb-6 flex items-center justify-between animate-in slide-in-from-top-5">
+        <div className="flex items-center gap-3">
+            <Wrench className="animate-spin-slow" size={20}/>
+            <div>
+                <p className="font-bold text-sm">Scheduled Maintenance</p>
+                <p className="text-xs opacity-90">System upgrade in progress.</p>
+            </div>
+        </div>
+        <div className="font-mono text-xl font-black bg-orange-700/50 px-3 py-1 rounded-lg">
+            {timeLeft}
+        </div>
+    </div>
+  );
+};
+
+const KnowledgeBase = () => {
+  const [openIndex, setOpenIndex] = useState(null);
+  const [search, setSearch] = useState('');
+  
+  const faqs = [
+    { q: "How do I change my WiFi Password?", a: "To change your password, connect to your router, open 192.168.1.1 in your browser, and log in with the details found on the sticker under your device." },
+    { q: "My internet is slow (Red LOS Light)", a: "A red LOS light means a fiber cut. Please file a repair ticket immediately." },
+    { q: "Where can I pay my bill?", a: "We accept GCash, Maya, and 7-Eleven. Use the 'Wallet' tab to upload your proof of payment." },
+    { q: "What is the FUP limit?", a: "Our Fiber 1699 plan has no data cap. Fiber 999 has a fair usage policy of 500GB/month." }
+  ];
+
+  const filtered = faqs.filter(f => f.q.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
+        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><BookOpen size={20} className="text-blue-600"/> Knowledge Base</h3>
+        <input className="w-full border p-2 rounded-lg text-sm mb-4 bg-slate-50" placeholder="Search help articles..." value={search} onChange={e=>setSearch(e.target.value)}/>
+        <div className="space-y-2">
+            {filtered.map((item, i) => (
+                <div key={i} className="border border-slate-100 rounded-xl overflow-hidden">
+                    <button onClick={() => setOpenIndex(openIndex === i ? null : i)} className="w-full flex justify-between items-center p-3 text-left hover:bg-slate-50 transition-colors">
+                        <span className="font-bold text-sm text-slate-700">{item.q}</span>
+                        <ChevronRight size={16} className={`transition-transform ${openIndex === i ? 'rotate-90' : ''}`}/>
+                    </button>
+                    {openIndex === i && <div className="p-3 pt-0 text-sm text-slate-600 bg-slate-50 border-t border-slate-100">{item.a}</div>}
+                </div>
+            ))}
+        </div>
+    </div>
+  );
+};
+
+const VideoSupport = ({ user }) => {
+  // 🔴 STEP 1: Paste your Admin Zoom Invite Link here
+  // Get this from Zoom App -> Meetings -> Copy Invitation
+  const ZOOM_MEETING_URL = "https://zoom.us/j/95247752936?pwd=KQY7CFPxbQyO1PSQPQIPaLyPgWraf8.1"; 
+
+  const startCall = () => {
+    // This opens the Zoom app or browser directly
+    window.open(ZOOM_MEETING_URL, '_blank');
+  };
+
+  return (
+    <div className="bg-gradient-to-r from-blue-700 to-blue-500 p-6 rounded-2xl text-white shadow-lg flex justify-between items-center animate-in fade-in">
+        <div>
+            <h3 className="font-bold text-lg flex items-center gap-2">
+                <Video size={20} className="text-blue-200"/> Zoom Support
+            </h3>
+            <p className="text-sm opacity-90 max-w-[200px]">
+                Speak with a technician live via Zoom.
+            </p>
+        </div>
+        <button 
+            onClick={startCall} 
+            className="bg-white text-blue-700 px-6 py-3 rounded-xl font-bold text-sm hover:bg-blue-50 hover:scale-105 transition-all shadow-md flex items-center gap-2"
+        >
+            <Video size={16}/> Join Meeting
+        </button>
+    </div>
+  );
+};
+
+const ScheduledCallback = ({ user, db, appId }) => {
+  const [time, setTime] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+            ticketId: Math.floor(Math.random() * 900000).toString(),
+            userId: user.uid,
+            username: user.username,
+            subject: "Scheduled Callback Request",
+            message: `Customer requests a phone call at: ${time}`,
+            status: 'open',
+            date: new Date().toISOString(),
+            isCallback: true
+        });
+        alert("Callback requested!");
+    } catch(e) { alert("Error"); }
+    setLoading(false);
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2"><PhoneCall size={18} className="text-green-600"/> Request Callback</h3>
+        <p className="text-xs text-slate-500 mb-4">We'll call you at your preferred time.</p>
+        <form onSubmit={handleSubmit} className="flex gap-2">
+            <input type="datetime-local" className="flex-1 border p-2 rounded-lg text-sm" value={time} onChange={e=>setTime(e.target.value)} required/>
+            <button disabled={loading} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-xs">{loading ? '...' : 'Book'}</button>
+        </form>
+    </div>
+  );
+};
+
+// --- [NEW] DATA RECORDER (Creates the history) ---
+// This invisible component saves traffic stats to Firestore every 10 minutes
+const TrafficRecorder = ({ db, app, appId }) => {
+  useEffect(() => {
+    const rtdb = getDatabase(app);
+    const trafficRef = ref(rtdb, 'monitor/traffic');
+    let currentTraffic = { rx: 0, tx: 0 };
+
+    // 1. Listen to live traffic constantly
+    const unsubscribe = onValue(trafficRef, (snapshot) => {
+        const val = snapshot.val();
+        if(val) currentTraffic = val;
+    });
+
+    // 2. Save snapshot every 10 minutes
+    const saveLog = async () => {
+        if(currentTraffic.rx === 0 && currentTraffic.tx === 0) return;
+        try {
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_traffic_logs'), {
+                date: new Date().toISOString(),
+                download: currentTraffic.rx,
+                upload: currentTraffic.tx
+            });
+            console.log("Traffic history saved.");
+        } catch(e) { console.error("Log error", e); }
+    };
+
+    const interval = setInterval(saveLog, 10 * 60 * 1000); // 10 Minutes
+    return () => { unsubscribe(); clearInterval(interval); }
+  }, [db, app, appId]);
+
+  return null; // Invisible
+};
+
+// --- [UPDATED] PEAK USAGE GRAPH (Reads the history) ---
+const PeakUsageGraph = ({ db, appId }) => {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadHistory = async () => {
+        try {
+            // Fetch logs from the last 24 hours
+            const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+            const q = query(
+                collection(db, 'artifacts', appId, 'public', 'data', 'isp_traffic_logs'),
+                where('date', '>=', yesterday),
+                orderBy('date', 'asc')
+            );
+
+            const snapshot = await getDocs(q);
+            const points = snapshot.docs.map(doc => {
+                const d = doc.data();
+                return {
+                    // Format time as "10:30 PM"
+                    time: new Date(d.date).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'}),
+                    usage: d.download
+                };
+            });
+
+            if(points.length === 0) {
+                // Fallback text if no logs yet
+                setData([{ time: 'Now', usage: 0 }]);
+            } else {
+                setData(points);
+            }
+        } catch (e) {
+            console.error("Graph error:", e);
+        }
+        setLoading(false);
+    };
+
+    loadHistory();
+  }, [db, appId]);
+
+  return (
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-80 w-full flex flex-col">
+        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <Activity size={18} className="text-red-500"/> Peak Usage History (24h)
+        </h3>
+        
+        {loading ? (
+            <div className="flex-1 flex items-center justify-center text-slate-400">Loading history...</div>
+        ) : data.length <= 1 ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 text-sm">
+                <p>No history yet.</p>
+                <p className="text-xs mt-1">Keep the Admin dashboard open to record data.</p>
+            </div>
+        ) : (
+            <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data}>
+                    <defs>
+                        <linearGradient id="colorUsage" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                        </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3}/>
+                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{fontSize: 10}} minTickGap={30}/>
+                    <RechartsTooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}/>
+                    <Area type="monotone" dataKey="usage" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#colorUsage)" />
+                </AreaChart>
+            </ResponsiveContainer>
+        )}
+    </div>
+  );
+};
+
+const OnboardingTour = () => {
+  const [step, setStep] = useState(0);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    // Check if user has seen tour
+    const hasSeen = localStorage.getItem('swiftnet_tour_completed');
+    if (!hasSeen) setVisible(true);
+  }, []);
+
+  if (!visible) return null;
+
+  const steps = [
+    { title: "Welcome to SwiftNet!", msg: "This is your new dashboard. Let's take a quick tour." },
+    { title: "Check Your Bill", msg: "See your balance and pay instantly via QR code in the Overview tab." },
+    { title: "Need Help?", msg: "Use the Support tab to file tickets or request a video call." },
+    { title: "All Set!", msg: "You are ready to explore. Enjoy the speed!" }
+  ];
+
+  const handleNext = () => {
+    if (step < steps.length - 1) setStep(step + 1);
+    else {
+        localStorage.setItem('swiftnet_tour_completed', 'true');
+        setVisible(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="bg-white p-8 rounded-2xl max-w-sm w-full shadow-2xl text-center">
+            <LifeBuoy size={48} className="mx-auto text-blue-600 mb-4"/>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">{steps[step].title}</h3>
+            <p className="text-slate-500 mb-6">{steps[step].msg}</p>
+            <div className="flex gap-2">
+                <button onClick={() => { setVisible(false); localStorage.setItem('swiftnet_tour_completed', 'true'); }} className="flex-1 py-3 text-slate-400 font-bold text-sm">Skip</button>
+                <button onClick={handleNext} className="flex-[2] bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700">
+                    {step === steps.length - 1 ? 'Finish' : 'Next'}
+                </button>
+            </div>
+            <div className="flex justify-center gap-1 mt-4">
+                {steps.map((_, i) => <div key={i} className={`w-2 h-2 rounded-full ${i === step ? 'bg-blue-600' : 'bg-slate-200'}`}></div>)}
+            </div>
+        </div>
+    </div>
+  );
+};
 
 const ApplicationWizard = ({ plan, onClose, onSubmit, db, appId }) => {
   const [step, setStep] = useState(1);
@@ -2094,6 +2415,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+    <OnboardingTour />
       <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
         {['overview', 'auto_tech', 'wallet', 'shop', 'my_id', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
@@ -2104,6 +2426,8 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       {activeTab === 'speedtest' && <SpeedTest />}
       {activeTab === 'overview' && (
         <div className="space-y-8">
+
+          <MaintenanceBanner targetDate={new Date(Date.now() + 86400000).toISOString()} />
 
             <NetworkStatusWidget db={db} appId={appId} />
             <LiveTrafficWidget />
@@ -2297,7 +2621,43 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           </div>
       )}
       {activeTab === 'plans' && (<div className="space-y-6"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-slate-800">Available Internet Plans</h2><span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">Current: {userData.plan}</span></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map((plan) => (<div key={plan.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-lg font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => handleApplyPlan(plan.name)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Request Change <ArrowRight size={16} /></button></div></div>))}</div></div>)}
-      {activeTab === 'support' && (<div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-1 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><MessageSquare size={20} className="text-blue-600"/> Create New Ticket</h3><form onSubmit={handleCreateTicket} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-white" value={newTicket.subject} onChange={(e) => setNewTicket({...newTicket, subject: e.target.value})}><option value="">Select...</option><option value="No Internet">No Internet</option><option value="Billing">Billing</option><option value="Other">Other</option></select></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Message</label><textarea required className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none h-32 resize-none" value={newTicket.message} onChange={(e) => setNewTicket({...newTicket, message: e.target.value})}></textarea></div><button type="submit" disabled={ticketLoading} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">{ticketLoading ? 'Submitting...' : 'Submit Ticket'}</button></form></div><div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-2 h-fit"><h3 className="font-bold text-slate-800 mb-4">My Ticket History</h3><div className="space-y-4 max-h-[600px] overflow-y-auto">{tickets && tickets.length > 0 ? tickets.map(ticket => (<div key={ticket.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50"><div className="flex justify-between items-start mb-2"><h4 className="font-bold text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject}</h4><span className="text-[10px] font-bold uppercase bg-yellow-100 text-yellow-700 px-2 py-1 rounded">{ticket.status}</span></div><p className="text-sm text-slate-600 mb-3">{ticket.message}</p>{ticket.adminReply && <div className="bg-white border-l-4 border-blue-500 p-3 rounded-r-lg mt-3"><p className="text-xs font-bold text-blue-600 mb-1">Admin Response:</p><p className="text-sm text-slate-700">{ticket.adminReply}</p></div>}<div className="mt-3 pt-2 border-t border-slate-100">{followingUpTo === ticket.id ? (<div className="mt-2"><textarea className="w-full border p-2 text-sm" rows="2" value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setFollowingUpTo(null)} className="text-xs font-bold px-3">Cancel</button><button onClick={() => handleFollowUpTicket(ticket.id, ticket.message)} className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded">Send</button></div></div>) : (<button onClick={() => setFollowingUpTo(ticket.id)} className="text-blue-600 text-xs font-bold flex items-center gap-1 mt-1"><MessageCircle size={14} /> Add Note</button>)}</div></div>)) : <p className="text-center text-slate-400">No tickets found.</p>}</div></div></div>)}
+      {activeTab === 'support' && (
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    
+    {/* Left Column: New Features */}
+    <div className="lg:col-span-1 space-y-6">
+        <VideoSupport user={userData} />
+        <ScheduledCallback user={userData} db={db} appId={appId} />
+        <KnowledgeBase />
+    </div>
+
+    {/* Right Column: Existing Ticket System */}
+    <div className="lg:col-span-2 space-y-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><MessageSquare size={20} className="text-blue-600"/> Create New Ticket</h3>
+            <form onSubmit={handleCreateTicket} className="space-y-4">
+                <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-white" value={newTicket.subject} onChange={(e) => setNewTicket({...newTicket, subject: e.target.value})}><option value="">Select...</option><option value="No Internet">No Internet</option><option value="Billing">Billing</option><option value="Other">Other</option></select></div>
+                <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Message</label><textarea required className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none h-32 resize-none" value={newTicket.message} onChange={(e) => setNewTicket({...newTicket, message: e.target.value})}></textarea></div>
+                <button type="submit" disabled={ticketLoading} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">{ticketLoading ? 'Submitting...' : 'Submit Ticket'}</button>
+            </form>
+        </div>
+        
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit">
+             <h3 className="font-bold text-slate-800 mb-4">My Ticket History</h3>
+             <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                {tickets && tickets.length > 0 ? tickets.map(ticket => (
+                    <div key={ticket.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50">
+                        <div className="flex justify-between items-start mb-2"><h4 className="font-bold text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject}</h4><span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${ticket.status==='open'?'bg-yellow-100 text-yellow-700':'bg-green-100 text-green-700'}`}>{ticket.status}</span></div>
+                        <p className="text-sm text-slate-600 mb-3">{ticket.message}</p>
+                        {ticket.adminReply && <div className="bg-white border-l-4 border-blue-500 p-3 rounded-r-lg mt-3"><p className="text-xs font-bold text-blue-600 mb-1">Admin Response:</p><p className="text-sm text-slate-700">{ticket.adminReply}</p></div>}
+                        <div className="mt-3 pt-2 border-t border-slate-100">{followingUpTo === ticket.id ? (<div className="mt-2"><textarea className="w-full border p-2 text-sm" rows="2" value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setFollowingUpTo(null)} className="text-xs font-bold px-3">Cancel</button><button onClick={() => handleFollowUpTicket(ticket.id, ticket.message)} className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded">Send</button></div></div>) : (<button onClick={() => setFollowingUpTo(ticket.id)} className="text-blue-600 text-xs font-bold flex items-center gap-1 mt-1"><MessageCircle size={14} /> Add Note</button>)}</div>
+                    </div>
+                )) : <p className="text-center text-slate-400">No tickets found.</p>}
+             </div>
+        </div>
+    </div>
+  </div>
+)}
       {activeTab === 'settings' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
@@ -2414,6 +2774,7 @@ const AdminAnalytics = ({ subscribers, payments, tickets }) => {
                         <Legend />
                     </PieChart>
                 </ResponsiveContainer>
+                <PeakUsageGraph />
             </div>
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-80">
                 <h3 className="font-bold text-slate-700 mb-4">Support Ticket Status</h3>
@@ -3787,8 +4148,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [editingUser, setEditingUser] = useState(null);
   const [billingUser, setBillingUser] = useState(null);
   const [showStaffModal, setShowStaffModal] = useState(false);
-  // If your functions are in Asia (likely), you must specify it here
-  const functions = getFunctions(app, 'asia-southeast1');
 
   // --- 1. Fetch Plans ---
   useEffect(() => {
@@ -3851,63 +4210,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   // ... (Rest of your handler functions: handleStatusChange, handleChangePassword, etc. keep them exactly as they were) ...
   // Since the code is very long, ensure you keep all your const handle... functions here.
 
-  // ... inside AdminDashboard component ...
-
-  const handleStatusChange = async (targetUser, newStatus) => {
-      // 1. Determine action
-      const action = newStatus === 'active' ? 'restore' : 'cut';
-      const confirmMsg = action === 'cut' 
-          ? `⚠️ DISCONNECT WARNING ⚠️\n\nAre you sure you want to CUT ${targetUser.username}?\nThis will kick them from the MikroTik router immediately.` 
-          : `Are you sure you want to RESTORE ${targetUser.username}?`;
-
-      if (!confirm(confirmMsg)) return;
-
-      // --- SECURITY CHECK ---
-      if (!auth.currentUser) {
-          alert("Session expired. You are not logged in.");
-          return;
-      }
-
-      try {
-          // 2. Prepare the command
-          console.log(`Connecting to Router (asia-southeast1)... Processing ${action}...`);
-          
-          // Call the Cloud Function
-          const toggleSubscriber = httpsCallable(functions, 'toggleSubscriber'); 
-          
-          // 3. Send and Wait (Await ensures we don't alert too early)
-          const result = await toggleSubscriber({ 
-              username: targetUser.username, 
-              action: action 
-          });
-
-          console.log("Router Response:", result.data.message);
-
-          // 4. If successful, update the database to match
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, targetUser.id), { 
-              status: newStatus 
-          });
-
-          alert(`Success! ${result.data.message}`);
-
-      } catch (e) {
-          console.error("Operation Failed:", e);
-          
-          // Handle specific error codes
-          if (e.code === 'unauthenticated') {
-              alert("Error: You are not logged in or your session expired.");
-          } else if (e.code === 'not-found') {
-              alert("Error: Function not found. Check if your function is deployed to 'asia-southeast1'.");
-          } else {
-              // Fallback: If router fails (offline), allow manual DB update
-              if(confirm(`❌ Router Error: ${e.message}\n\nThe router might be offline.\n\nForce update database status to '${newStatus}' anyway?`)) {
-                   await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, targetUser.id), { 
-                      status: newStatus 
-                  });
-              }
-          }
-      }
-  };
+  const handleStatusChange = async (userId, newStatus) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { status: newStatus }); } catch (e) { console.error(e); } };
   const handleChangePassword = async (e) => { e.preventDefault(); if (adminNewPass.length < 6) return alert("Min 6 chars"); try { await updatePassword(auth.currentUser, adminNewPass); alert("Success"); setShowPasswordModal(false); } catch (e) { alert(e.message); } };
   const handleAddSubscriber = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "Secondary"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newUser.email, newUser.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newUser.username, email: newUser.email, accountNumber: newUser.accountNumber, plan: newUser.plan || (plans[0] ? plans[0].name : 'Basic'), balance: 0, status: 'active', role: 'subscriber', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddModal(false); alert("Success"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
   const handleAddAdmin = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "SecondaryAdmin"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newAdmin.email, newAdmin.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newAdmin.username, email: newAdmin.email, role: 'admin', accountNumber: 'ADMIN', plan: 'N/A', balance: 0, status: 'active', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddAdminModal(false); alert("Admin created"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
@@ -4098,6 +4401,8 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                    <div><h2 className="text-2xl font-bold text-slate-800">Network Status Center</h2><p className="text-sm text-slate-500">Manage service outages and maintenance alerts.</p></div>
                </div>
               {/* NEW: The Individual User Table */}
+
+              <WeatherWidget />
               <UserTrafficTable app={app} />
                <LiveTrafficWidget />
                
