@@ -67,6 +67,8 @@ import {
   ToggleLeft, ToggleRight,
   Server, Cloud, Copy, Phone,
   Headphones, ArrowDownCircle, HardDrive, PhoneCall, Video, CloudRain, Info, XCircle, LifeBuoy,
+  Bot,       // <--- ADDED THIS
+  Loader2,
 } from 'lucide-react';
 
 // --- Firebase Configuration --
@@ -1025,7 +1027,7 @@ const BackgroundMusic = () => {
 };
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { Bot, Send, MessageCircle, X, Loader2 } from 'lucide-react';
+
 
 // --- CONFIGURATION ---
 const GEMINI_API_KEY = "AIzaSyDcgcNxJCMtQQlEyTaEbkONoQbpOm7psH4"; // <--- PASTE KEY HERE
@@ -1311,7 +1313,7 @@ const Layout = ({ children, user, onLogout }) => {
       </main>
       
       <GeminiChatWidget user={user} />
-      
+
       <BackgroundMusic />
     </div>
   );
