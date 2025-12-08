@@ -216,16 +216,39 @@ const WeatherWidget = () => {
   );
 };
 
-const MaintenanceBanner = ({ targetDate }) => {
+const MaintenanceBanner = ({ db, appId }) => {
+  const [targetDate, setTargetDate] = useState(null);
   const [timeLeft, setTimeLeft] = useState('');
 
+  // 1. Listen to Real Database Settings
   useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'main_settings'), (doc) => {
+        if (doc.exists() && doc.data().maintenanceSchedule) {
+            // Only set date if it's in the future
+            const schedule = new Date(doc.data().maintenanceSchedule);
+            if (schedule > new Date()) {
+                setTargetDate(schedule);
+            } else {
+                setTargetDate(null);
+            }
+        } else {
+            setTargetDate(null);
+        }
+    });
+    return () => unsub();
+  }, [db, appId]);
+
+  // 2. Countdown Logic
+  useEffect(() => {
+    if (!targetDate) return;
+
     const interval = setInterval(() => {
       const now = new Date();
       const distance = new Date(targetDate) - now;
       
       if (distance < 0) {
         setTimeLeft('EXPIRED');
+        setTargetDate(null); // Hide immediately when time is up
         clearInterval(interval);
         return;
       }
@@ -238,7 +261,7 @@ const MaintenanceBanner = ({ targetDate }) => {
     return () => clearInterval(interval);
   }, [targetDate]);
 
-  if (timeLeft === 'EXPIRED') return null;
+  if (!targetDate || timeLeft === 'EXPIRED') return null;
 
   return (
     <div className="bg-orange-600 text-white px-4 py-3 rounded-xl shadow-md mb-6 flex items-center justify-between animate-in slide-in-from-top-5">
@@ -2427,7 +2450,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       {activeTab === 'overview' && (
         <div className="space-y-8">
 
-          <MaintenanceBanner targetDate={new Date(Date.now() + 86400000).toISOString()} />
+          <MaintenanceBanner db={db} appId={appId} />
 
             <NetworkStatusWidget db={db} appId={appId} />
             <LiveTrafficWidget />
@@ -3782,31 +3805,68 @@ const ReportGenerator = ({ payments, expenses, subscribers }) => {
 
 const MaintenanceSwitch = ({ db, appId }) => {
   const [enabled, setEnabled] = useState(false);
+  const [schedule, setSchedule] = useState('');
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'main_settings'), (snap) => {
-        if (snap.exists()) setEnabled(snap.data().maintenanceMode || false);
+        if (snap.exists()) {
+            const data = snap.data();
+            setEnabled(data.maintenanceMode || false);
+            // Format date for input field (YYYY-MM-DDTHH:mm)
+            if (data.maintenanceSchedule) {
+                const d = new Date(data.maintenanceSchedule);
+                // Adjust to local ISO string for input value
+                const localIso = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+                setSchedule(localIso);
+            }
+        }
     });
     return () => unsub();
   }, [db, appId]);
 
   const toggle = async () => {
       const newState = !enabled;
-      if (newState && !confirm("WARNING: Turning this ON will block all subscribers and staff from logging in. Only Admins will have access. Proceed?")) return;
-      
+      if (newState && !confirm("WARNING: Turning this ON will block subscribers from logging in. Proceed?")) return;
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'main_settings'), {
           maintenanceMode: newState
       }, { merge: true });
   };
 
+  const handleSchedule = async (e) => {
+      const newDate = e.target.value;
+      setSchedule(newDate);
+      // Save schedule to DB
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'main_settings'), {
+          maintenanceSchedule: newDate ? new Date(newDate).toISOString() : null
+      }, { merge: true });
+  };
+
   return (
-    <button onClick={toggle} className={`flex items-center gap-3 px-4 py-2 rounded-xl border-2 transition-all ${enabled ? 'bg-red-50 border-red-500 text-red-700' : 'bg-white border-slate-200 text-slate-600'}`}>
-        {enabled ? <ToggleRight size={24} className="text-red-600"/> : <ToggleLeft size={24} />}
-        <div className="text-left leading-tight">
-            <p className="text-xs font-bold uppercase tracking-wider">Maintenance Mode</p>
-            <p className="text-[10px] font-bold">{enabled ? 'ACTIVE (Lockdown)' : 'Normal Operation'}</p>
+    <div className="flex gap-4">
+        {/* Lockdown Switch */}
+        <button onClick={toggle} className={`flex items-center gap-3 px-4 py-2 rounded-xl border-2 transition-all ${enabled ? 'bg-red-50 border-red-500 text-red-700' : 'bg-white border-slate-200 text-slate-600'}`}>
+            {enabled ? <ToggleRight size={24} className="text-red-600"/> : <ToggleLeft size={24} />}
+            <div className="text-left leading-tight">
+                <p className="text-xs font-bold uppercase tracking-wider">Lockdown Mode</p>
+                <p className="text-[10px] font-bold">{enabled ? 'ACTIVE' : 'Normal'}</p>
+            </div>
+        </button>
+
+        {/* Schedule Timer Input */}
+        <div className="flex items-center gap-2 bg-white border-2 border-slate-200 px-3 rounded-xl">
+            <Clock size={18} className="text-orange-500"/>
+            <div className="flex flex-col">
+                <label className="text-[9px] font-bold text-slate-400 uppercase">Set Countdown Timer</label>
+                <input 
+                    type="datetime-local" 
+                    className="text-xs font-bold text-slate-700 outline-none bg-transparent"
+                    value={schedule}
+                    onChange={handleSchedule}
+                />
+            </div>
+            {schedule && <button onClick={() => handleSchedule({target: {value: ''}})} className="text-red-400 hover:text-red-600"><X size={14}/></button>}
         </div>
-    </button>
+    </div>
   );
 };
 
