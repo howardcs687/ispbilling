@@ -68,7 +68,7 @@ import {
   Server, Cloud, Copy, Phone,
   Headphones, ArrowDownCircle, HardDrive, PhoneCall, Video, CloudRain, Info, XCircle, LifeBuoy,
   Bot,       // <--- ADDED THIS
-  Loader2,
+  Loader2, Save,
 } from 'lucide-react';
 
 // --- Firebase Configuration --
@@ -2507,6 +2507,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   const [documents, setDocuments] = useState([]);
   const [showContract, setShowContract] = useState(false);
   const [showKYC, setShowKYC] = useState(false);
+  const [paymentQRUrl, setPaymentQRUrl] = useState(null); // <--- Add this
 
   useEffect(() => {
     if (!userData?.id) return;
@@ -2516,6 +2517,22 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
     });
     return () => unsubscribe();
   }, [userData]);
+
+  // Fetch Admin Uploaded QR Code
+useEffect(() => {
+  const fetchQR = async () => {
+    try {
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'payment_qr');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists() && docSnap.data().image) {
+        setPaymentQRUrl(docSnap.data().image);
+      }
+    } catch (e) {
+      console.error("QR Fetch Error", e);
+    }
+  };
+  fetchQR();
+}, [db, appId]);
 
   const MOCK_DOCUMENTS = [
     { id: 1, title: "Service Contract - Swift Fiber", date: "2023-01-15", type: "Contract", size: "1.2 MB", amount: '0.00' },
@@ -2887,7 +2904,12 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
               </div>
           </div>
       )}
-      {showQR && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"><div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center space-x-2"><CreditCard size={20} /><span>Scan to Pay</span></h3><button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full"><X size={20} /></button></div><div className="p-8 flex flex-col items-center text-center"><p className="text-slate-600 text-sm mb-6">Scan the QR code with your banking app to pay <span className="font-bold text-slate-900 block text-2xl mt-2">₱{userData.balance.toFixed(2)}</span></p><div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8"><img src="/qr-code.png" alt="Payment QR" className="w-48 h-48 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/200x200?text=QR+Image+Missing"; }} /></div><div className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 mb-4">Payment posting will reflect once the admin verifies your payment. Your reference number provided should match on the payment they received.</div><div className="w-full text-left"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reference Number</label><form onSubmit={handlePaymentSubmit} className="flex gap-3"><input type="text" required placeholder="e.g. Ref-123456" className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium" value={refNumber} onChange={(e) => setRefNumber(e.target.value)} /><button type="submit" disabled={submitting} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200">{submitting ? '...' : 'Verify'}</button></form></div></div></div></div>)}
+      {showQR && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"><div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center space-x-2"><CreditCard size={20} /><span>Scan to Pay</span></h3><button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full"><X size={20} /></button></div><div className="p-8 flex flex-col items-center text-center"><p className="text-slate-600 text-sm mb-6">Scan the QR code with your banking app to pay <span className="font-bold text-slate-900 block text-2xl mt-2">₱{userData.balance.toFixed(2)}</span></p><div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8"><img 
+  src={paymentQRUrl || "/qr-code.png"} 
+  alt="Payment QR" 
+  className="w-48 h-48 object-contain" 
+  onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/200x200?text=Ask+Admin+for+QR"; }} 
+/></div><div className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 mb-4">Payment posting will reflect once the admin verifies your payment. Your reference number provided should match on the payment they received.</div><div className="w-full text-left"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reference Number</label><form onSubmit={handlePaymentSubmit} className="flex gap-3"><input type="text" required placeholder="e.g. Ref-123456" className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium" value={refNumber} onChange={(e) => setRefNumber(e.target.value)} /><button type="submit" disabled={submitting} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200">{submitting ? '...' : 'Verify'}</button></form></div></div></div></div>)}
       {showRepairModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-red-600 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center gap-2"><Hammer size={20} /> Request Service Repair</h3><button onClick={() => setShowRepairModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><div className="p-6"><p className="text-slate-600 text-sm mb-4">Please describe the issue.</p><textarea className="w-full border border-slate-300 rounded-lg p-3 h-32" value={repairNote} onChange={(e) => setRepairNote(e.target.value)}></textarea><div className="mt-4 flex justify-end gap-2"><button onClick={() => setShowRepairModal(false)} className="px-4 py-2 text-slate-500 font-bold">Cancel</button><button onClick={handleRequestRepair} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700">Submit</button></div></div></div></div>)}
       {showProofModal && <PaymentProofModal user={userData} db={db} appId={appId} onClose={() => setShowProofModal(false)} />}
         {showKYC && <KYCModal user={userData} db={db} appId={appId} onClose={() => setShowKYC(false)} />}
@@ -4331,6 +4353,109 @@ const UserTrafficTable = ({ app }) => {
   );
 };
 
+// --- NEW COMPONENT: Admin QR Code Uploader ---
+const PaymentQRSettings = ({ db, appId }) => {
+  const [preview, setPreview] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  // Load existing QR on mount
+  useEffect(() => {
+    const loadQR = async () => {
+      try {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'payment_qr');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setPreview(docSnap.data().image);
+        }
+      } catch (e) {
+        console.error("Error loading QR", e);
+      }
+    };
+    loadQR();
+  }, [db, appId]);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Convert to Base64
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        // Resize to save database space (Max width 500px)
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 500;
+        const scaleSize = MAX_WIDTH / img.width;
+        canvas.width = MAX_WIDTH;
+        canvas.height = img.height * scaleSize;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setPreview(canvas.toDataURL('image/jpeg', 0.7)); // Quality 0.7
+      };
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    if (!preview) return;
+    setUploading(true);
+    try {
+      // Save to isp_config_v1 collection
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'payment_qr'), {
+        image: preview,
+        updatedAt: new Date().toISOString()
+      });
+      alert("QR Code updated successfully! Subscribers will see this immediately.");
+    } catch (e) {
+      console.error(e);
+      alert("Error saving QR: " + e.message);
+    }
+    setUploading(false);
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 max-w-2xl">
+      <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+        <QrCode size={20} className="text-blue-600"/> Payment QR Code Settings
+      </h3>
+      <p className="text-sm text-slate-500 mb-6">
+        Upload your GCash/Maya QR code here. This image will be shown to subscribers when they click "Pay via QR".
+      </p>
+
+      <div className="flex flex-col md:flex-row gap-8 items-center">
+        <div className="relative group cursor-pointer border-2 border-dashed border-slate-300 rounded-2xl p-4 w-64 h-64 flex items-center justify-center bg-slate-50 hover:bg-white transition-colors">
+          <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" />
+          {preview ? (
+            <img src={preview} alt="QR Preview" className="w-full h-full object-contain rounded-lg" />
+          ) : (
+            <div className="text-center text-slate-400">
+              <UploadCloud size={32} className="mx-auto mb-2"/>
+              <span className="text-xs font-bold">Click to Upload</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 space-y-4">
+          <div className="bg-blue-50 p-4 rounded-xl text-blue-800 text-xs leading-relaxed border border-blue-100">
+            <strong>Note:</strong> Please ensure the QR code is clear. The system automatically optimizes the image size for faster loading.
+          </div>
+          <button 
+            onClick={handleSave} 
+            disabled={uploading || !preview}
+            className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {uploading ? <Loader2 className="animate-spin" size={20}/> : <Save size={20}/>}
+            {uploading ? 'Saving...' : 'Save QR Code'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs, user }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
   const [searchTerm, setSearchTerm] = useState('');
@@ -4558,7 +4683,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex space-x-1 overflow-x-auto max-w-[95vw] mx-auto md:mx-0 scrollbar-hide">
-         {['analytics', 'status', 'reports', 'cashier', 'coverage', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest'].map(tab => (
+         {['analytics', 'status', 'reports', 'cashier', 'coverage', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest', 'setting'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
                 {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'status' ? <><Activity size={16}/> Network Status</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
@@ -4571,6 +4696,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       {activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} />}
       {activeTab === 'reports' && <ReportGenerator payments={payments} expenses={expenses || []} subscribers={subscribers} />}
       {activeTab === 'cashier' && <CashierMode subscribers={subscribers} db={db} appId={appId} />}
+      {activeTab === 'settings' && <PaymentQRSettings db={db} appId={appId} />}
       {activeTab === 'coverage' && <ServiceAreaManager appId={appId} db={db} />}
       {activeTab === 'subscribers' && (
         <>
