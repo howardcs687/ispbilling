@@ -2929,15 +2929,30 @@ useEffect(() => {
 };
 
 const DigitalGoodsAdmin = ({ db, appId }) => {
+  const [activeView, setActiveView] = useState('catalog'); // 'catalog' or 'orders'
   const [products, setProducts] = useState([]);
+  const [pendingOrders, setPendingOrders] = useState([]);
   const [newItem, setNewItem] = useState({ name: '', wholesalePrice: '', srp: '', category: 'Streaming', stockMode: 'Manual', description: '' });
+  const [fulfillCode, setFulfillCode] = useState({}); // Stores input for each order
 
+  // Fetch Catalog
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', DIGITAL_GOODS_COLLECTION));
     const unsub = onSnapshot(q, (s) => setProducts(s.docs.map(d => ({id: d.id, ...d.data()}))));
     return () => unsub();
   }, [db, appId]);
 
+  // Fetch Pending Orders
+  useEffect(() => {
+    const q = query(
+        collection(db, 'artifacts', appId, 'public', 'data', USER_INVENTORY_COLLECTION),
+        where('status', '==', 'Pending Delivery')
+    );
+    const unsub = onSnapshot(q, (s) => setPendingOrders(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    return () => unsub();
+  }, [db, appId]);
+
+  // Add Item to Catalog
   const handleAdd = async (e) => {
     e.preventDefault();
     if(!newItem.name || !newItem.wholesalePrice) return;
@@ -2958,33 +2973,136 @@ const DigitalGoodsAdmin = ({ db, appId }) => {
     }
   };
 
+  // --- THE MAGIC: Fulfill Order ---
+  const handleFulfill = async (orderId, retailerId) => {
+      const code = fulfillCode[orderId];
+      if(!code) return alert("Please enter the code or credentials first.");
+
+      if(!confirm("Send these credentials to the retailer?")) return;
+
+      try {
+          // 1. Update the Inventory Item (This makes it visible to Retailer)
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', USER_INVENTORY_COLLECTION, orderId), {
+              status: 'Active', // Or 'Ready'
+              credentials: code,
+              dateFulfilled: new Date().toISOString()
+          });
+
+          // 2. Notify Retailer via Notification System (Optional but good)
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', NOTIFICATIONS_COLLECTION), {
+              userId: retailerId,
+              title: 'Order Ready',
+              message: `Your order is ready! Code: ${code}`,
+              date: new Date().toISOString(),
+              type: 'success',
+              read: false
+          });
+
+          alert("Order Fulfilled! Retailer has received the code.");
+          
+          // Clear input
+          setFulfillCode(prev => ({...prev, [orderId]: ''}));
+
+      } catch(e) {
+          console.error(e);
+          alert("Error fulfilling order: " + e.message);
+      }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-6 rounded-xl border border-slate-200">
-        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><ShoppingBag size={20} className="text-purple-600"/> Digital Goods Catalog (For Retailers)</h3>
-        <form onSubmit={handleAdd} className="grid grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-xl">
-            <div className="col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Item Name</label><input className="w-full border p-2 rounded" placeholder="e.g. Zoom Pro (1 Month)" value={newItem.name} onChange={e=>setNewItem({...newItem, name: e.target.value})} required/></div>
-            <div><label className="text-xs font-bold text-slate-500 uppercase">Wholesale Cost (Your Price)</label><input type="number" className="w-full border p-2 rounded" placeholder="150" value={newItem.wholesalePrice} onChange={e=>setNewItem({...newItem, wholesalePrice: e.target.value})} required/></div>
-            <div><label className="text-xs font-bold text-slate-500 uppercase">Suggested Retail Price (SRP)</label><input type="number" className="w-full border p-2 rounded" placeholder="200" value={newItem.srp} onChange={e=>setNewItem({...newItem, srp: e.target.value})} /></div>
-            <div><label className="text-xs font-bold text-slate-500 uppercase">Category</label><select className="w-full border p-2 rounded" value={newItem.category} onChange={e=>setNewItem({...newItem, category: e.target.value})}><option>Streaming</option><option>Gaming</option><option>Productivity</option><option>Vouchers</option></select></div>
-            <div><label className="text-xs font-bold text-slate-500 uppercase">Delivery Mode</label><select className="w-full border p-2 rounded" value={newItem.stockMode} onChange={e=>setNewItem({...newItem, stockMode: e.target.value})}><option value="Manual">Manual Processing (Ticket)</option><option value="Auto">Instant Code (Future)</option></select></div>
-            <button className="col-span-2 bg-purple-600 text-white font-bold py-2 rounded hover:bg-purple-700">Add to Catalog</button>
-        </form>
-
-        <div className="space-y-2">
-            {products.map(p => (
-                <div key={p.id} className="flex justify-between items-center p-3 border rounded-lg bg-white hover:bg-purple-50">
-                    <div>
-                        <p className="font-bold text-slate-800">{p.name}</p>
-                        <p className="text-xs text-slate-500">{p.category} • SRP: ₱{p.srp}</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <span className="font-mono font-bold text-purple-600">₱{p.wholesalePrice}</span>
-                        <button onClick={() => handleDelete(p.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={16}/></button>
-                    </div>
-                </div>
-            ))}
+        <div className="flex justify-between items-center mb-6">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <ShoppingBag size={20} className="text-purple-600"/> Digital Goods Manager
+            </h3>
+            <div className="flex bg-slate-100 p-1 rounded-lg">
+                <button 
+                    onClick={() => setActiveView('catalog')}
+                    className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${activeView === 'catalog' ? 'bg-white shadow text-purple-700' : 'text-slate-500'}`}
+                >
+                    Catalog
+                </button>
+                <button 
+                    onClick={() => setActiveView('orders')}
+                    className={`px-4 py-2 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${activeView === 'orders' ? 'bg-white shadow text-purple-700' : 'text-slate-500'}`}
+                >
+                    Pending Orders
+                    {pendingOrders.length > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 rounded-full">{pendingOrders.length}</span>}
+                </button>
+            </div>
         </div>
+
+        {activeView === 'catalog' && (
+            <>
+                <form onSubmit={handleAdd} className="grid grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-xl">
+                    <div className="col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Item Name</label><input className="w-full border p-2 rounded" placeholder="e.g. Zoom Pro (1 Month)" value={newItem.name} onChange={e=>setNewItem({...newItem, name: e.target.value})} required/></div>
+                    <div><label className="text-xs font-bold text-slate-500 uppercase">Wholesale Cost (Your Price)</label><input type="number" className="w-full border p-2 rounded" placeholder="150" value={newItem.wholesalePrice} onChange={e=>setNewItem({...newItem, wholesalePrice: e.target.value})} required/></div>
+                    <div><label className="text-xs font-bold text-slate-500 uppercase">Suggested Retail Price (SRP)</label><input type="number" className="w-full border p-2 rounded" placeholder="200" value={newItem.srp} onChange={e=>setNewItem({...newItem, srp: e.target.value})} /></div>
+                    <div><label className="text-xs font-bold text-slate-500 uppercase">Category</label><select className="w-full border p-2 rounded" value={newItem.category} onChange={e=>setNewItem({...newItem, category: e.target.value})}><option>Streaming</option><option>Gaming</option><option>Productivity</option><option>Vouchers</option></select></div>
+                    <div><label className="text-xs font-bold text-slate-500 uppercase">Delivery Mode</label><select className="w-full border p-2 rounded" value={newItem.stockMode} onChange={e=>setNewItem({...newItem, stockMode: e.target.value})}><option value="Manual">Manual Processing (Ticket)</option><option value="Auto">Instant Code (Future)</option></select></div>
+                    <button className="col-span-2 bg-purple-600 text-white font-bold py-2 rounded hover:bg-purple-700">Add to Catalog</button>
+                </form>
+
+                <div className="space-y-2">
+                    {products.map(p => (
+                        <div key={p.id} className="flex justify-between items-center p-3 border rounded-lg bg-white hover:bg-purple-50">
+                            <div>
+                                <p className="font-bold text-slate-800">{p.name}</p>
+                                <p className="text-xs text-slate-500">{p.category} • SRP: ₱{p.srp}</p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span className="font-mono font-bold text-purple-600">₱{p.wholesalePrice}</span>
+                                <button onClick={() => handleDelete(p.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={16}/></button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </>
+        )}
+
+        {activeView === 'orders' && (
+            <div className="space-y-4">
+                {pendingOrders.length === 0 ? (
+                    <p className="text-center text-slate-400 py-10">No pending orders. Good job!</p>
+                ) : (
+                    pendingOrders.map(order => (
+                        <div key={order.id} className="border-2 border-yellow-100 bg-yellow-50/50 p-4 rounded-xl">
+                            <div className="flex justify-between mb-2">
+                                <div>
+                                    <span className="bg-purple-100 text-purple-700 text-[10px] font-bold px-2 py-1 rounded uppercase">New Order</span>
+                                    <h4 className="font-bold text-slate-800 mt-1">{order.itemName}</h4>
+                                    <p className="text-xs text-slate-500">Ordered by User ID: {order.userId}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs font-bold text-slate-400">Paid</p>
+                                    <p className="font-mono font-black text-green-600">₱{order.cost}</p>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-white p-3 rounded-lg border border-slate-200 mt-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Enter Credentials / Code to Send</label>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="text" 
+                                        className="flex-1 border p-2 rounded text-sm font-mono"
+                                        placeholder="e.g. Code: 1234-5678 or User: admin / Pass: 123"
+                                        value={fulfillCode[order.id] || ''}
+                                        onChange={(e) => setFulfillCode({...fulfillCode, [order.id]: e.target.value})}
+                                    />
+                                    <button 
+                                        onClick={() => handleFulfill(order.id, order.userId)}
+                                        className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-xs hover:bg-green-700 shadow-lg shadow-green-200"
+                                    >
+                                        Send & Complete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+        )}
       </div>
     </div>
   );
