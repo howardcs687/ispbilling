@@ -539,6 +539,7 @@ const ApplicationWizard = ({ plan, onClose, onSubmit, db, appId }) => {
   const [step, setStep] = useState(1);
   const [serviceStatus, setServiceStatus] = useState(null); 
   const [position, setPosition] = useState({ lat: 18.4728, lng: 122.1557 }); // Default Center
+  const [isSwitcher, setIsSwitcher] = useState(false); // <--- NEW FEATURE STATE
   
   const [formData, setFormData] = useState({
     province: 'CAGAYAN',
@@ -610,8 +611,34 @@ const ApplicationWizard = ({ plan, onClose, onSubmit, db, appId }) => {
                       <div><label className="text-xs font-bold text-slate-500 uppercase">City</label><input className="w-full border p-3 rounded-lg uppercase" placeholder="STA ANA" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} /></div>
                       <div className="col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Barangay</label><input className="w-full border p-3 rounded-lg uppercase" placeholder="BGY MAREDE" value={formData.barangay} onChange={e => setFormData({...formData, barangay: e.target.value})} /></div>
                   </div>
+
+                  {/* --- NEW: SWITCHER PROMO SECTION --- */}
+                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
+                      <div className="flex items-center gap-3">
+                          <input 
+                            type="checkbox" 
+                            id="switcher" 
+                            className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            checked={isSwitcher}
+                            onChange={e => setIsSwitcher(e.target.checked)}
+                          />
+                          <label htmlFor="switcher" className="text-sm font-bold text-slate-700 cursor-pointer select-none">
+                              Switching from PLDT/Globe/Converge?
+                          </label>
+                      </div>
+                      {isSwitcher && (
+                          <div className="mt-2 text-xs text-blue-700 ml-8 animate-in slide-in-from-top-2">
+                              <p className="font-bold">🎉 Promo Eligible!</p>
+                              <p>Upload your previous bill later to get <span className="font-bold bg-yellow-200 px-1 rounded text-yellow-900">FREE INSTALLATION</span> and 50% OFF your first month.</p>
+                          </div>
+                      )}
+                  </div>
+                  {/* ----------------------------------- */}
+
                   {serviceStatus === 'None' && <div className="bg-red-50 border border-red-200 p-4 rounded-lg text-center"><p className="text-red-700 font-bold">Sorry, we are not yet available in this area.</p></div>}
                   {serviceStatus === 'Coming Soon' && <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg text-center"><p className="text-yellow-800 font-bold">Coming Soon!</p><p className="text-xs text-yellow-600">We are currently building lines here.</p></div>}
+                  
+                  {/* THIS IS THE BUTTON YOU WERE LOOKING FOR */}
                   <button onClick={checkAvailability} className="w-full py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700">CHECK COVERAGE</button>
               </div>
             )}
@@ -644,9 +671,11 @@ const ApplicationWizard = ({ plan, onClose, onSubmit, db, appId }) => {
                   <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 text-left space-y-3 text-sm">
                       <div className="flex justify-between"><span className="text-slate-500 font-bold">Plan</span><span className="font-bold text-blue-600">{plan.name}</span></div>
                       <div className="flex justify-between"><span className="text-slate-500">Address</span><span>{formData.street}, {formData.barangay}, {formData.city}</span></div>
+                      {isSwitcher && <div className="flex justify-between"><span className="text-slate-500 font-bold">Promo</span><span className="font-bold text-green-600">Switcher (Free Install)</span></div>}
                       <div className="flex justify-between"><span className="text-slate-500">GPS</span><span className="font-mono text-xs">{formData.lat.toFixed(5)}, {formData.lng.toFixed(5)}</span></div>
                   </div>
-                  <button onClick={() => onSubmit(formData)} className="w-full py-4 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-lg shadow-green-200">SUBMIT APPLICATION</button>
+                  {/* --- UPDATED SUBMIT: Passes isSwitcher data --- */}
+                  <button onClick={() => onSubmit({ ...formData, isSwitcher })} className="w-full py-4 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-lg shadow-green-200">SUBMIT APPLICATION</button>
               </div>
             )}
         </div>
@@ -2487,29 +2516,201 @@ const LiveTrafficWidget = () => {
   );
 };
 
+// --- FEATURE 1: REFERRAL SYSTEM COMPONENT ---
+const ReferralSystem = ({ user }) => {
+  const [copied, setCopied] = useState(false);
+  // Generate a code: First 3 letters of name + Last 4 of ID
+  const referralCode = (user.username.slice(0,3) + user.uid.slice(-4)).toUpperCase();
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(referralCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="bg-gradient-to-br from-pink-500 to-rose-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden mb-6">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
+      <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div>
+          <h3 className="text-2xl font-black mb-1 flex items-center gap-2">
+            <Gift className="animate-bounce" /> Invite & Earn
+          </h3>
+          <p className="text-pink-100 text-sm max-w-sm">
+            Give friends <span className="font-bold text-white">₱100 off</span> their installation. You get <span className="font-bold text-white">₱100 bill credits</span> when they join!
+          </p>
+        </div>
+        <div className="bg-white/20 backdrop-blur-md p-2 rounded-xl flex items-center gap-3 border border-white/30">
+          <div className="px-4 py-2 font-mono font-bold text-xl tracking-widest border-r border-white/30 border-dashed">
+            {referralCode}
+          </div>
+          <button onClick={handleCopy} className="p-2 hover:bg-white/20 rounded-lg transition-colors" title="Copy Code">
+            {copied ? <CheckCircle size={20}/> : <Copy size={20}/>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- FEATURE 3: FAMILY PLAN WIDGET ---
+const FamilyPlanWidget = ({ user, db, appId }) => {
+  const [email, setEmail] = useState('');
+  
+  const handleInvite = async (e) => {
+    e.preventDefault();
+    if (!email) return;
+    if (!confirm(`Send invitation to ${email} to join your Family Cluster?`)) return;
+    
+    // In a real app, this would send an email or create a notification
+    alert(`Invitation sent to ${email}! Once they accept, you'll both get 5% off monthly.`);
+    setEmail('');
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
+      <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+        <UserPlus size={20} className="text-purple-600"/> Family & Neighbor Plan
+      </h3>
+      <p className="text-xs text-slate-500 mb-4">
+        Link 3 accounts in your neighborhood to get a <span className="font-bold text-green-600">5% Discount</span> for everyone.
+      </p>
+      
+      <div className="flex items-center gap-2 mb-4">
+        <div className="flex -space-x-2">
+           <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold border-2 border-white">You</div>
+           <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-400 text-xs border-2 border-white border-dashed"><Plus size={14}/></div>
+           <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-400 text-xs border-2 border-white border-dashed"><Plus size={14}/></div>
+        </div>
+        <span className="text-xs text-slate-400 font-medium">2 slots open</span>
+      </div>
+
+      <form onSubmit={handleInvite} className="flex gap-2">
+        <input 
+          type="email" 
+          placeholder="Neighbor's Email" 
+          className="flex-1 border p-2 rounded-lg text-sm bg-slate-50 outline-none focus:border-purple-500"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+        />
+        <button className="bg-purple-600 text-white px-3 py-2 rounded-lg font-bold text-xs hover:bg-purple-700">Invite</button>
+      </form>
+    </div>
+  );
+};
+
+// --- FEATURE 4: STUDENT DISCOUNT VERIFICATION ---
+const StudentPromoModal = ({ onClose }) => {
+  const [file, setFile] = useState(null);
+  
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if(!file) return alert("Please upload your School ID.");
+    // Logic to save file would go here
+    alert("Application Submitted! We will apply the 10% Student Discount to your next bill once verified.");
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
+      <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+            <BookOpen size={20} className="text-blue-600"/> Student Discount
+          </h3>
+          <button onClick={onClose}><X size={20} className="text-slate-400"/></button>
+        </div>
+        <div className="bg-blue-50 p-3 rounded-xl text-xs text-blue-800 mb-4 border border-blue-100">
+          Students and Teachers get <strong>10% OFF</strong> monthly fees. Upload a valid School ID for this school year.
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="border-2 border-dashed border-slate-300 rounded-xl h-32 flex flex-col items-center justify-center bg-slate-50 hover:bg-white cursor-pointer relative">
+             <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => setFile(e.target.files[0])} />
+             {file ? (
+               <span className="text-sm font-bold text-green-600">{file.name}</span>
+             ) : (
+               <div className="text-center text-slate-400">
+                 <Upload size={24} className="mx-auto mb-1"/>
+                 <span className="text-xs">Tap to upload ID</span>
+               </div>
+             )}
+          </div>
+          <button className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700">Apply Discount</button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// --- FEATURE 5: SWITCH & SAVE CALCULATOR ---
+const SwitchCalculator = () => {
+  const [currentBill, setCurrentBill] = useState(1699);
+  const swiftNetPrice = 1499; // Assume comparable plan
+  const yearlySavings = (currentBill - swiftNetPrice) * 12;
+
+  return (
+    <div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden border border-slate-700">
+       <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+       <div className="relative z-10">
+         <h3 className="text-2xl font-bold mb-2">Switch & Save Calculator</h3>
+         <p className="text-slate-400 text-sm mb-6">See how much you save by switching to SwiftNet Fiber.</p>
+         
+         <div className="space-y-6">
+            <div>
+              <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">Your Current Monthly Bill (PLDT/Globe)</label>
+              <div className="flex items-center gap-4">
+                 <input 
+                   type="range" min="1299" max="3500" step="100" 
+                   value={currentBill} onChange={e => setCurrentBill(Number(e.target.value))}
+                   className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+                 />
+                 <span className="font-mono font-bold text-xl w-20">₱{currentBill}</span>
+              </div>
+            </div>
+
+            <div className="bg-white/10 p-4 rounded-xl border border-white/10 flex justify-between items-center">
+               <div>
+                 <p className="text-xs text-slate-300">You could save</p>
+                 <p className="text-3xl font-black text-green-400">₱{yearlySavings > 0 ? yearlySavings.toLocaleString() : 0}</p>
+                 <p className="text-xs text-slate-300">per year with SwiftNet!</p>
+               </div>
+               <button className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg transition-transform hover:scale-105">
+                 Switch Now
+               </button>
+            </div>
+         </div>
+       </div>
+    </div>
+  );
+};
+
 // 3. Subscriber Dashboard
+// 3. Subscriber Dashboard (UPDATED)
 const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair, outages }) => {
-  const [activeTab, setActiveTab] = useState('overview'); 
-  const [showQR, setShowQR] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview'); 
+  const [showQR, setShowQR] = useState(false);
   const [showProofModal, setShowProofModal] = useState(false);
-  const [refNumber, setRefNumber] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [newTicket, setNewTicket] = useState({ subject: '', message: '' });
-  const [ticketLoading, setTicketLoading] = useState(false);
-  const [showRepairModal, setShowRepairModal] = useState(false);
-  const [repairNote, setRepairNote] = useState('');
-  const [availablePlans, setAvailablePlans] = useState([]);
-  const [manageEmail, setManageEmail] = useState('');
-  const [managePass, setManagePass] = useState('');
-  const [updatingCreds, setUpdatingCreds] = useState(false);
-  const [followUpText, setFollowUpText] = useState('');
-  const [followingUpTo, setFollowingUpTo] = useState(null);
-  const [selectedPlanForApp, setSelectedPlanForApp] = useState(null); 
-  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [refNumber, setRefNumber] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [newTicket, setNewTicket] = useState({ subject: '', message: '' });
+  const [ticketLoading, setTicketLoading] = useState(false);
+  const [showRepairModal, setShowRepairModal] = useState(false);
+  const [repairNote, setRepairNote] = useState('');
+  const [availablePlans, setAvailablePlans] = useState([]);
+  const [manageEmail, setManageEmail] = useState('');
+  const [managePass, setManagePass] = useState('');
+  const [updatingCreds, setUpdatingCreds] = useState(false);
+  const [followUpText, setFollowUpText] = useState('');
+  const [followingUpTo, setFollowingUpTo] = useState(null);
+  const [selectedPlanForApp, setSelectedPlanForApp] = useState(null); 
+  const [selectedDoc, setSelectedDoc] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [showContract, setShowContract] = useState(false);
   const [showKYC, setShowKYC] = useState(false);
-  const [paymentQRUrl, setPaymentQRUrl] = useState(null); // <--- Add this
+  const [paymentQRUrl, setPaymentQRUrl] = useState(null);
+  
+  // --- NEW: Custom Modal State ---
+  const [customModal, setCustomModal] = useState(null); 
 
   useEffect(() => {
     if (!userData?.id) return;
@@ -2520,118 +2721,127 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
     return () => unsubscribe();
   }, [userData]);
 
-  // Fetch Admin Uploaded QR Code
-useEffect(() => {
-  const fetchQR = async () => {
+  useEffect(() => {
+    const fetchQR = async () => {
+      try {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'payment_qr');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data().image) {
+          setPaymentQRUrl(docSnap.data().image);
+        }
+      } catch (e) { console.error("QR Fetch Error", e); }
+    };
+    fetchQR();
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setAvailablePlans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // --- HANDLER FUNCTIONS ---
+  const handlePurchase = async (product) => {
+    if (!confirm(`Request to order: ${product.name}? An agent will contact you.`)) return;
     try {
-      const docRef = doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'payment_qr');
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists() && docSnap.data().image) {
-        setPaymentQRUrl(docSnap.data().image);
-      }
-    } catch (e) {
-      console.error("QR Fetch Error", e);
-    }
+        const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString();
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+            ticketId, userId: userData.uid, username: userData.username, subject: `Order: ${product.name}`, message: `Customer wants to subscribe to promo: ${product.name} (${product.price}).`, status: 'open', adminReply: '', date: new Date().toISOString(), isOrder: true
+        });
+        await sendCustomEmail('order', { name: userData.username, email: userData.email, orderDetails: product.name, message: `We received your request for ${product.name}. A technician will contact you shortly.` });
+        alert("Request sent! A ticket has been created.");
+    } catch (e) { alert("Error sending request."); }
   };
-  fetchQR();
-}, [db, appId]);
 
-  const MOCK_DOCUMENTS = [
-    { id: 1, title: "Service Contract - Swift Fiber", date: "2023-01-15", type: "Contract", size: "1.2 MB", amount: '0.00' },
-    { id: 2, title: "Statement of Account - Oct 2023", date: "2023-10-01", type: "Invoice", size: "450 KB", amount: '1,500.00' },
-    { id: 3, title: "Statement of Account - Nov 2023", date: "2023-11-01", type: "Invoice", size: "480 KB", amount: '1,500.00' },
-  ];
+  const handleWizardSubmit = async (addressData) => {
+    try {
+        const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString();
+        const fullAddress = `${addressData.street}, ${addressData.barangay}, ${addressData.city}, ${addressData.province}`;
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { plan: selectedPlanForApp.name, address: fullAddress, addressDetails: addressData, isSwitcher: addressData.isSwitcher || false });
+        const promoNote = addressData.isSwitcher ? " [PROMO: SWITCHER - FREE INSTALLATION APPLIES]" : "";
+        await sendCustomEmail('order', { name: userData.username, email: userData.email, orderDetails: selectedPlanForApp.name + promoNote, message: `We have received your application for ${selectedPlanForApp.name}. Ticket #${ticketId}. We will review your area coverage shortly.` });
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'New Subscription Application', message: `Applicant ${userData.username} (${userData.email}) has applied for the ${selectedPlanForApp.name} plan.\nAddress: ${fullAddress}\n\n${promoNote}`, status: 'open', adminReply: '', isApplication: true, targetUserId: userData.uid, targetPlan: selectedPlanForApp.name, date: new Date().toISOString() });
+        setSelectedPlanForApp(null);
+        alert(`Application submitted! Ticket #${ticketId}.`);
+    } catch(e) { console.error(e); alert("Error submitting application"); }
+  };
 
-  useEffect(() => {
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAvailablePlans(fetchedPlans);
-    });
-    return () => unsubscribe();
-  }, []);
+  const handlePaymentSubmit = async (e) => { e.preventDefault(); setSubmitting(true); await onPay(userData.id, refNumber, userData.username); setSubmitting(false); setShowQR(false); setRefNumber(''); };
+  const handleCreateTicket = async (e) => { if(e) e.preventDefault(); if (!newTicket.subject || !newTicket.message) return; setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: newTicket.subject, message: newTicket.message, status: 'open', adminReply: '', date: new Date().toISOString() }); setNewTicket({ subject: '', message: '' }); await sendCustomEmail('auto_reply', { name: userData.username, email: userData.email, message: `We received your ticket #${ticketId}: "${newTicket.subject}". Our support team is reviewing it now.` }); alert(`Ticket #${ticketId} submitted successfully!`); setActiveTab('support'); } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } setTicketLoading(false); };
+  const handleFollowUpTicket = async (ticketId, originalMessage) => { if(!followUpText) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId); const timestamp = new Date().toLocaleString(); const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`; await updateDoc(docRef, { message: newMessage, status: 'open', date: new Date().toISOString() }); setFollowingUpTo(null); setFollowUpText(''); alert("Follow-up sent successfully!"); } catch(e) { console.error(e); alert("Failed to send follow-up"); } };
+  const handleRequestRepair = async (e) => { e.preventDefault(); if(!repairNote) return; try { const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0'); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: randomId, userId: userData.uid, username: userData.username, address: userData.address || "No address provided", type: 'Service Repair - Internet', notes: repairNote, status: 'Submission', stepIndex: 0, technicianNote: 'Waiting for initial evaluation.', dateFiled: new Date().toISOString() }); setRepairNote(''); setShowRepairModal(false); alert("Repair request filed successfully!"); } catch(e) { console.error(e); alert("Failed to request repair."); } };
+  const handleApplyPlan = (planName) => { if(confirm(`Apply for ${planName}?`)) { const msg = `Requesting plan change.\n\nCurrent: ${userData.plan}\nNew: ${planName}`; const submitPlanTicket = async () => { setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'Plan Change Request', message: msg, status: 'open', adminReply: '', date: new Date().toISOString(), isPlanChange: true, targetPlan: planName }); alert(`Application submitted! Ticket #${ticketId}.`); setActiveTab('support'); } catch(e) { alert("Failed."); } setTicketLoading(false); }; submitPlanTicket(); } };
+  const handleUpdatePassword = async (e) => { e.preventDefault(); if (managePass.length < 6) return alert("Min 6 chars."); setUpdatingCreds(true); try { await updatePassword(auth.currentUser, managePass); setManagePass(''); alert("Password updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
+  const handleUpdateEmail = async (e) => { e.preventDefault(); if (!manageEmail) return; setUpdatingCreds(true); try { await updateEmail(auth.currentUser, manageEmail); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { email: manageEmail }); setManageEmail(''); alert("Email updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
+  
+  const getIcon = (type) => { switch(type) { case 'warning': return <AlertCircle size={18} />; case 'success': return <CheckCircle size={18} />; default: return <Megaphone size={18} />; } };
+  const getBgColor = (type) => { switch(type) { case 'warning': return 'bg-orange-50 text-orange-600'; case 'success': return 'bg-green-50 text-green-600'; default: return 'bg-blue-50 text-blue-600'; } };
 
-  if (!userData) return <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500"><div className="animate-spin mb-4"><RefreshCw /></div><p>Loading your account details...</p></div>;
+  if (!userData) return <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500"><div className="animate-spin mb-4"><RefreshCw /></div><p>Loading your account details...</p></div>;
 
-  const isOverdue = userData.status === 'overdue' || userData.status === 'disconnected';
+  const isOverdue = userData.status === 'overdue' || userData.status === 'disconnected';
+  const allAlerts = [ ...(announcements || []).map(a => ({ ...a, isPublic: true })), ...(notifications || []).map(n => ({ ...n, isPublic: false })) ].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const activeRepairs = (repairs || []).filter(r => r.status !== 'Completed');
+  const historyRepairs = (repairs || []).filter(r => r.status === 'Completed');
 
-  const allAlerts = [
-    ...(announcements || []).map(a => ({ ...a, isPublic: true })),
-    ...(notifications || []).map(n => ({ ...n, isPublic: false }))
-  ].sort((a, b) => new Date(b.date) - new Date(a.date));
+  // --- APPLICANT VIEW ---
+  if (userData.status === 'applicant' || userData.accountNumber === 'PENDING') {
+      return (
+        <div className="w-full py-12 animate-in fade-in">
+           <div className="text-center mb-12"><h1 className="text-3xl font-bold text-slate-800 mb-2">Welcome to SwiftNet!</h1><p className="text-slate-500">To get started, please select an internet plan below.</p></div>
+           {userData.plan ? (
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-r-xl max-w-xl mx-auto shadow-sm"><div className="flex items-center gap-4"><Hourglass size={32} className="text-yellow-600" /><div><h3 className="text-lg font-bold text-yellow-800">Application Pending</h3><p className="text-yellow-700">You have applied for the <strong>{userData.plan}</strong>. An administrator will review your request.</p></div></div></div>
+           ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map(plan => (<div key={plan.id} className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-xl font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Fiber Optic</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => setSelectedPlanForApp(plan)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Apply Now <ArrowRight size={16} /></button></div></div>))}{availablePlans.length === 0 && <p className="col-span-full text-center text-slate-400">No plans configured by admin yet.</p>}</div>
+           )}
+           <div className="mt-12 text-center"><button onClick={() => signOut(getAuth(app))} className="text-slate-400 hover:text-slate-600 text-sm underline">Sign Out</button></div>
+           {selectedPlanForApp && (<ApplicationWizard plan={selectedPlanForApp} onClose={() => setSelectedPlanForApp(null)} onSubmit={handleWizardSubmit} db={db} appId={appId} />)}
+        </div>
+      );
+  }
 
-  const activeRepairs = (repairs || []).filter(r => r.status !== 'Completed');
-  const historyRepairs = (repairs || []).filter(r => r.status === 'Completed');
-  
-  // Filter active outages
-  const activeOutages = (outages || []).filter(o => o.status !== 'Resolved');
-  const hasOutage = activeOutages.length > 0;
-
-  if (userData.status === 'applicant' || userData.accountNumber === 'PENDING') {
-      // ... (Applicant View logic - Unchanged)
-      const handleWizardSubmit = async (addressData) => {
-         try {
-            const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); 
-            const fullAddress = `${addressData.street}, ${addressData.barangay}, ${addressData.city}, ${addressData.province}`;
-            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { plan: selectedPlanForApp.name, address: fullAddress, addressDetails: addressData });
-            // REPLACE THE OLD sendSystemEmail WITH THIS:
-            await sendCustomEmail('order', {
-                name: userData.username,
-                email: userData.email,
-                orderDetails: selectedPlanForApp.name,
-                message: `We have received your application for ${selectedPlanForApp.name}. Ticket #${ticketId}. We will review your area coverage shortly.`
-            });
-            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'New Subscription Application', message: `Applicant ${userData.username} (${userData.email}) has applied for the ${selectedPlanForApp.name} plan.\nAddress: ${fullAddress}`, status: 'open', adminReply: '', isApplication: true, targetUserId: userData.uid, targetPlan: selectedPlanForApp.name, date: new Date().toISOString() });
-            setSelectedPlanForApp(null);
-            alert(`Application submitted! Ticket #${ticketId}.`);
-        } catch(e) { console.error(e); alert("Error submitting application"); }
-      };
-      return (
-        <div className="w-full py-12 animate-in fade-in">
-           <div className="text-center mb-12"><h1 className="text-3xl font-bold text-slate-800 mb-2">Welcome to SwiftNet!</h1><p className="text-slate-500">To get started, please select an internet plan below.</p></div>
-           {userData.plan ? (
-              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-r-xl max-w-xl mx-auto shadow-sm"><div className="flex items-center gap-4"><Hourglass size={32} className="text-yellow-600" /><div><h3 className="text-lg font-bold text-yellow-800">Application Pending</h3><p className="text-yellow-700">You have applied for the <strong>{userData.plan}</strong>. An administrator will review your request.</p></div></div></div>
-           ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map(plan => (<div key={plan.id} className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-xl font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Fiber Optic</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => setSelectedPlanForApp(plan)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Apply Now <ArrowRight size={16} /></button></div></div>))}{availablePlans.length === 0 && <p className="col-span-full text-center text-slate-400">No plans configured by admin yet.</p>}</div>
-           )}
-           <div className="mt-12 text-center"><button onClick={() => signOut(getAuth(app))} className="text-slate-400 hover:text-slate-600 text-sm underline">Sign Out</button></div>
-           {selectedPlanForApp && (<ApplicationWizard plan={selectedPlanForApp} onClose={() => setSelectedPlanForApp(null)} onSubmit={handleWizardSubmit} db={db} appId={appId} />)}
-        </div>
-      );
-  }
-
-  const handlePaymentSubmit = async (e) => { e.preventDefault(); setSubmitting(true); await onPay(userData.id, refNumber, userData.username); setSubmitting(false); setShowQR(false); setRefNumber(''); };
-  const handleCreateTicket = async (e) => { if(e) e.preventDefault(); if (!newTicket.subject || !newTicket.message) return; setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: newTicket.subject, message: newTicket.message, status: 'open', adminReply: '', date: new Date().toISOString() }); setNewTicket({ subject: '', message: '' }); await sendCustomEmail('auto_reply', {
-            name: userData.username,
-            email: userData.email,
-            message: `We received your ticket #${ticketId}: "${newTicket.subject}". Our support team is reviewing it now.`
-        }); alert(`Ticket #${ticketId} submitted successfully!`); setActiveTab('support'); } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } setTicketLoading(false); };
-  const handleFollowUpTicket = async (ticketId, originalMessage) => { if(!followUpText) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId); const timestamp = new Date().toLocaleString(); const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`; await updateDoc(docRef, { message: newMessage, status: 'open', date: new Date().toISOString() }); setFollowingUpTo(null); setFollowUpText(''); alert("Follow-up sent successfully!"); } catch(e) { console.error(e); alert("Failed to send follow-up"); } };
-  const handleRequestRepair = async (e) => { e.preventDefault(); if(!repairNote) return; try { const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0'); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: randomId, userId: userData.uid, username: userData.username, address: userData.address || "No address provided", type: 'Service Repair - Internet', notes: repairNote, status: 'Submission', stepIndex: 0, technicianNote: 'Waiting for initial evaluation.', dateFiled: new Date().toISOString() }); setRepairNote(''); setShowRepairModal(false); alert("Repair request filed successfully!"); } catch(e) { console.error(e); alert("Failed to request repair."); } };
-  const handleApplyPlan = (planName) => { if(confirm(`Apply for ${planName}?`)) { const msg = `Requesting plan change.\n\nCurrent: ${userData.plan}\nNew: ${planName}`; const submitPlanTicket = async () => { setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'Plan Change Request', message: msg, status: 'open', adminReply: '', date: new Date().toISOString(), isPlanChange: true, targetPlan: planName }); alert(`Application submitted! Ticket #${ticketId}.`); setActiveTab('support'); } catch(e) { alert("Failed."); } setTicketLoading(false); }; submitPlanTicket(); } };
-  const handleUpdatePassword = async (e) => { e.preventDefault(); if (managePass.length < 6) return alert("Min 6 chars."); setUpdatingCreds(true); try { await updatePassword(auth.currentUser, managePass); setManagePass(''); alert("Password updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
-  const handleUpdateEmail = async (e) => { e.preventDefault(); if (!manageEmail) return; setUpdatingCreds(true); try { await updateEmail(auth.currentUser, manageEmail); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { email: manageEmail }); setManageEmail(''); alert("Email updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
-  const getIcon = (type) => { switch(type) { case 'warning': return <AlertCircle size={18} />; case 'success': return <CheckCircle size={18} />; default: return <Megaphone size={18} />; } };
-  const getBgColor = (type) => { switch(type) { case 'warning': return 'bg-orange-50 text-orange-600'; case 'success': return 'bg-green-50 text-green-600'; default: return 'bg-blue-50 text-blue-600'; } };
-
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+  // --- SUBSCRIBER VIEW ---
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
     <OnboardingTour />
-      <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
-        {['overview', 'auto_tech', 'wallet', 'shop', 'my_id', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
-           <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'auto_tech' ? <><Zap size={16}/> Auto-Tech</> : tab === 'wallet' ? <><Wallet size={16}/> Wallet</> : tab === 'shop' ? <><ShoppingBag size={16}/> Shop</> : tab === 'my_id' ? <><CreditCard size={16}/> My ID</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'documents' ? <><FileText size={16}/> Documents</> : tab === 'rewards' ? <><Gift size={16}/> Rewards</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
-           </button>
-        ))}
-      </div>
-      {activeTab === 'speedtest' && <SpeedTest />}
-      {activeTab === 'overview' && (
+      <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
+        {['overview', 'family', 'auto_tech', 'wallet', 'shop', 'my_id', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
+           <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
+              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'auto_tech' ? <><Zap size={16}/> Auto-Tech</> : tab === 'wallet' ? <><Wallet size={16}/> Wallet</> : tab === 'shop' ? <><ShoppingBag size={16}/> Shop</> : tab === 'my_id' ? <><CreditCard size={16}/> My ID</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'documents' ? <><FileText size={16}/> Documents</> : tab === 'rewards' ? <><Gift size={16}/> Rewards</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
+           </button>
+        ))}
+      </div>
+
+      {/* --- CONTENT TABS --- */}
+      {activeTab === 'speedtest' && <SpeedTest />}
+      
+      {activeTab === 'overview' && (
         <div className="space-y-8">
+          
+          {/* --- NEW: Referral System --- */}
+          <ReferralSystem user={userData} />
+          
+          {/* FEATURE 1: CCTV PROMO BANNER */}
+          <div className="bg-slate-900 rounded-2xl p-6 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl border border-slate-700">
+             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl -mr-10 -mt-10"></div>
+             <div className="relative z-10">
+                <div className="inline-flex items-center gap-2 bg-red-600 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2">Limited Offer</div>
+                <h3 className="text-2xl font-bold text-white mb-1">Secure Your Home with SwiftCam</h3>
+                <p className="text-slate-400 text-sm max-w-md">Get 2 HD CCTV Cameras installed + Mobile App Access. Add to your plan for only <span className="text-white font-bold">₱300/mo</span>.</p>
+             </div>
+             <button 
+                onClick={() => handlePurchase({name: 'CCTV Bundle (2 Cameras)', price: '300/mo or 2500 Cash', id: 'promo_cctv'})}
+                className="relative z-10 bg-white text-slate-900 px-6 py-3 rounded-xl font-bold text-sm hover:bg-blue-50 transition-colors flex items-center gap-2 whitespace-nowrap"
+             >
+                <ShieldCheck size={18}/> Get Protected
+             </button>
+          </div>
 
           <MaintenanceBanner db={db} appId={appId} />
-
-            <NetworkStatusWidget db={db} appId={appId} />
-            <LiveTrafficWidget />
+          <NetworkStatusWidget db={db} appId={appId} />
+          <LiveTrafficWidget />
             
           {/* Welcome Banner */}
           <div className="relative overflow-hidden rounded-3xl bg-slate-900 text-white p-8 shadow-2xl">
@@ -2650,7 +2860,7 @@ useEffect(() => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-             {/* Balance Card - Glassmorphism */}
+             {/* Balance Card */}
              <div className="lg:col-span-2 relative overflow-hidden rounded-3xl p-8 shadow-xl border border-white/40 bg-white/60 backdrop-blur-xl transition-all hover:shadow-2xl group">
                 <div className="flex justify-between items-start mb-8">
                     <div>
@@ -2719,29 +2929,55 @@ useEffect(() => {
           </div>
         </div>
       )}
+
+      {/* --- NEW: Family Plan Tab --- */}
+      {activeTab === 'family' && (
+        <div className="space-y-6 animate-in fade-in">
+           <div className="flex justify-between items-center">
+              <div>
+                 <h2 className="text-2xl font-bold text-slate-800">Family & Neighborhood</h2>
+                 <p className="text-slate-500">Manage linked accounts and shared savings.</p>
+              </div>
+           </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FamilyPlanWidget user={userData} db={db} appId={appId} />
+              
+              <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
+                 <h4 className="font-bold text-blue-800 mb-2">How it works</h4>
+                 <ul className="list-disc list-inside text-sm text-blue-700 space-y-2">
+                    <li>Invite neighbors using their registered email.</li>
+                    <li>Once 3 households are linked, a 5% discount is applied automatically.</li>
+                    <li>Bill payments remain separate.</li>
+                 </ul>
+              </div>
+           </div>
+        </div>
+      )}
+
       {activeTab === 'auto_tech' && <SmartDiagnostics user={userData} db={db} appId={appId} />}
       {activeTab === 'wallet' && <SwiftWallet user={userData} db={db} appId={appId} />}
       {activeTab === 'shop' && <Marketplace user={userData} db={db} appId={appId} />}
       {activeTab === 'my_id' && <DigitalID user={userData} />}
-      {activeTab === 'repairs' && (
-         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-               <div><h2 className="text-2xl font-bold text-slate-800">Repair Requests</h2><p className="text-sm text-slate-500">Track status.</p></div>
-               <button onClick={() => setShowRepairModal(true)} className="bg-red-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-red-700 shadow-lg flex items-center gap-2"><Hammer size={18} /> Request Repair</button>
-            </div>
-            <div className="space-y-4">
-               <h3 className="text-sm font-bold text-slate-500 uppercase">Active Requests</h3>
-               {activeRepairs && activeRepairs.length > 0 ? activeRepairs.map(repair => (<RepairStatusCard key={repair.id} repair={repair} isSubscriber={true} onConfirm={onConfirmRepair} />)) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400 text-sm">No active repairs.</div>}
-            </div>
-            {historyRepairs.length > 0 && (<div className="pt-8 mt-8 border-t border-slate-200"><h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><Clock size={18}/> Repair History</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{historyRepairs.map(repair => (<RepairStatusCard key={repair.id} repair={repair} isSubscriber={true} />))}</div></div>)}
-         </div>
-      )}
+      
+      {activeTab === 'repairs' && (
+         <div className="space-y-6">
+            <div className="flex justify-between items-center">
+               <div><h2 className="text-2xl font-bold text-slate-800">Repair Requests</h2><p className="text-sm text-slate-500">Track status.</p></div>
+               <button onClick={() => setShowRepairModal(true)} className="bg-red-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-red-700 shadow-lg flex items-center gap-2"><Hammer size={18} /> Request Repair</button>
+            </div>
+            <div className="space-y-4">
+               <h3 className="text-sm font-bold text-slate-500 uppercase">Active Requests</h3>
+               {activeRepairs && activeRepairs.length > 0 ? activeRepairs.map(repair => (<RepairStatusCard key={repair.id} repair={repair} isSubscriber={true} onConfirm={onConfirmRepair} />)) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400 text-sm">No active repairs.</div>}
+            </div>
+            {historyRepairs.length > 0 && (<div className="pt-8 mt-8 border-t border-slate-200"><h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><Clock size={18}/> Repair History</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{historyRepairs.map(repair => (<RepairStatusCard key={repair.id} repair={repair} isSubscriber={true} />))}</div></div>)}
+         </div>
+      )}
+
       {activeTab === 'documents' && (
           <div className="space-y-6">
               <div className="flex justify-between items-center">
                   <div><h2 className="text-2xl font-bold text-slate-800">My Documents</h2><p className="text-sm text-slate-500">View and download your contracts and statements.</p></div>
               </div>
-              {/* Contract CTA */}
               {!userData.contractSigned && (
                   <div className="mb-6 p-6 bg-red-50 border-b border-red-100 rounded-2xl flex items-center justify-between">
                       <div className="flex items-center gap-4">
@@ -2761,13 +2997,13 @@ useEffect(() => {
                       {documents.length > 0 ? documents.map(doc => (
                           <div key={doc.id} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
                               <div className="flex items-center gap-4">
-                                <div className="bg-blue-50 p-3 rounded-xl text-blue-600"><FileText size={24} /></div>
-                                <div>
-                                  <h4 className="font-bold text-slate-800">{doc.title}</h4>
-                                  <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
-                                    <span>{doc.type}</span> • <span>{new Date(doc.date).toLocaleDateString()}</span> • <span className="text-red-600 font-bold">₱{parseFloat(doc.amount).toLocaleString()}</span>
-                                  </p>
-                                </div>
+                                  <div className="bg-blue-50 p-3 rounded-xl text-blue-600"><FileText size={24} /></div>
+                                  <div>
+                                      <h4 className="font-bold text-slate-800">{doc.title}</h4>
+                                      <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+                                          <span>{doc.type}</span> • <span>{new Date(doc.date).toLocaleDateString()}</span> • <span className="text-red-600 font-bold">₱{parseFloat(doc.amount).toLocaleString()}</span>
+                                      </p>
+                                  </div>
                               </div>
                               <button onClick={() => setSelectedDoc(doc)} className="flex items-center gap-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-4 py-2 rounded-lg font-bold text-sm transition-colors"><Eye size={18} /><span className="hidden sm:inline">View Invoice</span></button>
                           </div>
@@ -2776,93 +3012,81 @@ useEffect(() => {
               </div>
           </div>
       )}
-      {activeTab === 'rewards' && (
-          <div className="space-y-6">
-              <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-2xl p-8 text-white relative overflow-hidden shadow-lg">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-16 -mt-16"></div>
-                  <div className="relative z-10">
-                      <div className="flex items-center gap-3 mb-2">
-                          <Gift size={32} className="text-white" />
-                          <h2 className="text-3xl font-bold">SwiftPoints</h2>
-                      </div>
-                      <p className="text-yellow-100 font-medium text-lg">Your Balance: <span className="text-4xl font-bold text-white ml-2">{userData.points || 0}</span> pts</p>
-                      <p className="text-sm mt-4 text-yellow-50 opacity-90">Earn 50 points for every verified payment!</p>
-                  </div>
-              </div>
-              <h3 className="text-xl font-bold text-slate-800">Redeem Rewards</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col">
-                      <div className="bg-blue-50 w-12 h-12 rounded-lg flex items-center justify-center text-blue-600 mb-4"><Zap size={24}/></div>
-                      <h4 className="font-bold text-slate-800 text-lg">24h Speed Boost</h4>
-                      <p className="text-sm text-slate-500 mb-4 flex-grow">Get an extra 50Mbps for 24 hours. Perfect for gaming or large downloads.</p>
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
-                          <span className="font-bold text-slate-800">150 pts</span>
-                          <button className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50" disabled={(userData.points || 0) < 150}>Redeem</button>
-                      </div>
-                  </div>
-                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col">
-                      <div className="bg-green-50 w-12 h-12 rounded-lg flex items-center justify-center text-green-600 mb-4"><span className="text-2xl font-bold font-sans">₱</span></div>
-                      <h4 className="font-bold text-slate-800 text-lg">₱50 Bill Rebate</h4>
-                      <p className="text-sm text-slate-500 mb-4 flex-grow">Deduct ₱50 from your next billing statement instantly.</p>
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
-                          <span className="font-bold text-slate-800">200 pts</span>
-                          <button className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50" disabled={(userData.points || 0) < 200}>Redeem</button>
-                      </div>
-                  </div>
-                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col opacity-60">
-                      <div className="bg-slate-100 w-12 h-12 rounded-lg flex items-center justify-center text-slate-500 mb-4"><Smartphone size={24}/></div>
-                      <h4 className="font-bold text-slate-800 text-lg">Raffle Entry</h4>
-                      <p className="text-sm text-slate-500 mb-4 flex-grow">Win a new iPhone 15! Draw date: Dec 31, 2023.</p>
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
-                          <span className="font-bold text-slate-800">50 pts</span>
-                          <button className="bg-slate-300 text-white px-4 py-2 rounded-lg text-sm font-bold cursor-not-allowed">Coming Soon</button>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-      {activeTab === 'plans' && (<div className="space-y-6"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-slate-800">Available Internet Plans</h2><span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">Current: {userData.plan}</span></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map((plan) => (<div key={plan.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-lg font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => handleApplyPlan(plan.name)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Request Change <ArrowRight size={16} /></button></div></div>))}</div></div>)}
-      {activeTab === 'support' && (
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    
-    {/* Left Column: New Features */}
-    <div className="lg:col-span-1 space-y-6">
-        <VideoSupport user={userData} />
-        <ScheduledCallback user={userData} db={db} appId={appId} />
-        <KnowledgeBase />
-    </div>
 
-    {/* Right Column: Existing Ticket System */}
-    <div className="lg:col-span-2 space-y-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit">
-            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><MessageSquare size={20} className="text-blue-600"/> Create New Ticket</h3>
-            <form onSubmit={handleCreateTicket} className="space-y-4">
-                <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-white" value={newTicket.subject} onChange={(e) => setNewTicket({...newTicket, subject: e.target.value})}><option value="">Select...</option><option value="No Internet">No Internet</option><option value="Billing">Billing</option><option value="Other">Other</option></select></div>
-                <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Message</label><textarea required className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none h-32 resize-none" value={newTicket.message} onChange={(e) => setNewTicket({...newTicket, message: e.target.value})}></textarea></div>
-                <button type="submit" disabled={ticketLoading} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">{ticketLoading ? 'Submitting...' : 'Submit Ticket'}</button>
-            </form>
+      {activeTab === 'rewards' && (
+          <div className="space-y-6">
+              <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-2xl p-8 text-white relative overflow-hidden shadow-lg">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-16 -mt-16"></div>
+                  <div className="relative z-10">
+                      <div className="flex items-center gap-3 mb-2">
+                          <Gift size={32} className="text-white" />
+                          <h2 className="text-3xl font-bold">SwiftPoints</h2>
+                      </div>
+                      <p className="text-yellow-100 font-medium text-lg">Your Balance: <span className="text-4xl font-bold text-white ml-2">{userData.points || 0}</span> pts</p>
+                      <p className="text-sm mt-4 text-yellow-50 opacity-90">Earn 50 points for every verified payment!</p>
+                  </div>
+              </div>
+              <h3 className="text-xl font-bold text-slate-800">Redeem Rewards</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col">
+                      <div className="bg-blue-50 w-12 h-12 rounded-lg flex items-center justify-center text-blue-600 mb-4"><Zap size={24}/></div>
+                      <h4 className="font-bold text-slate-800 text-lg">24h Speed Boost</h4>
+                      <p className="text-sm text-slate-500 mb-4 flex-grow">Get an extra 50Mbps for 24 hours. Perfect for gaming or large downloads.</p>
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
+                          <span className="font-bold text-slate-800">150 pts</span>
+                          <button className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50" disabled={(userData.points || 0) < 150}>Redeem</button>
+                      </div>
+                  </div>
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col">
+                      <div className="bg-green-50 w-12 h-12 rounded-lg flex items-center justify-center text-green-600 mb-4"><span className="text-2xl font-bold font-sans">₱</span></div>
+                      <h4 className="font-bold text-slate-800 text-lg">₱50 Bill Rebate</h4>
+                      <p className="text-sm text-slate-500 mb-4 flex-grow">Deduct ₱50 from your next billing statement instantly.</p>
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
+                          <span className="font-bold text-slate-800">200 pts</span>
+                          <button className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50" disabled={(userData.points || 0) < 200}>Redeem</button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {activeTab === 'plans' && (<div className="space-y-6"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-slate-800">Available Internet Plans</h2><span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">Current: {userData.plan}</span></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map((plan) => (<div key={plan.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-lg font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => handleApplyPlan(plan.name)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Request Change <ArrowRight size={16} /></button></div></div>))}</div></div>)}
+      
+      {activeTab === 'support' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1 space-y-6">
+                <VideoSupport user={userData} />
+                <ScheduledCallback user={userData} db={db} appId={appId} />
+                <KnowledgeBase />
+            </div>
+            <div className="lg:col-span-2 space-y-6">
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit">
+                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><MessageSquare size={20} className="text-blue-600"/> Create New Ticket</h3>
+                    <form onSubmit={handleCreateTicket} className="space-y-4">
+                        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-white" value={newTicket.subject} onChange={(e) => setNewTicket({...newTicket, subject: e.target.value})}><option value="">Select...</option><option value="No Internet">No Internet</option><option value="Billing">Billing</option><option value="Other">Other</option></select></div>
+                        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Message</label><textarea required className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none h-32 resize-none" value={newTicket.message} onChange={(e) => setNewTicket({...newTicket, message: e.target.value})}></textarea></div>
+                        <button type="submit" disabled={ticketLoading} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">{ticketLoading ? 'Submitting...' : 'Submit Ticket'}</button>
+                    </form>
+                </div>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit">
+                      <h3 className="font-bold text-slate-800 mb-4">My Ticket History</h3>
+                      <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                        {tickets && tickets.length > 0 ? tickets.map(ticket => (
+                            <div key={ticket.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50">
+                                <div className="flex justify-between items-start mb-2"><h4 className="font-bold text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject}</h4><span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${ticket.status==='open'?'bg-yellow-100 text-yellow-700':'bg-green-100 text-green-700'}`}>{ticket.status}</span></div>
+                                <p className="text-sm text-slate-600 mb-3">{ticket.message}</p>
+                                {ticket.adminReply && <div className="bg-white border-l-4 border-blue-500 p-3 rounded-r-lg mt-3"><p className="text-xs font-bold text-blue-600 mb-1">Admin Response:</p><p className="text-sm text-slate-700">{ticket.adminReply}</p></div>}
+                                <div className="mt-3 pt-2 border-t border-slate-100">{followingUpTo === ticket.id ? (<div className="mt-2"><textarea className="w-full border p-2 text-sm" rows="2" value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setFollowingUpTo(null)} className="text-xs font-bold px-3">Cancel</button><button onClick={() => handleFollowUpTicket(ticket.id, ticket.message)} className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded">Send</button></div></div>) : (<button onClick={() => setFollowingUpTo(ticket.id)} className="text-blue-600 text-xs font-bold flex items-center gap-1 mt-1"><MessageCircle size={14} /> Add Note</button>)}</div>
+                            </div>
+                        )) : <p className="text-center text-slate-400">No tickets found.</p>}
+                      </div>
+                </div>
+            </div>
         </div>
-        
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit">
-             <h3 className="font-bold text-slate-800 mb-4">My Ticket History</h3>
-             <div className="space-y-4 max-h-[600px] overflow-y-auto">
-                {tickets && tickets.length > 0 ? tickets.map(ticket => (
-                    <div key={ticket.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50">
-                        <div className="flex justify-between items-start mb-2"><h4 className="font-bold text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject}</h4><span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${ticket.status==='open'?'bg-yellow-100 text-yellow-700':'bg-green-100 text-green-700'}`}>{ticket.status}</span></div>
-                        <p className="text-sm text-slate-600 mb-3">{ticket.message}</p>
-                        {ticket.adminReply && <div className="bg-white border-l-4 border-blue-500 p-3 rounded-r-lg mt-3"><p className="text-xs font-bold text-blue-600 mb-1">Admin Response:</p><p className="text-sm text-slate-700">{ticket.adminReply}</p></div>}
-                        <div className="mt-3 pt-2 border-t border-slate-100">{followingUpTo === ticket.id ? (<div className="mt-2"><textarea className="w-full border p-2 text-sm" rows="2" value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setFollowingUpTo(null)} className="text-xs font-bold px-3">Cancel</button><button onClick={() => handleFollowUpTicket(ticket.id, ticket.message)} className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded">Send</button></div></div>) : (<button onClick={() => setFollowingUpTo(ticket.id)} className="text-blue-600 text-xs font-bold flex items-center gap-1 mt-1"><MessageCircle size={14} /> Add Note</button>)}</div>
-                    </div>
-                )) : <p className="text-center text-slate-400">No tickets found.</p>}
-             </div>
-        </div>
-    </div>
-  </div>
-)}
-      {activeTab === 'settings' && (
+      )}
+
+      {activeTab === 'settings' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Identity Card */}
               <div className="col-span-full bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4">
                   <div>
                       <h3 className="font-bold text-slate-800 flex items-center gap-2">
@@ -2875,8 +3099,6 @@ useEffect(() => {
                            'Please upload an ID to secure your account.'}
                       </p>
                   </div>
-
-                  {/* Simplified Logic: Shows Button OR Verified Badge OR Pending Badge */}
                   {userData.kycStatus === 'verified' ? (
                       <span className="bg-green-100 text-green-700 px-4 py-1 rounded-full text-xs font-bold uppercase">Verified</span>
                   ) : userData.kycStatus === 'pending' ? (
@@ -2888,7 +3110,16 @@ useEffect(() => {
                   )}
               </div>
 
-              {/* Password & Email Cards */}
+              {/* --- NEW: Student Discount Promo --- */}
+              <div className="col-span-full bg-gradient-to-r from-blue-600 to-indigo-600 p-6 rounded-2xl shadow-lg text-white flex justify-between items-center relative overflow-hidden">
+                <div className="relative z-10">
+                   <h3 className="font-bold text-lg flex items-center gap-2"><BookOpen size={20}/> Student & Teacher Discount</h3>
+                   <p className="text-blue-100 text-sm">Get 10% OFF your monthly service fee.</p>
+                </div>
+                <button onClick={() => setCustomModal('student')} className="relative z-10 bg-white text-blue-600 px-6 py-2 rounded-xl font-bold text-sm hover:bg-blue-50">Apply</button>
+                <div className="absolute -right-10 -bottom-20 text-white/10"><BookOpen size={150}/></div>
+              </div>
+
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit">
                   <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Lock size={20} className="text-blue-600"/> Change Password</h3>
                   <form onSubmit={handleUpdatePassword} className="space-y-4">
@@ -2896,7 +3127,6 @@ useEffect(() => {
                       <button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">{updatingCreds ? 'Updating...' : 'Update'}</button>
                   </form>
               </div>
-
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit">
                   <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Mail size={20} className="text-blue-600"/> Update Email</h3>
                   <form onSubmit={handleUpdateEmail} className="space-y-4">
@@ -2906,26 +3136,18 @@ useEffect(() => {
               </div>
           </div>
       )}
-      {showQR && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"><div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center space-x-2"><CreditCard size={20} /><span>Scan to Pay</span></h3><button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full"><X size={20} /></button></div><div className="p-8 flex flex-col items-center text-center"><p className="text-slate-600 text-sm mb-6">Scan the QR code with your banking app to pay <span className="font-bold text-slate-900 block text-2xl mt-2">₱{userData.balance.toFixed(2)}</span></p><div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8"><img 
-  src={paymentQRUrl || "/qr-code.png"} 
-  alt="Payment QR" 
-  className="w-48 h-48 object-contain" 
-  onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/200x200?text=Ask+Admin+for+QR"; }} 
-/></div><div className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 mb-4">Payment posting will reflect once the admin verifies your payment. Your reference number provided should match on the payment they received.</div><div className="w-full text-left"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reference Number</label><form onSubmit={handlePaymentSubmit} className="flex gap-3"><input type="text" required placeholder="e.g. Ref-123456" className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium" value={refNumber} onChange={(e) => setRefNumber(e.target.value)} /><button type="submit" disabled={submitting} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200">{submitting ? '...' : 'Verify'}</button></form></div></div></div></div>)}
-      {showRepairModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-red-600 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center gap-2"><Hammer size={20} /> Request Service Repair</h3><button onClick={() => setShowRepairModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><div className="p-6"><p className="text-slate-600 text-sm mb-4">Please describe the issue.</p><textarea className="w-full border border-slate-300 rounded-lg p-3 h-32" value={repairNote} onChange={(e) => setRepairNote(e.target.value)}></textarea><div className="mt-4 flex justify-end gap-2"><button onClick={() => setShowRepairModal(false)} className="px-4 py-2 text-slate-500 font-bold">Cancel</button><button onClick={handleRequestRepair} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700">Submit</button></div></div></div></div>)}
+
+      {showQR && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"><div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center space-x-2"><CreditCard size={20} /><span>Scan to Pay</span></h3><button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full"><X size={20} /></button></div><div className="p-8 flex flex-col items-center text-center"><p className="text-slate-600 text-sm mb-6">Scan the QR code with your banking app to pay <span className="font-bold text-slate-900 block text-2xl mt-2">₱{userData.balance.toFixed(2)}</span></p><div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8"><img src={paymentQRUrl || "/qr-code.png"} alt="Payment QR" className="w-48 h-48 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/200x200?text=Ask+Admin+for+QR"; }} /></div><div className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 mb-4">Payment posting will reflect once the admin verifies your payment. Your reference number provided should match on the payment they received.</div><div className="w-full text-left"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reference Number</label><form onSubmit={handlePaymentSubmit} className="flex gap-3"><input type="text" required placeholder="e.g. Ref-123456" className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium" value={refNumber} onChange={(e) => setRefNumber(e.target.value)} /><button type="submit" disabled={submitting} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200">{submitting ? '...' : 'Verify'}</button></form></div></div></div></div>)}
+      {showRepairModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-red-600 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center gap-2"><Hammer size={20} /> Request Service Repair</h3><button onClick={() => setShowRepairModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><div className="p-6"><p className="text-slate-600 text-sm mb-4">Please describe the issue.</p><textarea className="w-full border border-slate-300 rounded-lg p-3 h-32" value={repairNote} onChange={(e) => setRepairNote(e.target.value)}></textarea><div className="mt-4 flex justify-end gap-2"><button onClick={() => setShowRepairModal(false)} className="px-4 py-2 text-slate-500 font-bold">Cancel</button><button onClick={handleRequestRepair} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700">Submit</button></div></div></div></div>)}
       {showProofModal && <PaymentProofModal user={userData} db={db} appId={appId} onClose={() => setShowProofModal(false)} />}
-        {showKYC && <KYCModal user={userData} db={db} appId={appId} onClose={() => setShowKYC(false)} />}
-      <InvoiceModal doc={selectedDoc} user={userData} onClose={() => setSelectedDoc(null)} />
-     {showContract && (
-        <ServiceContractModal 
-            user={userData} 
-            db={db} 
-            appId={appId} 
-            onClose={() => setShowContract(false)} 
-        />
-      )}
-    </div>
-  );
+      {showKYC && <KYCModal user={userData} db={db} appId={appId} onClose={() => setShowKYC(false)} />}
+      <InvoiceModal doc={selectedDoc} user={userData} onClose={() => setSelectedDoc(null)} />
+      {showContract && <ServiceContractModal user={userData} db={db} appId={appId} onClose={() => setShowContract(false)} />}
+      
+      {/* --- RENDER CUSTOM MODAL --- */}
+      {customModal === 'student' && <StudentPromoModal onClose={() => setCustomModal(null)} />}
+    </div>
+  );
 };
 
 const DigitalGoodsAdmin = ({ db, appId }) => {
@@ -3782,7 +4004,7 @@ const CashierMode = ({ subscribers, db, appId }) => {
   const [queryText, setQueryText] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [amount, setAmount] = useState('');
-  const [mode, setMode] = useState('bill'); // 'bill' or 'wallet'
+  const [mode, setMode] = useState('bill'); // 'bill', 'wallet', or 'prepaid'
   const [processing, setProcessing] = useState(false);
 
   const filtered = queryText ? subscribers.filter(s => s.username.toLowerCase().includes(queryText.toLowerCase()) || s.accountNumber.includes(queryText)) : [];
@@ -3833,6 +4055,39 @@ const CashierMode = ({ subscribers, db, appId }) => {
               }
 
               alert(`Bill Paid! Receipt saved to Dashboard & Email Sent.`);
+          } else if (mode === 'prepaid') {
+              // --- PREPAID TIME LOADING LOGIC ---
+              
+              // 1. Determine Days based on Amount
+              let daysToAdd = 0;
+              if (val === 50) daysToAdd = 1;   // ₱50 = 1 Day
+              else if (val === 200) daysToAdd = 7; // ₱200 = 1 Week
+              else if (val === 700) daysToAdd = 30; // ₱700 = 1 Month
+              else return alert("Invalid Prepaid Amount. Standard rates: 50 (1d), 200 (7d), or 700 (30d).");
+
+              // 2. Calculate New Due Date
+              // If currently disconnected or overdue, start from NOW. If active, add to existing date.
+              const currentDue = new Date(selectedUser.dueDate);
+              const now = new Date();
+              const baseDate = (currentDue > now && selectedUser.status === 'active') ? currentDue : now;
+              
+              const newDueDate = new Date(baseDate);
+              newDueDate.setDate(newDueDate.getDate() + daysToAdd);
+
+              // 3. Update User
+              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, selectedUser.id), {
+                  status: 'active', // Reactivate service immediately
+                  dueDate: newDueDate.toISOString(),
+                  balance: 0 // Prepaid users usually don't run a negative balance
+              });
+
+              // 4. Log Payment
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
+                  userId: selectedUser.id, username: selectedUser.username, refNumber: newRef, amount: val, date: new Date().toISOString(), status: 'verified', type: 'Prepaid Load'
+              });
+
+              alert(`Success! Added ${daysToAdd} Days. New Expiry: ${newDueDate.toLocaleDateString()}`);
+
           } else {
               // --- WALLET TOP-UP LOGIC ---
               const newCredits = (selectedUser.walletCredits || 0) + val;
@@ -3890,8 +4145,9 @@ const CashierMode = ({ subscribers, db, appId }) => {
             
             {/* Mode Toggle */}
             <div className="flex bg-slate-800 p-1 rounded-xl mb-6">
-                <button onClick={() => setMode('bill')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${mode === 'bill' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>Pay Bill</button>
-                <button onClick={() => setMode('wallet')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${mode === 'wallet' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>Load Wallet</button>
+                <button onClick={() => setMode('bill')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${mode === 'bill' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>Pay Bill</button>
+                <button onClick={() => setMode('prepaid')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${mode === 'prepaid' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>Prepaid Load</button>
+                <button onClick={() => setMode('wallet')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${mode === 'wallet' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>Wallet</button>
             </div>
 
             {selectedUser ? (
@@ -3905,17 +4161,17 @@ const CashierMode = ({ subscribers, db, appId }) => {
                                 <p className="text-red-400 font-mono font-bold">₱{selectedUser.balance}</p>
                             </div>
                             <div className="text-center">
-                                <p className="text-[10px] text-slate-400 uppercase">Wallet Credits</p>
-                                <p className="text-emerald-400 font-mono font-bold">₱{selectedUser.walletCredits || 0}</p>
+                                <p className="text-[10px] text-slate-400 uppercase">Expiry</p>
+                                <p className="text-yellow-400 font-mono font-bold text-xs">{new Date(selectedUser.dueDate).toLocaleDateString()}</p>
                             </div>
                         </div>
                     </div>
                     <div>
-                        <label className="text-slate-400 text-xs uppercase font-bold block mb-2">{mode === 'bill' ? 'Payment Amount' : 'Load Amount'}</label>
+                        <label className="text-slate-400 text-xs uppercase font-bold block mb-2">{mode === 'bill' ? 'Payment Amount' : mode === 'prepaid' ? 'Load Amount (50/200/700)' : 'Load Amount'}</label>
                         <input type="number" className="w-full bg-slate-800 border-2 border-slate-700 rounded-xl p-4 text-3xl font-mono font-bold text-white outline-none focus:border-green-500" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} />
                     </div>
-                    <button onClick={handleTransaction} disabled={processing || !amount} className={`w-full mt-auto py-4 rounded-xl font-bold text-xl shadow-lg transition-all disabled:opacity-50 ${mode === 'bill' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
-                        {processing ? 'Processing...' : mode === 'bill' ? 'Confirm Payment' : 'Confirm Top-up'}
+                    <button onClick={handleTransaction} disabled={processing || !amount} className={`w-full mt-auto py-4 rounded-xl font-bold text-xl shadow-lg transition-all disabled:opacity-50 ${mode === 'bill' ? 'bg-blue-600 hover:bg-blue-500' : mode === 'prepaid' ? 'bg-purple-600 hover:bg-purple-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
+                        {processing ? 'Processing...' : mode === 'bill' ? 'Confirm Payment' : mode === 'prepaid' ? 'Load Prepaid' : 'Confirm Top-up'}
                     </button>
                 </div>
             ) : (
@@ -4354,6 +4610,7 @@ const PlanManageModal = ({ plan, onClose, onSave }) => {
     name: plan?.name || '',
     price: plan?.price || '',
     speed: plan?.speed || '',
+    category: plan?.category || 'Home', // <--- NEW: Default Category
     features: plan?.features ? plan.features.join(', ') : '' // Convert array to string for editing
   });
 
@@ -4361,8 +4618,8 @@ const PlanManageModal = ({ plan, onClose, onSave }) => {
     e.preventDefault();
     onSave({
       ...formData,
-      // Convert comma-separated string back to array
-      features: formData.features.split(',').map(f => f.trim()).filter(f => f !== '') 
+      // Convert comma-separated string back to array, removing extra spaces
+      features: formData.features.split(',').map(f => f.trim()).filter(f => f !== '')
     });
   };
 
@@ -4377,23 +4634,41 @@ const PlanManageModal = ({ plan, onClose, onSave }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Plan Name</label>
-            <input className="w-full border p-3 rounded-xl" placeholder="e.g. Fiber Unli 1699" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
+            <input className="w-full border p-3 rounded-xl outline-none focus:border-blue-500 transition-colors" placeholder="e.g. Fiber Unli 1699" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
           </div>
+          
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Price (₱)</label>
-              <input type="number" className="w-full border p-3 rounded-xl" placeholder="1699" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} required />
+              <input type="number" className="w-full border p-3 rounded-xl outline-none focus:border-blue-500 transition-colors" placeholder="1699" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} required />
             </div>
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Speed</label>
-              <input className="w-full border p-3 rounded-xl" placeholder="200 Mbps" value={formData.speed} onChange={e => setFormData({...formData, speed: e.target.value})} required />
+              <input className="w-full border p-3 rounded-xl outline-none focus:border-blue-500 transition-colors" placeholder="200 Mbps" value={formData.speed} onChange={e => setFormData({...formData, speed: e.target.value})} required />
             </div>
           </div>
+
+          {/* --- NEW: CATEGORY DROPDOWN --- */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Category</label>
+            <select 
+              className="w-full border p-3 rounded-xl bg-white text-slate-700 outline-none focus:border-blue-500 transition-colors cursor-pointer" 
+              value={formData.category} 
+              onChange={e => setFormData({...formData, category: e.target.value})}
+            >
+                <option value="Home">Home Fiber</option>
+                <option value="Business">Business / Failover</option>
+                <option value="Prepaid">Prepaid Kit</option>
+            </select>
+          </div>
+          {/* ----------------------------- */}
+
           <div>
             <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Features (Comma separated)</label>
-            <textarea className="w-full border p-3 rounded-xl h-24" placeholder="Unlimited Data, Free Modem, Netflix Ready" value={formData.features} onChange={e => setFormData({...formData, features: e.target.value})} />
+            <textarea className="w-full border p-3 rounded-xl h-24 resize-none outline-none focus:border-blue-500 transition-colors" placeholder="Unlimited Data, Free Modem, Netflix Ready" value={formData.features} onChange={e => setFormData({...formData, features: e.target.value})} />
           </div>
-          <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all">
+          
+          <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg hover:shadow-blue-500/30">
             {plan ? 'Update Plan' : 'Create Plan'}
           </button>
         </form>
@@ -5496,10 +5771,10 @@ const PrivacyPage = ({ onNavigate, onLogin }) => (
 
 // --- NEW LANDING PAGE COMPONENT (PLDT STYLE) ---
 const LandingPage = ({ onLoginClick, onNavigate, plans }) => {
-  // Default fallback plans if none loaded
+  // Default fallback plans if none loaded or database is empty
   const displayPlans = plans && plans.length > 0 ? plans : [
-    { name: 'Fiber Starter', speed: '50 Mbps', price: '999', features: ['Unlimited Data', 'Free Installation'] },
-    { name: 'Fiber Pro', speed: '100 Mbps', price: '1499', features: ['Unlimited Data', 'Priority Support'] },
+    { name: 'Fiber Starter', speed: '50 Mbps', price: '999', features: ['Unlimited Data', 'Free Installation'], category: 'Home' },
+    { name: 'Fiber Pro', speed: '100 Mbps', price: '1499', features: ['Unlimited Data', 'Priority Support'], category: 'Home' },
   ];
 
   return (
@@ -5532,13 +5807,82 @@ const LandingPage = ({ onLoginClick, onNavigate, plans }) => {
       </div>
 
       <div className="py-12 bg-slate-50 border-b border-slate-200">
-  <div className="max-w-4xl mx-auto px-4">
-    <LiveTrafficWidget />
-  </div>
-</div>
+        <div className="max-w-4xl mx-auto px-4">
+          <LiveTrafficWidget />
+        </div>
+      </div>
+
+      {/* PLANS SECTION (Categorized) */}
+      <div className="py-24 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            
+            {/* 1. HOME FIBER PLANS */}
+            <div className="text-center mb-16">
+                <span className="inline-block px-4 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-bold uppercase tracking-widest mb-4">Residential</span>
+                <h2 className="text-3xl font-black text-slate-900 mb-4">Home Fiber Plans</h2>
+                <p className="text-slate-500">Perfect for streaming, gaming, and working from home.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-24">
+              {displayPlans.filter(p => !p.category || p.category === 'Home').map((plan, idx) => (
+                 <div key={idx} className="bg-white rounded-3xl p-8 shadow-xl border border-slate-100 hover:-translate-y-2 transition-transform duration-300 relative overflow-hidden group">
+                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500"></div>
+                     
+                     <h3 className="text-xl font-bold text-slate-500 uppercase tracking-widest mb-4">{plan.name}</h3>
+                     <div className="text-5xl font-black text-slate-900 mb-6">{plan.speed}</div>
+                     <div className="text-3xl font-bold text-red-600 mb-8">₱{plan.price}<span className="text-sm text-slate-400 font-medium">/mo</span></div>
+                     
+                     <ul className="space-y-4 mb-8">
+                        {plan.features?.map((f, i) => (
+                          <li key={i} className="flex items-center gap-3 text-slate-600 text-sm">
+                              <Check size={16} className="text-green-500 flex-shrink-0"/> {f}
+                          </li>
+                        ))}
+                     </ul>
+
+                     <button onClick={() => onNavigate('plans')} className="w-full py-4 rounded-xl font-bold text-white bg-slate-900 hover:bg-red-600 transition-colors shadow-lg">
+                        View Details
+                     </button>
+                 </div>
+              ))}
+            </div>
+
+            {/* 2. BUSINESS / FAILOVER PLANS (Dark Section) */}
+            <div className="bg-slate-900 rounded-3xl p-8 md:p-16 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                <div className="relative z-10">
+                    <div className="text-center mb-12">
+                        <span className="inline-block px-4 py-1 bg-yellow-500 text-slate-900 rounded-full text-xs font-bold uppercase tracking-widest mb-4">Enterprise Grade</span>
+                        <h2 className="text-3xl font-black text-white mb-4">Business & Failover Lines</h2>
+                        <p className="text-slate-400">Keep your business online 24/7 with redundant fiber connections.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        {displayPlans.filter(p => p.category === 'Business').map((plan, idx) => (
+                            <div key={idx} className="bg-slate-800 rounded-2xl p-8 border border-slate-700 hover:border-yellow-500/50 transition-colors relative">
+                                <div className="absolute top-0 right-0 bg-yellow-500 text-slate-900 text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase">Priority Support</div>
+                                <h3 className="text-lg font-bold text-slate-300 uppercase tracking-widest mb-4">{plan.name}</h3>
+                                <div className="text-4xl font-black text-white mb-4">{plan.speed}</div>
+                                <div className="text-2xl font-bold text-yellow-500 mb-6">₱{plan.price}<span className="text-sm text-slate-500">/mo</span></div>
+                                <button onClick={() => onNavigate('plans')} className="w-full py-3 rounded-xl font-bold text-slate-900 bg-white hover:bg-yellow-500 transition-colors">
+                                    Get Business Line
+                                </button>
+                            </div>
+                        ))}
+                        {displayPlans.filter(p => p.category === 'Business').length === 0 && (
+                            <div className="col-span-3 text-center text-slate-500 py-10 border border-dashed border-slate-700 rounded-xl">
+                                Contact us for custom Enterprise Quotes.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+      </div>
 
       {/* FEATURES PREVIEW */}
-      <div className="py-24 bg-white">
+      <div className="py-24 bg-white border-t border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-black text-slate-900 mb-12">Why Choose SwiftNet?</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -5561,7 +5905,7 @@ const LandingPage = ({ onLoginClick, onNavigate, plans }) => {
         </div>
       </div>
 
-      {/* FOOTER (With links wired up) */}
+      {/* FOOTER */}
       <footer className="bg-slate-900 text-slate-400 py-12 border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="col-span-1 md:col-span-2">
