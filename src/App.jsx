@@ -5198,7 +5198,56 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const handleUpdateRepairStatus = async (repairId, currentStep) => { if (currentStep === 3) { alert("Waiting for customer confirmation. You cannot force complete this step."); return; } const newStep = currentStep < 4 ? currentStep + 1 : 4; const statusLabels = ['Submission', 'Evaluation', 'Processing', 'Customer Confirmation', 'Completed']; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId), { stepIndex: newStep, status: statusLabels[newStep] }); } catch(e) { console.error(e); } };
   const handleForceComplete = async (repairId) => { if (!confirm("Force complete this repair? This bypasses customer confirmation.")) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId); await updateDoc(docRef, { stepIndex: 4, status: 'Completed', completedDate: new Date().toISOString() }); alert("Repair marked as completed by Admin."); } catch(e) { console.error(e); alert("Failed to force complete."); } };
   const handleApprovePlanChange = async (ticket) => { if(!confirm(`Approve plan change to ${ticket.targetPlan} for ${ticket.username}?`)) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.userId), { plan: ticket.targetPlan }); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), { status: 'resolved', adminReply: `Plan change to ${ticket.targetPlan} approved and updated.` }); alert("Plan updated successfully!"); } catch (e) { console.error(e); alert("Failed to update plan."); } };
-  const handleApproveApplication = async (ticket) => { const amountStr = prompt("Enter initial balance/installation fee for this user:", "1500"); if (amountStr === null) return; const amount = parseFloat(amountStr); if (isNaN(amount)) { alert("Invalid amount. Please enter a number."); return; } const newAccountNo = Math.floor(Math.random() * 1000000).toString(); const planName = ticket.targetPlan; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.targetUserId), { status: 'active', accountNumber: newAccountNo, plan: planName, balance: amount, dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() }); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), { status: 'resolved', adminReply: `Approved! Account Number: ${newAccountNo}. Initial Balance: ₱${amount}. Please proceed to payment.` }); alert(`Application Approved! Assigned Account #${newAccountNo} with balance ₱${amount}`); } catch(e) { alert("Failed to approve."); } };
+  const handleApproveApplication = async (ticket) => {
+    // FIX 1: Fallback to ticket.userId if targetUserId is missing (Student Promo case)
+    const targetUid = ticket.targetUserId || ticket.userId;
+    
+    if (!targetUid) return alert("Error: Cannot identify the user ID for this ticket.");
+
+    const amountStr = prompt("Enter initial balance/installation fee for this user:", "1500");
+    if (amountStr === null) return;
+    
+    const amount = parseFloat(amountStr);
+    if (isNaN(amount)) {
+      alert("Invalid amount. Please enter a number.");
+      return;
+    }
+
+    const newAccountNo = Math.floor(Math.random() * 1000000).toString();
+    
+    // FIX 2: Handle missing Plan Name
+    // If ticket.targetPlan is missing (Student Promo), we try to keep their existing plan
+    let planName = ticket.targetPlan;
+    
+    if (!planName) {
+        // Option A: Ask Admin to confirm plan
+        planName = prompt("Plan name not found in ticket. Please enter the Plan to assign (e.g., Fiber 1699):", "Fiber 1699");
+        if (!planName) return; // Cancelled
+    }
+
+    try {
+      // Update the User Profile
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, targetUid), {
+        status: 'active',
+        accountNumber: newAccountNo,
+        plan: planName,
+        balance: amount,
+        isStudent: true, // Tag them as student
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      });
+
+      // Update the Ticket
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), {
+        status: 'resolved',
+        adminReply: `Approved! Account Number: ${newAccountNo}. Initial Balance: ₱${amount}. Student status verified.`
+      });
+
+      alert(`Application Approved! Assigned Account #${newAccountNo} with balance ₱${amount}`);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to approve: " + e.message);
+    }
+  };
   const handleOpenNotify = (sub) => { setNotifyData({ targetId: sub.id, targetName: sub.username, title: '', message: '' }); setShowNotifyModal(true); };
   const handleSendNotification = async (e) => { e.preventDefault(); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', NOTIFICATIONS_COLLECTION), { userId: notifyData.targetId, title: notifyData.title, message: notifyData.message, date: new Date().toISOString(), type: 'info', read: false }); setShowNotifyModal(false); alert("Sent!"); } catch (e) { alert("Failed."); } };
   const handleDeleteSubscriber = async (id) => { if (confirm("Delete subscriber?")) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id)); alert("Deleted."); } catch (e) { alert("Failed."); } } };
