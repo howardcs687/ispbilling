@@ -5065,32 +5065,30 @@ const RetailerDashboard = ({ user, db, appId, onLogout }) => {
 
 
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs, user }) => {
-  const [activeTab, setActiveTab] = useState('subscribers'); 
+  const [activeTab, setActiveTab] = useState('subscribers');
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
-  const [showAddTechModal, setShowAddTechModal] = useState(false); 
+  const [showAddTechModal, setShowAddTechModal] = useState(false);
   const [newTech, setNewTech] = useState({ email: '', password: '', username: '' });
-  const [showPlanModal, setShowPlanModal] = useState(false);
   const [showDateModal, setShowDateModal] = useState(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showAnnounceModal, setShowAnnounceModal] = useState(false);
-  const [showNotifyModal, setShowNotifyModal] = useState(false); 
+  const [showNotifyModal, setShowNotifyModal] = useState(false);
   const [adminNewPass, setAdminNewPass] = useState('');
   const [replyText, setReplyText] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
   const [plans, setPlans] = useState([]);
-  const [editingPlan, setEditingPlan] = useState(null); // The plan object being edited
-  const [isPlanModalOpen, setIsPlanModalOpen] = useState(false); // Controls modal visibility
-  const [newPlanName, setNewPlanName] = useState('');
-  const [technicians, setTechnicians] = useState([]); 
+  const [editingPlan, setEditingPlan] = useState(null);
+  const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  const [technicians, setTechnicians] = useState([]);
   const [newUser, setNewUser] = useState({ email: '', password: '', username: '', accountNumber: '', plan: '' });
   const [newAdmin, setNewAdmin] = useState({ email: '', password: '', username: '' });
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', message: '', type: 'info' });
   const [notifyData, setNotifyData] = useState({ targetId: null, targetName: '', title: '', message: '' });
   const [newDueDate, setNewDueDate] = useState('');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
-  const [showCreateJobModal, setShowCreateJobModal] = useState(false); 
+  const [showCreateJobModal, setShowCreateJobModal] = useState(false);
   const [newJob, setNewJob] = useState({ targetUserId: '', type: 'New Installation', notes: '', assignedTechId: '' });
   
   // Outage States
@@ -5135,38 +5133,17 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
     return () => unsubscribe();
   }, [appId, db]);
 
-  // --- 5. Ticket Fetching (Moved to top level) ---
-  // This was the specific block causing the error previously
-  useEffect(() => {
-    // Only run if admin or cashier
-    if (!user || (user.role !== 'admin' && user.role !== 'cashier')) return;
-
-    const ticketCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'isp_tickets_v1');
-    
-    const unsubscribe = onSnapshot(ticketCollectionRef, (snapshot) => {
-      const fetchedTickets = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
-      
-      // Sort manually in Javascript instead of Firestore
-      const sortedTickets = fetchedTickets.sort((a,b) => new Date(b.date) - new Date(a.date));
-      
-      // Assuming setTickets is passed as prop or you need to manage it locally. 
-      // NOTE: In your original code, 'tickets' was a prop, but you were trying to set it?
-      // Since 'tickets' is passed from the Parent App component, you usually don't fetch it here again.
-      // However, if you want to force fetch it here, you need a local state.
-      // For now, I will assume you want to use the prop, but if you need to fetch:
-      // setTickets(sortedTickets); <--- You cannot do this if tickets is a prop.
-    });
-    return () => unsubscribe();
-  }, [appId, db, user]);
-
-  // ... (Rest of your handler functions: handleStatusChange, handleChangePassword, etc. keep them exactly as they were) ...
-  // Since the code is very long, ensure you keep all your const handle... functions here.
-
+  // --- Handlers ---
   const handleStatusChange = async (userId, newStatus) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId), { status: newStatus }); } catch (e) { console.error(e); } };
+  
   const handleChangePassword = async (e) => { e.preventDefault(); if (adminNewPass.length < 6) return alert("Min 6 chars"); try { await updatePassword(auth.currentUser, adminNewPass); alert("Success"); setShowPasswordModal(false); } catch (e) { alert(e.message); } };
+  
   const handleAddSubscriber = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "Secondary"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newUser.email, newUser.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newUser.username, email: newUser.email, accountNumber: newUser.accountNumber, plan: newUser.plan || (plans[0] ? plans[0].name : 'Basic'), balance: 0, status: 'active', role: 'subscriber', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddModal(false); alert("Success"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
+  
   const handleAddAdmin = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "SecondaryAdmin"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newAdmin.email, newAdmin.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newAdmin.username, email: newAdmin.email, role: 'admin', accountNumber: 'ADMIN', plan: 'N/A', balance: 0, status: 'active', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddAdminModal(false); alert("Admin created"); } catch (e) { alert(e.message); } setIsCreatingUser(false); };
+  
   const handleAddTechnician = async (e) => { e.preventDefault(); setIsCreatingUser(true); let secondaryApp = null; try { secondaryApp = initializeApp(firebaseConfig, "SecondaryTech"); const secondaryAuth = getAuth(secondaryApp); const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newTech.email, newTech.password); const newUid = userCredential.user.uid; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), { uid: newUid, username: newTech.username, email: newTech.email, role: 'technician', accountNumber: 'TECH', plan: 'N/A', balance: 0, status: 'active', dueDate: new Date().toISOString() }); await deleteApp(secondaryApp); setShowAddTechModal(false); alert("Technician created!"); } catch(e) { alert(e.message); } setIsCreatingUser(false); };
+  
   const openNewPlanModal = () => {
     setEditingPlan(null);
     setIsPlanModalOpen(true);
@@ -5193,13 +5170,21 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       alert("Error saving plan: " + e.message);
     }
   };
+
   const handleDeletePlan = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION, id)); };
+  
   const handlePostAnnouncement = async (e) => { e.preventDefault(); if(!newAnnouncement.title) return; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), { ...newAnnouncement, date: new Date().toISOString() }); setShowAnnounceModal(false); };
+  
   const handleUpdateDueDate = async (e) => { e.preventDefault(); if (!showDateModal || !newDueDate) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, showDateModal.id); await updateDoc(docRef, { dueDate: new Date(newDueDate).toISOString() }); alert("Due date updated successfully!"); setShowDateModal(null); } catch(e) { console.error(e); alert("Failed to update date: " + e.message); } };
+  
   const handleReplyTicket = async (ticketId) => { if(!replyText) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId), { adminReply: replyText, status: 'resolved' }); setReplyingTo(null); setReplyText(''); } catch(e) { alert("Failed"); } };
+  
   const handleUpdateRepairStatus = async (repairId, currentStep) => { if (currentStep === 3) { alert("Waiting for customer confirmation. You cannot force complete this step."); return; } const newStep = currentStep < 4 ? currentStep + 1 : 4; const statusLabels = ['Submission', 'Evaluation', 'Processing', 'Customer Confirmation', 'Completed']; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId), { stepIndex: newStep, status: statusLabels[newStep] }); } catch(e) { console.error(e); } };
+  
   const handleForceComplete = async (repairId) => { if (!confirm("Force complete this repair? This bypasses customer confirmation.")) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId); await updateDoc(docRef, { stepIndex: 4, status: 'Completed', completedDate: new Date().toISOString() }); alert("Repair marked as completed by Admin."); } catch(e) { console.error(e); alert("Failed to force complete."); } };
+  
   const handleApprovePlanChange = async (ticket) => { if(!confirm(`Approve plan change to ${ticket.targetPlan} for ${ticket.username}?`)) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.userId), { plan: ticket.targetPlan }); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), { status: 'resolved', adminReply: `Plan change to ${ticket.targetPlan} approved and updated.` }); alert("Plan updated successfully!"); } catch (e) { console.error(e); alert("Failed to update plan."); } };
+  
   const handleApproveApplication = async (ticket) => {
     // FIX 1: Identify the user ID
     const targetUid = ticket.targetUserId || ticket.userId;
@@ -5207,7 +5192,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
     if (!targetUid) return alert("Error: Cannot identify the user ID for this ticket.");
 
     // --- NEW FIX START: Fetch User Data to check for existing plan ---
-    // This ensures we get the plan the user actually selected in the Wizard
     const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, targetUid);
     const userSnap = await getDoc(userRef);
     let existingPlan = '';
@@ -5229,13 +5213,11 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
     const newAccountNo = Math.floor(Math.random() * 1000000).toString();
     
     // FIX 2: Priority Logic for Plan Name
-    // 1. Try Ticket Target Plan -> 2. Try User's Existing Profile Plan -> 3. Prompt Admin
     let planName = ticket.targetPlan || existingPlan;
     
     if (!planName) {
-        // Only ask if we absolutely cannot find a plan
         planName = prompt("Plan name not found. Please enter the Plan to assign:", "Fiber 1699");
-        if (!planName) return; // Cancelled
+        if (!planName) return; 
     }
 
     try {
@@ -5243,7 +5225,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       await updateDoc(userRef, {
         status: 'active',
         accountNumber: newAccountNo,
-        plan: planName, // Now uses the correct plan
+        plan: planName, 
         balance: amount,
         dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
       });
@@ -5260,8 +5242,11 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       alert("Failed to approve: " + e.message);
     }
   };
+
   const handleOpenNotify = (sub) => { setNotifyData({ targetId: sub.id, targetName: sub.username, title: '', message: '' }); setShowNotifyModal(true); };
+  
   const handleSendNotification = async (e) => { e.preventDefault(); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', NOTIFICATIONS_COLLECTION), { userId: notifyData.targetId, title: notifyData.title, message: notifyData.message, date: new Date().toISOString(), type: 'info', read: false }); setShowNotifyModal(false); alert("Sent!"); } catch (e) { alert("Failed."); } };
+  
   const handleDeleteSubscriber = async (id) => { if (confirm("Delete subscriber?")) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id)); alert("Deleted."); } catch (e) { alert("Failed."); } } };
   
   const handleVerifyPayment = async (paymentId, userId, amountPaid, refNumber) => { 
@@ -5320,6 +5305,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   };
   
   const handleAssignTech = async (repairId, techUid) => { if(!techUid) return; const tech = technicians.find(t => t.uid === techUid); try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId), { assignedTechId: techUid, assignedTechName: tech.username, stepIndex: 1, status: 'Evaluation' }); } catch(e) { console.error(e); } };
+  
   const handleAdminCreateJob = async (e) => { e.preventDefault(); if(!newJob.targetUserId || !newJob.notes) return alert("Select user and add details."); const targetUser = subscribers.find(u => u.id === newJob.targetUserId); const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0'); const startStep = newJob.assignedTechId ? 1 : 0; const startStatus = newJob.assignedTechId ? 'Evaluation' : 'Submission'; const assignedTechName = newJob.assignedTechId ? technicians.find(t => t.uid === newJob.assignedTechId)?.username : null; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: randomId, userId: targetUser.uid, username: targetUser.username, address: targetUser.address || "Address not set", type: newJob.type, notes: newJob.notes, status: startStatus, stepIndex: startStep, assignedTechId: newJob.assignedTechId || null, assignedTechName: assignedTechName || null, technicianNote: newJob.assignedTechId ? 'Technician assigned by Admin.' : 'Waiting for assignment.', dateFiled: new Date().toISOString() }); setShowCreateJobModal(false); setNewJob({ targetUserId: '', type: 'New Installation', notes: '', assignedTechId: '' }); alert("Job created successfully!"); } catch(e) { console.error(e); alert("Failed to create job."); } };
   
   const handlePostOutage = async (e) => {
@@ -5356,6 +5342,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
             </button>
          ))}
       </div>
+      
       {activeTab === 'store' && <ProductManager appId={appId} db={db} />}
       {activeTab === 'digital_goods' && <DigitalGoodsAdmin db={db} appId={appId} />}
       {activeTab === 'status' && <NetworkStatusManager db={db} appId={appId} />}
@@ -5366,6 +5353,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       {activeTab === 'cashier' && <CashierMode subscribers={subscribers} db={db} appId={appId} />}
       {activeTab === 'setting' && <PaymentQRSettings db={db} appId={appId} />}
       {activeTab === 'coverage' && <ServiceAreaManager appId={appId} db={db} />}
+      
       {activeTab === 'subscribers' && (
         <>
            <div className="mb-6 flex justify-between items-center bg-slate-100 p-4 rounded-2xl border border-slate-200">
@@ -5413,8 +5401,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                <div className="flex justify-between items-center">
                    <div><h2 className="text-2xl font-bold text-slate-800">Network Status Center</h2><p className="text-sm text-slate-500">Manage service outages and maintenance alerts.</p></div>
                </div>
-              {/* NEW: The Individual User Table */}
-
               <WeatherWidget />
               <UserTrafficTable app={app} />
                <LiveTrafficWidget />
@@ -5455,165 +5441,141 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
            </div>
        )}
 
-{activeTab === 'tickets' && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold text-slate-800">Support Tickets & Applications</h2>
-          <div className="grid grid-cols-1 gap-4">
-            {tickets && tickets.length > 0 ? (
-              tickets.map((ticket) => (
-                <div
-                  key={ticket.id}
-                  className={`p-5 rounded-xl shadow-sm border ${
-                    ticket.isApplication
-                      ? 'bg-blue-50 border-blue-200'
-                      : 'bg-white border-slate-200'
-                  }`}
-                >
-                  {/* Header */}
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h4 className="font-bold text-lg text-slate-800">
-                        #{ticket.ticketId || '---'} - {ticket.subject}{' '}
-                        {ticket.isApplication && (
-                          <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">
-                            APPLICATION
-                          </span>
-                        )}
-                      </h4>
-                      <p className="text-xs text-slate-500">
-                        From: <span className="font-bold text-blue-600">{ticket.username}</span> •{' '}
-                        {new Date(ticket.date).toLocaleString()}
-                      </p>
+        {activeTab === 'tickets' && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-slate-800">Support Tickets & Applications</h2>
+            <div className="grid grid-cols-1 gap-4">
+              {tickets && tickets.length > 0 ? (
+                tickets.map((ticket) => (
+                  <div
+                    key={ticket.id}
+                    className={`p-5 rounded-xl shadow-sm border ${
+                      ticket.isApplication
+                        ? 'bg-blue-50 border-blue-200'
+                        : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    {/* Header */}
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h4 className="font-bold text-lg text-slate-800">
+                          #{ticket.ticketId || '---'} - {ticket.subject}{' '}
+                          {ticket.isApplication && (
+                            <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">
+                              APPLICATION
+                            </span>
+                          )}
+                        </h4>
+                        <p className="text-xs text-slate-500">
+                          From: <span className="font-bold text-blue-600">{ticket.username}</span> •{' '}
+                          {new Date(ticket.date).toLocaleString()}
+                        </p>
+                      </div>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                          ticket.status === 'open'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-green-100 text-green-700'
+                        }`}
+                      >
+                        {ticket.status}
+                      </span>
                     </div>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                        ticket.status === 'open'
-                          ? 'bg-yellow-100 text-yellow-700'
-                          : 'bg-green-100 text-green-700'
-                      }`}
-                    >
-                      {ticket.status}
-                    </span>
-                  </div>
 
-                  {/* Message Body */}
-                  <p className="text-slate-700 text-sm mb-4 whitespace-pre-wrap">{ticket.message}</p>
+                    {/* Message Body */}
+                    <p className="text-slate-700 text-sm mb-4 whitespace-pre-wrap">{ticket.message}</p>
 
-                  {/* Attachment / ID Image Viewer */}
-                  {ticket.attachmentUrl && (
-                    <div className="mb-4 bg-slate-100 p-3 rounded-lg border border-slate-200">
-                      <p className="text-xs font-bold text-slate-500 uppercase mb-2">
-                        Attached Document (Click to Open)
-                      </p>
-                      <img
-                        src={ticket.attachmentUrl}
-                        alt="Attachment"
-                        className="h-32 object-contain rounded-md border border-white shadow-sm cursor-pointer hover:opacity-90 transition-opacity bg-white"
-                        onClick={() => {
-                          const w = window.open("");
-                          w.document.write('<img src="' + ticket.attachmentUrl + '" style="width:100%"/>');
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  {ticket.isPlanChange && ticket.status === 'open' && (
-                    <button
-                      onClick={() => handleApprovePlanChange(ticket)}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors flex items-center justify-center gap-2"
-                    >
-                      <CheckCircle size={16} /> Approve Plan Change
-                    </button>
-                  )}
-                  {ticket.isApplication && ticket.status === 'open' && (
-                    <button
-                      onClick={() => handleApproveApplication(ticket)}
-                      className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors"
-                    >
-                      Approve & Assign Account #
-                    </button>
-                  )}
-
-                  {/* Reply Section */}
-                  {ticket.adminReply ? (
-                    <div className="border-t border-slate-200 pt-3">
-                      <p className="text-xs font-bold text-slate-400 uppercase mb-1">Your Reply</p>
-                      <p className="text-sm text-blue-700 font-medium">{ticket.adminReply}</p>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2 mt-2">
-                      {replyingTo === ticket.id ? (
-                        <div className="w-full">
-                          <textarea
-                            className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2"
-                            rows="3"
-                            value={replyText}
-                            onChange={(e) => setReplyText(e.target.value)}
-                          ></textarea>
-                          <div className="flex gap-2 justify-end">
-                            <button
-                              onClick={() => setReplyingTo(null)}
-                              className="text-slate-500 text-sm font-bold"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => handleReplyTicket(ticket.id)}
-                              className="bg-blue-600 text-white text-sm font-bold px-4 py-1 rounded-lg"
-                            >
-                              Send Reply
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
+                    {/* Attachment Viewer */}
+                    {ticket.attachmentUrl && (
+                      <div className="mb-4 bg-slate-100 p-3 rounded-lg border border-slate-200">
+                        <p className="text-xs font-bold text-slate-500 uppercase mb-2">
+                          Attached Document
+                        </p>
+                        <img
+                          src={ticket.attachmentUrl}
+                          alt="Attachment"
+                          className="h-32 object-contain rounded-md border border-white shadow-sm cursor-pointer hover:opacity-90 transition-opacity bg-white"
                           onClick={() => {
-                            setReplyingTo(ticket.id);
-                            setReplyText('');
+                            const w = window.open("");
+                            w.document.write('<img src="' + ticket.attachmentUrl + '" style="width:100%"/>');
                           }}
-                          className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg font-bold text-sm transition-colors"
-                        >
-                          <MessageSquare size={16} /> Reply
-                        </button>
-                      )}
-                    </div>
-                  )}
+                        />
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    {ticket.isPlanChange && ticket.status === 'open' && (
+                      <button
+                        onClick={() => handleApprovePlanChange(ticket)}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors flex items-center justify-center gap-2"
+                      >
+                        <CheckCircle size={16} /> Approve Plan Change
+                      </button>
+                    )}
+                    {ticket.isApplication && ticket.status === 'open' && (
+                      <button
+                        onClick={() => handleApproveApplication(ticket)}
+                        className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors"
+                      >
+                        Approve & Assign Account #
+                      </button>
+                    )}
+
+                    {/* Reply Section */}
+                    {ticket.adminReply ? (
+                      <div className="border-t border-slate-200 pt-3">
+                        <p className="text-xs font-bold text-slate-400 uppercase mb-1">Your Reply</p>
+                        <p className="text-sm text-blue-700 font-medium">{ticket.adminReply}</p>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 mt-2">
+                        {replyingTo === ticket.id ? (
+                          <div className="w-full">
+                            <textarea
+                              className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2"
+                              rows="3"
+                              value={replyText}
+                              onChange={(e) => setReplyText(e.target.value)}
+                            ></textarea>
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                onClick={() => setReplyingTo(null)}
+                                className="text-slate-500 text-sm font-bold"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => handleReplyTicket(ticket.id)}
+                                className="bg-blue-600 text-white text-sm font-bold px-4 py-1 rounded-lg"
+                              >
+                                Send Reply
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setReplyingTo(ticket.id);
+                              setReplyText('');
+                            }}
+                            className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg font-bold text-sm transition-colors"
+                          >
+                            <MessageSquare size={16} /> Reply
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400">
+                  No tickets found.
                 </div>
-              ))
-            ) : (
-              <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400">
-                No tickets found.
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      )}
-       {/* Inside the ticket mapping in AdminDashboard */}
-<div key={ticket.id} className="...">
-    {/* ... existing header code ... */}
-    
-    <p className="text-slate-700 text-sm mb-4">{ticket.message}</p>
-    
-    {/* ADD THIS BLOCK TO SEE THE IMAGE */}
-    {ticket.attachmentUrl && (
-        <div className="mb-4">
-            <p className="text-xs font-bold text-slate-500 uppercase mb-1">Attachment:</p>
-            <img 
-                src={ticket.attachmentUrl} 
-                alt="Proof" 
-                className="max-h-48 rounded-lg border border-slate-200 cursor-pointer"
-                onClick={() => {
-                    const w = window.open("");
-                    w.document.write('<img src="' + ticket.attachmentUrl + '" style="width:100%"/>');
-                }}
-            />
-        </div>
-    )}
-    
-    {/* ... existing reply button code ... */}
-</div>
-{ticket.isPlanChange && ticket.status === 'open' && (<button onClick={() => handleApprovePlanChange(ticket)} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors flex items-center justify-center gap-2"><CheckCircle size={16} /> Approve Plan Change</button>)}{ticket.isApplication && ticket.status === 'open' && (<button onClick={() => handleApproveApplication(ticket)} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors">Approve & Assign Account #</button>)}{ticket.adminReply ? <div className="border-t border-slate-200 pt-3"><p className="text-xs font-bold text-slate-400 uppercase mb-1">Your Reply</p><p className="text-sm text-blue-700 font-medium">{ticket.adminReply}</p></div> : (<div className="flex gap-2 mt-2">{replyingTo === ticket.id ? (<div className="w-full"><textarea className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2" rows="3" value={replyText} onChange={(e) => setReplyText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setReplyingTo(null)} className="text-slate-500 text-sm font-bold">Cancel</button><button onClick={() => handleReplyTicket(ticket.id)} className="bg-blue-600 text-white text-sm font-bold px-4 py-1 rounded-lg">Send Reply</button></div></div>) : <button onClick={() => { setReplyingTo(ticket.id); setReplyText(''); }} className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg font-bold text-sm transition-colors"><MessageSquare size={16} /> Reply</button>}</div>)}</div>)) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400">No tickets found.</div>}</div></div>)}
+        )}
+
        {activeTab === 'repairs' && (
          <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -5629,59 +5591,61 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
             <div className="pt-8 border-t border-slate-200"><h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><Clock size={18}/> Job History</h3>{historyRepairs && historyRepairs.length > 0 ? (<div className="grid grid-cols-1 md:grid-cols-2 gap-4">{historyRepairs.map(repair => (<RepairStatusCard key={repair.id} repair={repair} isSubscriber={false} />))}</div>) : <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-100 text-slate-400 text-sm">No completed history.</div>}</div>
          </div>
       )}
-        {activeTab === 'plans' && (
-  <div className="space-y-6">
-    <div className="flex justify-between items-center">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-800">Internet Plans</h2>
-        <p className="text-sm text-slate-500">These plans appear on the Landing Page.</p>
-      </div>
-      <button onClick={openNewPlanModal} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-blue-700 shadow-lg">
-        <Plus size={18}/> Add Plan
-      </button>
-    </div>
 
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {plans.map((p) => (
-        <div key={p.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 relative group hover:shadow-md transition-all">
-          <div className="flex justify-between items-start mb-4">
-            <h3 className="font-bold text-xl text-slate-800">{p.name}</h3>
-            <div className="flex gap-2">
-              <button onClick={() => openEditPlanModal(p)} className="text-slate-400 hover:text-blue-600"><Edit size={18}/></button>
-              <button onClick={() => handleDeletePlan(p.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={18}/></button>
+      {activeTab === 'plans' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800">Internet Plans</h2>
+              <p className="text-sm text-slate-500">These plans appear on the Landing Page.</p>
             </div>
-          </div>
-          
-          <div className="text-3xl font-black text-blue-600 mb-2">
-            ₱{p.price || '0'}<span className="text-sm text-slate-400 font-medium">/mo</span>
-          </div>
-          <div className="font-bold text-slate-700 mb-4 flex items-center gap-2">
-            <Zap size={16} className="text-yellow-500"/> {p.speed || 'N/A'}
+            <button onClick={openNewPlanModal} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-blue-700 shadow-lg">
+              <Plus size={18}/> Add Plan
+            </button>
           </div>
 
-          <div className="space-y-2 border-t border-slate-100 pt-4">
-            {p.features && p.features.map((feat, i) => (
-              <div key={i} className="flex items-center gap-2 text-sm text-slate-600">
-                <Check size={14} className="text-green-500"/> {feat}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {plans.map((p) => (
+              <div key={p.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 relative group hover:shadow-md transition-all">
+                <div className="flex justify-between items-start mb-4">
+                  <h3 className="font-bold text-xl text-slate-800">{p.name}</h3>
+                  <div className="flex gap-2">
+                    <button onClick={() => openEditPlanModal(p)} className="text-slate-400 hover:text-blue-600"><Edit size={18}/></button>
+                    <button onClick={() => handleDeletePlan(p.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={18}/></button>
+                  </div>
+                </div>
+                
+                <div className="text-3xl font-black text-blue-600 mb-2">
+                  ₱{p.price || '0'}<span className="text-sm text-slate-400 font-medium">/mo</span>
+                </div>
+                <div className="font-bold text-slate-700 mb-4 flex items-center gap-2">
+                  <Zap size={16} className="text-yellow-500"/> {p.speed || 'N/A'}
+                </div>
+
+                <div className="space-y-2 border-t border-slate-100 pt-4">
+                  {p.features && p.features.map((feat, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm text-slate-600">
+                      <Check size={14} className="text-green-500"/> {feat}
+                    </div>
+                  ))}
+                  {(!p.features || p.features.length === 0) && <span className="text-xs text-slate-400 italic">No features listed</span>}
+                </div>
               </div>
             ))}
-            {(!p.features || p.features.length === 0) && <span className="text-xs text-slate-400 italic">No features listed</span>}
+            {plans.length === 0 && <p className="col-span-full text-center text-slate-400 py-10">No plans configured yet.</p>}
           </div>
-        </div>
-      ))}
-      {plans.length === 0 && <p className="col-span-full text-center text-slate-400 py-10">No plans configured yet.</p>}
-    </div>
 
-    {/* Render the Modal */}
-    {isPlanModalOpen && (
-      <PlanManageModal 
-        plan={editingPlan} 
-        onClose={() => setIsPlanModalOpen(false)} 
-        onSave={handleSavePlan} 
-      />
-    )}
-  </div>
-)}
+          {/* Render the Modal */}
+          {isPlanModalOpen && (
+            <PlanManageModal 
+              plan={editingPlan} 
+              onClose={() => setIsPlanModalOpen(false)} 
+              onSave={handleSavePlan} 
+            />
+          )}
+        </div>
+      )}
+
        {activeTab === 'payments' && (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
           <h3 className="font-bold mb-4 text-slate-800">Payments & Verifications</h3>
@@ -5704,11 +5668,11 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                     {p.proofImage ? (
                         <button 
                            onClick={() => {
-    const win = window.open("");
-    win.document.write(
-        `<iframe src="${p.proofImage}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`
-    );
-}}
+                                const win = window.open("");
+                                win.document.write(
+                                    `<iframe src="${p.proofImage}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`
+                                );
+                            }}
                            className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 border border-blue-200 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-all"
                         >
                            <Image size={16}/> View Proof
@@ -5737,6 +5701,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
         </div>
       )}
        {activeTab === 'speedtest' && <SpeedTest />}
+       
        {showCreateJobModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6">
