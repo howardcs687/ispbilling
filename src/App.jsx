@@ -382,23 +382,24 @@ const ScheduledCallback = ({ user, db, appId }) => {
 
 // --- [NEW] DATA RECORDER (Creates the history) ---
 // This invisible component saves traffic stats to Firestore every 10 minutes
+// --- [UPDATED] TRAFFIC RECORDER ---
 const TrafficRecorder = ({ db, app, appId }) => {
   useEffect(() => {
     const rtdb = getDatabase(app);
     const trafficRef = ref(rtdb, 'monitor/traffic');
     let currentTraffic = { rx: 0, tx: 0 };
 
-    // 1. Listen to live traffic constantly
     const unsubscribe = onValue(trafficRef, (snapshot) => {
         const val = snapshot.val();
         if(val) currentTraffic = val;
     });
 
-    // 2. Save snapshot every 10 minutes
     const saveLog = async () => {
         if(currentTraffic.rx === 0 && currentTraffic.tx === 0) return;
         try {
-            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_traffic_logs'), {
+            // FIX: Use backticks ` ` and slashes / for the path
+            const path = `artifacts/${appId}/public/data/isp_traffic_logs`;
+            await addDoc(collection(db, path), {
                 date: new Date().toISOString(),
                 download: currentTraffic.rx,
                 upload: currentTraffic.tx
@@ -407,14 +408,15 @@ const TrafficRecorder = ({ db, app, appId }) => {
         } catch(e) { console.error("Log error", e); }
     };
 
-    const interval = setInterval(saveLog, 10 * 60 * 1000); // 10 Minutes
+    const interval = setInterval(saveLog, 10 * 60 * 1000); 
     return () => { unsubscribe(); clearInterval(interval); }
   }, [db, app, appId]);
 
-  return null; // Invisible
+  return null; 
 };
 
 // --- [UPDATED] PEAK USAGE GRAPH (Reads the history) ---
+// --- [UPDATED] PEAK USAGE GRAPH ---
 const PeakUsageGraph = ({ db, appId }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -422,10 +424,13 @@ const PeakUsageGraph = ({ db, appId }) => {
   useEffect(() => {
     const loadHistory = async () => {
         try {
-            // Fetch logs from the last 24 hours
             const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+            
+            // FIX: Use backticks ` ` and slashes / for the path
+            const path = `artifacts/${appId}/public/data/isp_traffic_logs`;
+            
             const q = query(
-                collection(db, 'artifacts', appId, 'public', 'data', 'isp_traffic_logs'),
+                collection(db, path),
                 where('date', '>=', yesterday),
                 orderBy('date', 'asc')
             );
@@ -434,14 +439,12 @@ const PeakUsageGraph = ({ db, appId }) => {
             const points = snapshot.docs.map(doc => {
                 const d = doc.data();
                 return {
-                    // Format time as "10:30 PM"
                     time: new Date(d.date).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'}),
                     usage: d.download
                 };
             });
 
             if(points.length === 0) {
-                // Fallback text if no logs yet
                 setData([{ time: 'Now', usage: 0 }]);
             } else {
                 setData(points);
@@ -455,6 +458,7 @@ const PeakUsageGraph = ({ db, appId }) => {
     loadHistory();
   }, [db, appId]);
 
+  // ... (The rest of the render return code stays the same) ...
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-80 w-full flex flex-col">
         <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
@@ -2600,15 +2604,64 @@ const FamilyPlanWidget = ({ user, db, appId }) => {
 };
 
 // --- FEATURE 4: STUDENT DISCOUNT VERIFICATION ---
-const StudentPromoModal = ({ onClose }) => {
-  const [file, setFile] = useState(null);
-  
-  const handleSubmit = (e) => {
+// --- [FIXED] STUDENT PROMO MODAL ---
+const StudentPromoModal = ({ onClose, user, db, appId }) => {
+  const [preview, setPreview] = useState(null);
+  const [base64Image, setBase64Image] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Handle Image Compression
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setPreview(URL.createObjectURL(file));
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const img = new window.Image();
+        img.src = event.target.result;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 600;
+            const scaleSize = MAX_WIDTH / img.width;
+            canvas.width = MAX_WIDTH;
+            canvas.height = img.height * scaleSize;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            setBase64Image(canvas.toDataURL('image/jpeg', 0.6));
+        };
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if(!file) return alert("Please upload your School ID.");
-    // Logic to save file would go here
-    alert("Application Submitted! We will apply the 10% Student Discount to your next bill once verified.");
-    onClose();
+    if(!base64Image) return alert("Please upload your School ID.");
+    setLoading(true);
+
+    try {
+        const ticketId = Math.floor(100000 + Math.random() * 900000).toString();
+        
+        // Save to Tickets Collection
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_tickets_v1'), {
+            ticketId,
+            userId: user.uid,
+            username: user.username,
+            subject: "Student Discount Application",
+            message: "I am applying for the 10% Student Discount. Please verify my attached ID.",
+            attachmentUrl: base64Image, // <--- SAVING THE IMAGE HERE
+            status: 'open',
+            date: new Date().toISOString(),
+            isApplication: true
+        });
+
+        alert("Application Submitted! Ticket #" + ticketId + " created.");
+        onClose();
+    } catch (e) {
+        console.error(e);
+        alert("Error submitting: " + e.message);
+    }
+    setLoading(false);
   };
 
   return (
@@ -2621,21 +2674,23 @@ const StudentPromoModal = ({ onClose }) => {
           <button onClick={onClose}><X size={20} className="text-slate-400"/></button>
         </div>
         <div className="bg-blue-50 p-3 rounded-xl text-xs text-blue-800 mb-4 border border-blue-100">
-          Students and Teachers get <strong>10% OFF</strong> monthly fees. Upload a valid School ID for this school year.
+          Students and Teachers get <strong>10% OFF</strong> monthly fees. Upload a valid School ID.
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="border-2 border-dashed border-slate-300 rounded-xl h-32 flex flex-col items-center justify-center bg-slate-50 hover:bg-white cursor-pointer relative">
-             <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => setFile(e.target.files[0])} />
-             {file ? (
-               <span className="text-sm font-bold text-green-600">{file.name}</span>
+          <div className="border-2 border-dashed border-slate-300 rounded-xl h-40 flex flex-col items-center justify-center bg-slate-50 hover:bg-white cursor-pointer relative overflow-hidden">
+             <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleFileChange} />
+             {preview ? (
+                <img src={preview} className="w-full h-full object-contain" alt="Preview"/>
              ) : (
-               <div className="text-center text-slate-400">
-                 <Upload size={24} className="mx-auto mb-1"/>
-                 <span className="text-xs">Tap to upload ID</span>
-               </div>
+                <div className="text-center text-slate-400">
+                  <Upload size={24} className="mx-auto mb-1"/>
+                  <span className="text-xs">Tap to upload ID</span>
+                </div>
              )}
           </div>
-          <button className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700">Apply Discount</button>
+          <button disabled={loading} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50">
+            {loading ? 'Submitting...' : 'Apply Discount'}
+          </button>
         </form>
       </div>
     </div>
@@ -3145,7 +3200,14 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       {showContract && <ServiceContractModal user={userData} db={db} appId={appId} onClose={() => setShowContract(false)} />}
       
       {/* --- RENDER CUSTOM MODAL --- */}
-      {customModal === 'student' && <StudentPromoModal onClose={() => setCustomModal(null)} />}
+              {customModal === 'student' && (
+            <StudentPromoModal 
+                onClose={() => setCustomModal(null)} 
+                user={userData} 
+                db={db} 
+                appId={appId} 
+            />
+        )}
     </div>
   );
 };
@@ -5332,7 +5394,32 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
            </div>
        )}
 
-       {activeTab === 'tickets' && (<div className="space-y-4"><h2 className="text-xl font-bold text-slate-800">Support Tickets & Applications</h2><div className="grid grid-cols-1 gap-4">{tickets && tickets.length > 0 ? tickets.map(ticket => (<div key={ticket.id} className={`p-5 rounded-xl shadow-sm border ${ticket.isApplication ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}><div className="flex justify-between items-start mb-3"><div><h4 className="font-bold text-lg text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject} {ticket.isApplication && <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">APPLICATION</span>}</h4><p className="text-xs text-slate-500">From: <span className="font-bold text-blue-600">{ticket.username}</span> • {new Date(ticket.date).toLocaleString()}</p></div><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${ticket.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{ticket.status}</span></div><p className="text-slate-700 text-sm mb-4">{ticket.message}</p>{ticket.isPlanChange && ticket.status === 'open' && (<button onClick={() => handleApprovePlanChange(ticket)} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors flex items-center justify-center gap-2"><CheckCircle size={16} /> Approve Plan Change</button>)}{ticket.isApplication && ticket.status === 'open' && (<button onClick={() => handleApproveApplication(ticket)} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors">Approve & Assign Account #</button>)}{ticket.adminReply ? <div className="border-t border-slate-200 pt-3"><p className="text-xs font-bold text-slate-400 uppercase mb-1">Your Reply</p><p className="text-sm text-blue-700 font-medium">{ticket.adminReply}</p></div> : (<div className="flex gap-2 mt-2">{replyingTo === ticket.id ? (<div className="w-full"><textarea className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2" rows="3" value={replyText} onChange={(e) => setReplyText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setReplyingTo(null)} className="text-slate-500 text-sm font-bold">Cancel</button><button onClick={() => handleReplyTicket(ticket.id)} className="bg-blue-600 text-white text-sm font-bold px-4 py-1 rounded-lg">Send Reply</button></div></div>) : <button onClick={() => { setReplyingTo(ticket.id); setReplyText(''); }} className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg font-bold text-sm transition-colors"><MessageSquare size={16} /> Reply</button>}</div>)}</div>)) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400">No tickets found.</div>}</div></div>)}
+       {activeTab === 'tickets' && (<div className="space-y-4"><h2 className="text-xl font-bold text-slate-800">Support Tickets & Applications</h2><div className="grid grid-cols-1 gap-4">{tickets && tickets.length > 0 ? tickets.map(ticket => (<div key={ticket.id} className={`p-5 rounded-xl shadow-sm border ${ticket.isApplication ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}><div className="flex justify-between items-start mb-3"><div><h4 className="font-bold text-lg text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject} {ticket.isApplication && <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">APPLICATION</span>}</h4><p className="text-xs text-slate-500">From: <span className="font-bold text-blue-600">{ticket.username}</span> • {new Date(ticket.date).toLocaleString()}</p></div><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${ticket.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{ticket.status}</span></div><p className="text-slate-700 text-sm mb-4">{ticket.message}</p>
+       {/* Inside the ticket mapping in AdminDashboard */}
+<div key={ticket.id} className="...">
+    {/* ... existing header code ... */}
+    
+    <p className="text-slate-700 text-sm mb-4">{ticket.message}</p>
+    
+    {/* ADD THIS BLOCK TO SEE THE IMAGE */}
+    {ticket.attachmentUrl && (
+        <div className="mb-4">
+            <p className="text-xs font-bold text-slate-500 uppercase mb-1">Attachment:</p>
+            <img 
+                src={ticket.attachmentUrl} 
+                alt="Proof" 
+                className="max-h-48 rounded-lg border border-slate-200 cursor-pointer"
+                onClick={() => {
+                    const w = window.open("");
+                    w.document.write('<img src="' + ticket.attachmentUrl + '" style="width:100%"/>');
+                }}
+            />
+        </div>
+    )}
+    
+    {/* ... existing reply button code ... */}
+</div>
+{ticket.isPlanChange && ticket.status === 'open' && (<button onClick={() => handleApprovePlanChange(ticket)} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors flex items-center justify-center gap-2"><CheckCircle size={16} /> Approve Plan Change</button>)}{ticket.isApplication && ticket.status === 'open' && (<button onClick={() => handleApproveApplication(ticket)} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors">Approve & Assign Account #</button>)}{ticket.adminReply ? <div className="border-t border-slate-200 pt-3"><p className="text-xs font-bold text-slate-400 uppercase mb-1">Your Reply</p><p className="text-sm text-blue-700 font-medium">{ticket.adminReply}</p></div> : (<div className="flex gap-2 mt-2">{replyingTo === ticket.id ? (<div className="w-full"><textarea className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2" rows="3" value={replyText} onChange={(e) => setReplyText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setReplyingTo(null)} className="text-slate-500 text-sm font-bold">Cancel</button><button onClick={() => handleReplyTicket(ticket.id)} className="bg-blue-600 text-white text-sm font-bold px-4 py-1 rounded-lg">Send Reply</button></div></div>) : <button onClick={() => { setReplyingTo(ticket.id); setReplyText(''); }} className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg font-bold text-sm transition-colors"><MessageSquare size={16} /> Reply</button>}</div>)}</div>)) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400">No tickets found.</div>}</div></div>)}
        {activeTab === 'repairs' && (
          <div className="space-y-6">
             <div className="flex justify-between items-center">
