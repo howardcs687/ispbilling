@@ -3393,7 +3393,7 @@ const DigitalGoodsAdmin = ({ db, appId }) => {
 };
 
 
-const AdminAnalytics = ({ subscribers, payments, tickets }) => {
+const AdminAnalytics = ({ subscribers, payments, tickets, db, appId }) => {
   const activeUsers = subscribers.filter(s => s.status === 'active').length;
   const inactiveUsers = subscribers.filter(s => s.status !== 'active').length;
   const totalBalance = subscribers.reduce((acc, curr) => acc + (curr.balance || 0), 0);
@@ -3446,7 +3446,9 @@ const AdminAnalytics = ({ subscribers, payments, tickets }) => {
                         <Legend />
                     </PieChart>
                 </ResponsiveContainer>
-                <PeakUsageGraph />
+                
+                {/* --- FIX APPLIED HERE: Passing the required props --- */}
+                <PeakUsageGraph db={db} appId={appId} />
             </div>
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-80">
                 <h3 className="font-bold text-slate-700 mb-4">Support Ticket Status</h3>
@@ -5199,10 +5201,21 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const handleForceComplete = async (repairId) => { if (!confirm("Force complete this repair? This bypasses customer confirmation.")) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId); await updateDoc(docRef, { stepIndex: 4, status: 'Completed', completedDate: new Date().toISOString() }); alert("Repair marked as completed by Admin."); } catch(e) { console.error(e); alert("Failed to force complete."); } };
   const handleApprovePlanChange = async (ticket) => { if(!confirm(`Approve plan change to ${ticket.targetPlan} for ${ticket.username}?`)) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.userId), { plan: ticket.targetPlan }); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), { status: 'resolved', adminReply: `Plan change to ${ticket.targetPlan} approved and updated.` }); alert("Plan updated successfully!"); } catch (e) { console.error(e); alert("Failed to update plan."); } };
   const handleApproveApplication = async (ticket) => {
-    // FIX 1: Fallback to ticket.userId if targetUserId is missing (Student Promo case)
+    // FIX 1: Identify the user ID
     const targetUid = ticket.targetUserId || ticket.userId;
     
     if (!targetUid) return alert("Error: Cannot identify the user ID for this ticket.");
+
+    // --- NEW FIX START: Fetch User Data to check for existing plan ---
+    // This ensures we get the plan the user actually selected in the Wizard
+    const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, targetUid);
+    const userSnap = await getDoc(userRef);
+    let existingPlan = '';
+    
+    if (userSnap.exists()) {
+        existingPlan = userSnap.data().plan;
+    }
+    // --- NEW FIX END ---
 
     const amountStr = prompt("Enter initial balance/installation fee for this user:", "1500");
     if (amountStr === null) return;
@@ -5215,34 +5228,33 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
 
     const newAccountNo = Math.floor(Math.random() * 1000000).toString();
     
-    // FIX 2: Handle missing Plan Name
-    // If ticket.targetPlan is missing (Student Promo), we try to keep their existing plan
-    let planName = ticket.targetPlan;
+    // FIX 2: Priority Logic for Plan Name
+    // 1. Try Ticket Target Plan -> 2. Try User's Existing Profile Plan -> 3. Prompt Admin
+    let planName = ticket.targetPlan || existingPlan;
     
     if (!planName) {
-        // Option A: Ask Admin to confirm plan
-        planName = prompt("Plan name not found in ticket. Please enter the Plan to assign (e.g., Fiber 1699):", "Fiber 1699");
+        // Only ask if we absolutely cannot find a plan
+        planName = prompt("Plan name not found. Please enter the Plan to assign:", "Fiber 1699");
         if (!planName) return; // Cancelled
     }
 
     try {
       // Update the User Profile
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, targetUid), {
+      await updateDoc(userRef, {
         status: 'active',
         accountNumber: newAccountNo,
-        plan: planName,
+        plan: planName, // Now uses the correct plan
         balance: amount,
-        isStudent: true, // Tag them as student
         dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
       });
 
       // Update the Ticket
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), {
         status: 'resolved',
-        adminReply: `Approved! Account Number: ${newAccountNo}. Initial Balance: ₱${amount}. Student status verified.`
+        adminReply: `Approved! Account Number: ${newAccountNo}. Plan: ${planName}. Initial Balance: ₱${amount}.`
       });
 
-      alert(`Application Approved! Assigned Account #${newAccountNo} with balance ₱${amount}`);
+      alert(`Application Approved! Assigned Account #${newAccountNo} with Plan: ${planName}`);
     } catch (e) {
       console.error(e);
       alert("Failed to approve: " + e.message);
@@ -5349,7 +5361,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       {activeTab === 'status' && <NetworkStatusManager db={db} appId={appId} />}
       {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} payments={payments} />}
       {activeTab === 'speedtest' && <SpeedTest />}
-      {activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} />}
+      {activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} db={db} appId={appId} />}
       {activeTab === 'reports' && <ReportGenerator payments={payments} expenses={expenses || []} subscribers={subscribers} />}
       {activeTab === 'cashier' && <CashierMode subscribers={subscribers} db={db} appId={appId} />}
       {activeTab === 'settings' && <PaymentQRSettings db={db} appId={appId} />}
