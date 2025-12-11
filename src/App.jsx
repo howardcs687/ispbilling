@@ -5364,7 +5364,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       {activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} db={db} appId={appId} />}
       {activeTab === 'reports' && <ReportGenerator payments={payments} expenses={expenses || []} subscribers={subscribers} />}
       {activeTab === 'cashier' && <CashierMode subscribers={subscribers} db={db} appId={appId} />}
-      {activeTab === 'settings' && <PaymentQRSettings db={db} appId={appId} />}
+      {activeTab === 'setting' && <PaymentQRSettings db={db} appId={appId} />}
       {activeTab === 'coverage' && <ServiceAreaManager appId={appId} db={db} />}
       {activeTab === 'subscribers' && (
         <>
@@ -5455,7 +5455,140 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
            </div>
        )}
 
-       {activeTab === 'tickets' && (<div className="space-y-4"><h2 className="text-xl font-bold text-slate-800">Support Tickets & Applications</h2><div className="grid grid-cols-1 gap-4">{tickets && tickets.length > 0 ? tickets.map(ticket => (<div key={ticket.id} className={`p-5 rounded-xl shadow-sm border ${ticket.isApplication ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}><div className="flex justify-between items-start mb-3"><div><h4 className="font-bold text-lg text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject} {ticket.isApplication && <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">APPLICATION</span>}</h4><p className="text-xs text-slate-500">From: <span className="font-bold text-blue-600">{ticket.username}</span> • {new Date(ticket.date).toLocaleString()}</p></div><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${ticket.status === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{ticket.status}</span></div><p className="text-slate-700 text-sm mb-4">{ticket.message}</p>
+        {activeTab === 'tickets' && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-slate-800">Support Tickets & Applications</h2>
+            <div className="grid grid-cols-1 gap-4">
+              {tickets && tickets.length > 0 ? (
+                tickets.map((ticket) => (
+                  <div
+                    key={ticket.id}
+                    className={`p-5 rounded-xl shadow-sm border ${
+                      ticket.isApplication
+                        ? 'bg-blue-50 border-blue-200'
+                        : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    {/* Header */}
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h4 className="font-bold text-lg text-slate-800">
+                          #{ticket.ticketId || '---'} - {ticket.subject}{' '}
+                          {ticket.isApplication && (
+                            <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-2">
+                              APPLICATION
+                            </span>
+                          )}
+                        </h4>
+                        <p className="text-xs text-slate-500">
+                          From: <span className="font-bold text-blue-600">{ticket.username}</span> •{' '}
+                          {new Date(ticket.date).toLocaleString()}
+                        </p>
+                      </div>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                          ticket.status === 'open'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-green-100 text-green-700'
+                        }`}
+                      >
+                        {ticket.status}
+                      </span>
+                    </div>
+
+                    {/* Message Body */}
+                    <p className="text-slate-700 text-sm mb-4 whitespace-pre-wrap">{ticket.message}</p>
+
+                    {/* Attachment / ID Image Viewer */}
+                    {ticket.attachmentUrl && (
+                      <div className="mb-4 bg-slate-100 p-3 rounded-lg border border-slate-200">
+                        <p className="text-xs font-bold text-slate-500 uppercase mb-2">
+                          Attached Document (Click to Open)
+                        </p>
+                        <img
+                          src={ticket.attachmentUrl}
+                          alt="Attachment"
+                          className="h-32 object-contain rounded-md border border-white shadow-sm cursor-pointer hover:opacity-90 transition-opacity bg-white"
+                          onClick={() => {
+                            const w = window.open("");
+                            w.document.write('<img src="' + ticket.attachmentUrl + '" style="width:100%"/>');
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    {ticket.isPlanChange && ticket.status === 'open' && (
+                      <button
+                        onClick={() => handleApprovePlanChange(ticket)}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors flex items-center justify-center gap-2"
+                      >
+                        <CheckCircle size={16} /> Approve Plan Change
+                      </button>
+                    )}
+                    {ticket.isApplication && ticket.status === 'open' && (
+                      <button
+                        onClick={() => handleApproveApplication(ticket)}
+                        className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg mb-3 shadow-md transition-colors"
+                      >
+                        Approve & Assign Account #
+                      </button>
+                    )}
+
+                    {/* Reply Section */}
+                    {ticket.adminReply ? (
+                      <div className="border-t border-slate-200 pt-3">
+                        <p className="text-xs font-bold text-slate-400 uppercase mb-1">Your Reply</p>
+                        <p className="text-sm text-blue-700 font-medium">{ticket.adminReply}</p>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 mt-2">
+                        {replyingTo === ticket.id ? (
+                          <div className="w-full">
+                            <textarea
+                              className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2"
+                              rows="3"
+                              value={replyText}
+                              onChange={(e) => setReplyText(e.target.value)}
+                            ></textarea>
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                onClick={() => setReplyingTo(null)}
+                                className="text-slate-500 text-sm font-bold"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => handleReplyTicket(ticket.id)}
+                                className="bg-blue-600 text-white text-sm font-bold px-4 py-1 rounded-lg"
+                              >
+                                Send Reply
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setReplyingTo(ticket.id);
+                              setReplyText('');
+                            }}
+                            className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg font-bold text-sm transition-colors"
+                          >
+                            <MessageSquare size={16} /> Reply
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400">
+                  No tickets found.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
        {/* Inside the ticket mapping in AdminDashboard */}
 <div key={ticket.id} className="...">
     {/* ... existing header code ... */}
