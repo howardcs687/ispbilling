@@ -111,6 +111,8 @@ const STATUS_COLLECTION = 'isp_status_v1';
 const CONFIG_COLLECTION = 'isp_config_v1';
 const SMS_QUEUE_COLLECTION = 'isp_sms_queue_v1';
 const SMS_COLLECTION = 'isp_sms_logs_v1';
+const DIGITAL_GOODS_COLLECTION = 'isp_digital_goods_v1';
+const USER_INVENTORY_COLLECTION = 'isp_user_inventory_v1';
 const ADMIN_EMAIL = 'admin@swiftnet.com'; 
 
 // --- Helper Functions ---
@@ -1056,7 +1058,7 @@ const GeminiChatWidget = ({ user }) => {
       // 2. Initialize Gemini
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
       
-      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       // 3. Define the AI Persona (System Prompt)
       const systemContext = `
@@ -2925,6 +2927,70 @@ useEffect(() => {
     </div>
   );
 };
+
+const DigitalGoodsAdmin = ({ db, appId }) => {
+  const [products, setProducts] = useState([]);
+  const [newItem, setNewItem] = useState({ name: '', wholesalePrice: '', srp: '', category: 'Streaming', stockMode: 'Manual', description: '' });
+
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', DIGITAL_GOODS_COLLECTION));
+    const unsub = onSnapshot(q, (s) => setProducts(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    return () => unsub();
+  }, [db, appId]);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if(!newItem.name || !newItem.wholesalePrice) return;
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', DIGITAL_GOODS_COLLECTION), {
+      ...newItem,
+      wholesalePrice: parseFloat(newItem.wholesalePrice),
+      srp: parseFloat(newItem.srp),
+      status: 'Active',
+      updatedAt: new Date().toISOString()
+    });
+    setNewItem({ name: '', wholesalePrice: '', srp: '', category: 'Streaming', stockMode: 'Manual', description: '' });
+    alert("Digital Good Added!");
+  };
+
+  const handleDelete = async (id) => {
+    if(confirm("Remove this item from the reseller catalog?")) {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', DIGITAL_GOODS_COLLECTION, id));
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+      <div className="bg-white p-6 rounded-xl border border-slate-200">
+        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><ShoppingBag size={20} className="text-purple-600"/> Digital Goods Catalog (For Retailers)</h3>
+        <form onSubmit={handleAdd} className="grid grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-xl">
+            <div className="col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Item Name</label><input className="w-full border p-2 rounded" placeholder="e.g. Zoom Pro (1 Month)" value={newItem.name} onChange={e=>setNewItem({...newItem, name: e.target.value})} required/></div>
+            <div><label className="text-xs font-bold text-slate-500 uppercase">Wholesale Cost (Your Price)</label><input type="number" className="w-full border p-2 rounded" placeholder="150" value={newItem.wholesalePrice} onChange={e=>setNewItem({...newItem, wholesalePrice: e.target.value})} required/></div>
+            <div><label className="text-xs font-bold text-slate-500 uppercase">Suggested Retail Price (SRP)</label><input type="number" className="w-full border p-2 rounded" placeholder="200" value={newItem.srp} onChange={e=>setNewItem({...newItem, srp: e.target.value})} /></div>
+            <div><label className="text-xs font-bold text-slate-500 uppercase">Category</label><select className="w-full border p-2 rounded" value={newItem.category} onChange={e=>setNewItem({...newItem, category: e.target.value})}><option>Streaming</option><option>Gaming</option><option>Productivity</option><option>Vouchers</option></select></div>
+            <div><label className="text-xs font-bold text-slate-500 uppercase">Delivery Mode</label><select className="w-full border p-2 rounded" value={newItem.stockMode} onChange={e=>setNewItem({...newItem, stockMode: e.target.value})}><option value="Manual">Manual Processing (Ticket)</option><option value="Auto">Instant Code (Future)</option></select></div>
+            <button className="col-span-2 bg-purple-600 text-white font-bold py-2 rounded hover:bg-purple-700">Add to Catalog</button>
+        </form>
+
+        <div className="space-y-2">
+            {products.map(p => (
+                <div key={p.id} className="flex justify-between items-center p-3 border rounded-lg bg-white hover:bg-purple-50">
+                    <div>
+                        <p className="font-bold text-slate-800">{p.name}</p>
+                        <p className="text-xs text-slate-500">{p.category} • SRP: ₱{p.srp}</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <span className="font-mono font-bold text-purple-600">₱{p.wholesalePrice}</span>
+                        <button onClick={() => handleDelete(p.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={16}/></button>
+                    </div>
+                </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 const AdminAnalytics = ({ subscribers, payments, tickets }) => {
   const activeUsers = subscribers.filter(s => s.status === 'active').length;
   const inactiveUsers = subscribers.filter(s => s.status !== 'active').length;
@@ -3804,6 +3870,7 @@ const AddStaffModal = ({ onClose }) => {
                     <select className="w-full border p-2 rounded-lg bg-blue-50 font-bold text-blue-700" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
                         <option value="cashier">Cashier (Billing Only)</option>
                         <option value="technician">Technician (Repairs Only)</option>
+                        <option value="retailer">Retailer (Digital Goods)</option>
                         <option value="admin">Admin (Full Access)</option>
                     </select>
                 </div>
@@ -4455,6 +4522,90 @@ const PaymentQRSettings = ({ db, appId }) => {
   );
 };
 
+const RetailerDashboard = ({ user, db, appId, onLogout }) => {
+  const [activeTab, setActiveTab] = useState('shop'); 
+  const [goods, setGoods] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [buying, setBuying] = useState(null);
+
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', DIGITAL_GOODS_COLLECTION));
+    const unsub = onSnapshot(q, (s) => setGoods(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    return () => unsub();
+  }, [db, appId]);
+
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', USER_INVENTORY_COLLECTION), where('userId', '==', user.uid), orderBy('dateBought', 'desc'));
+    const unsub = onSnapshot(q, (s) => setInventory(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    return () => unsub();
+  }, [user, db, appId]);
+
+  const handleBuy = async (item) => {
+    if((user.walletCredits || 0) < item.wholesalePrice) return alert("Insufficient Wallet Credits. Please top up via Admin.");
+    if(!confirm(`Purchase ${item.name} for ₱${item.wholesalePrice}?`)) return;
+    
+    setBuying(item.id);
+    try {
+        const newBalance = (user.walletCredits || 0) - item.wholesalePrice;
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id), { walletCredits: newBalance });
+
+        const purchaseRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', USER_INVENTORY_COLLECTION), {
+            userId: user.uid, itemId: item.id, itemName: item.name, cost: item.wholesalePrice, srp: item.srp,
+            dateBought: new Date().toISOString(), status: 'Pending Delivery', credentials: '', customerName: ''
+        });
+
+        const ticketId = Math.floor(Math.random() * 9000000).toString();
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+            ticketId, userId: user.uid, username: user.username,
+            subject: `Retailer Order: ${item.name}`,
+            message: `AUTO-ORDER: Retailer ${user.username} purchased ${item.name}. Please edit their Inventory Item #${purchaseRef.id} with the credentials/code.`,
+            status: 'open', date: new Date().toISOString(), isOrder: true, targetInventoryId: purchaseRef.id
+        });
+        alert("Purchase successful! Admin will send credentials shortly.");
+    } catch(e) { console.error(e); alert("Transaction failed."); }
+    setBuying(null);
+  };
+
+  const handleMarkSold = async (invItem) => {
+      const customer = prompt("Enter Customer Name (Optional):");
+      if(customer === null) return;
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', USER_INVENTORY_COLLECTION, invItem.id), {
+          status: 'Sold', customerName: customer, dateSold: new Date().toISOString()
+      });
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
+        <nav className="bg-purple-900 text-white p-4 shadow-lg sticky top-0 z-50">
+            <div className="max-w-6xl mx-auto flex justify-between items-center">
+                <div className="flex items-center gap-2"><ShoppingBag className="text-yellow-400"/><span className="font-bold text-lg">SwiftNet<span className="text-yellow-400">Retailer</span></span></div>
+                <div className="flex items-center gap-6">
+                    <div className="text-right hidden md:block"><p className="text-[10px] uppercase text-purple-300 font-bold">Wallet Balance</p><p className="font-mono text-xl font-bold text-yellow-400">₱{(user.walletCredits || 0).toLocaleString()}</p></div>
+                    <button onClick={onLogout} className="bg-purple-800 hover:bg-purple-700 p-2 rounded-lg"><LogOut size={18}/></button>
+                </div>
+            </div>
+        </nav>
+        <div className="max-w-6xl mx-auto p-4 md:p-8">
+            <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
+                <button onClick={()=>setActiveTab('shop')} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${activeTab==='shop' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-slate-600 border'}`}><ShoppingBag size={18}/> Buy Stock</button>
+                <button onClick={()=>setActiveTab('inventory')} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${activeTab==='inventory' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-slate-600 border'}`}><Server size={18}/> Inventory</button>
+                <button onClick={()=>setActiveTab('wallet')} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${activeTab==='wallet' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-slate-600 border'}`}><Wallet size={18}/> Wallet</button>
+            </div>
+            {activeTab === 'shop' && (
+                <div className="space-y-6">
+                    <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-8 text-white shadow-xl"><h2 className="text-3xl font-bold mb-2">Wholesale Digital Goods</h2><p className="opacity-90">Purchase premium accounts and vouchers at wholesale rates.</p></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{goods.map(item => (<div key={item.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-xl transition-all flex flex-col"><div className="flex justify-between items-start mb-4"><span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-1 rounded uppercase">{item.category}</span><span className="text-xs font-bold text-slate-400">SRP: ₱{item.srp}</span></div><h3 className="text-xl font-bold text-slate-800 mb-2">{item.name}</h3><p className="text-slate-500 text-sm mb-6 flex-grow">{item.description || "Premium subscription ready for resale."}</p><div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-100"><div><p className="text-[10px] text-slate-400 uppercase font-bold">Your Cost</p><p className="text-2xl font-black text-purple-600">₱{item.wholesalePrice}</p></div><button onClick={() => handleBuy(item)} disabled={buying===item.id} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-slate-800 disabled:opacity-50">{buying===item.id ? 'Buying...' : 'Purchase'}</button></div></div>))}</div>
+                </div>
+            )}
+            {activeTab === 'inventory' && (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"><div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center"><h3 className="font-bold text-slate-700">Stock on Hand</h3><span className="bg-white border px-3 py-1 rounded-lg text-xs font-bold text-slate-500">Total Items: {inventory.length}</span></div><div className="divide-y divide-slate-100">{inventory.map(inv => (<div key={inv.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-4 hover:bg-slate-50 transition-colors"><div className="flex-1"><div className="flex items-center gap-2 mb-1"><h4 className="font-bold text-slate-800 text-lg">{inv.itemName}</h4><span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${inv.status==='Sold' ? 'bg-green-100 text-green-700' : inv.status==='Pending Delivery' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>{inv.status}</span></div><p className="text-xs text-slate-500">Purchased: {new Date(inv.dateBought).toLocaleDateString()} • Cost: ₱{inv.cost}</p>{inv.status !== 'Pending Delivery' && (<div className="mt-3 bg-slate-100 p-3 rounded-lg border border-slate-200 font-mono text-sm text-slate-700 break-all select-all">{inv.credentials || "No credentials provided yet."}</div>)}</div><div className="flex items-center gap-2">{inv.status === 'Pending Delivery' ? (<span className="text-xs text-slate-400 italic">Waiting for Admin...</span>) : inv.status === 'Sold' ? (<div className="text-right"><p className="text-xs font-bold text-slate-400 uppercase">Sold To</p><p className="font-bold text-slate-700">{inv.customerName}</p></div>) : (<button onClick={() => handleMarkSold(inv)} className="bg-green-600 text-white px-6 py-2 rounded-xl font-bold text-sm hover:bg-green-700 shadow-lg shadow-green-200">Mark as Sold</button>)}</div></div>))}{inventory.length === 0 && <div className="p-12 text-center text-slate-400">Your inventory is empty.</div>}</div></div>
+            )}
+            {activeTab === 'wallet' && <SwiftWallet user={user} db={db} appId={appId} />}
+        </div>
+    </div>
+  );
+};
+
 
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs, user }) => {
   const [activeTab, setActiveTab] = useState('subscribers'); 
@@ -4683,13 +4834,14 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex space-x-1 overflow-x-auto max-w-[95vw] mx-auto md:mx-0 scrollbar-hide">
-         {['analytics', 'status', 'reports', 'cashier', 'coverage', 'expenses', 'store', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest', 'setting'].map(tab => (
+         {['analytics', 'status', 'reports', 'cashier', 'coverage', 'expenses', 'store', 'digital_goods', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest', 'setting'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'status' ? <><Activity size={16}/> Network Status</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
+                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'status' ? <><Activity size={16}/> Network Status</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'digital_goods' ? <><Server size={16}/> Digital Goods</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
          ))}
       </div>
       {activeTab === 'store' && <ProductManager appId={appId} db={db} />}
+      {activeTab === 'digital_goods' && <DigitalGoodsAdmin db={db} appId={appId} />}
       {activeTab === 'status' && <NetworkStatusManager db={db} appId={appId} />}
       {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} payments={payments} />}
       {activeTab === 'speedtest' && <SpeedTest />}
@@ -5479,18 +5631,20 @@ export default function App() {
   // 1. If User is Logged In -> Show Dashboard
   if (user) {
     return (
-      <Layout user={user} onLogout={handleLogout}>
-        {user.role === 'admin' ? (
-          <AdminDashboard subscribers={subscribers} announcements={announcements} payments={payments} tickets={tickets} repairs={repairs} user={user} />
-        ) : user.role === 'cashier' ? (
-          <CashierDashboard subscribers={subscribers} db={db} appId={appId} />
-        ) : user.role === 'technician' ? (
-          <TechnicianDashboard repairs={repairs} onTechUpdate={handleTechUpdateStatus} />
-        ) : (
-          <SubscriberDashboard userData={mySubscriberData || {}} onPay={handlePayment} announcements={announcements} notifications={notifications} tickets={tickets} repairs={repairs} onConfirmRepair={handleConfirmRepair} />
-        )}
-      </Layout>
-    );
+  <Layout user={user} onLogout={handleLogout}>
+    {user.role === 'admin' ? (
+      <AdminDashboard subscribers={subscribers} announcements={announcements} payments={payments} tickets={tickets} repairs={repairs} user={user} />
+    ) : user.role === 'cashier' ? (
+      <CashierDashboard subscribers={subscribers} db={db} appId={appId} />
+    ) : user.role === 'technician' ? (
+      <TechnicianDashboard repairs={repairs} onTechUpdate={handleTechUpdateStatus} />
+    ) : user.role === 'retailer' ? (
+      <RetailerDashboard user={user} db={db} appId={appId} onLogout={handleLogout} />
+    ) : (
+      <SubscriberDashboard userData={mySubscriberData || {}} onPay={handlePayment} announcements={announcements} notifications={notifications} tickets={tickets} repairs={repairs} onConfirmRepair={handleConfirmRepair} />
+    )}
+  </Layout>
+);
   }
 
   // 2. If User is NOT Logged In but clicked "Login" -> Show Login Modal
