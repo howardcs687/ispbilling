@@ -42,6 +42,7 @@ import { getDatabase, ref, onValue } from "firebase/database";
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import SignatureCanvas from 'react-signature-canvas';
+import Tesseract from 'tesseract.js';
 import { 
   Wifi, CreditCard, User, LogOut, Shield, CheckCircle, AlertCircle, 
   Smartphone, Activity, Search, Menu, X, Plus, Settings, Trash2, Zap, 
@@ -181,6 +182,205 @@ const sendCustomEmail = async (type, data) => {
 };
 
 // --- COMPONENTS (Ordered bottom-up to avoid hoisting issues) ---
+
+// --- [FEATURE 4] REAL SPONSORED WIFI PORTAL (MIKROTIK) ---
+const HotspotPortal = ({ onLogin, db, appId }) => {
+  const [step, setStep] = useState('landing'); 
+  const [timeLeft, setTimeLeft] = useState(15); 
+  const [adData, setAdData] = useState(null);
+  
+  // MikroTik Parameters State
+  const [mtParams, setMtParams] = useState({
+    loginUrl: '', // usually http://10.5.50.1/login
+    dst: '',      // original destination
+    mac: ''
+  });
+
+  // 1. Initialize: Parse URL & Fetch Ad
+  useEffect(() => {
+    // A. Parse MikroTik URL Parameters
+    const params = new URLSearchParams(window.location.search);
+    // MikroTik sends 'link-login-only' or 'link-login'
+    const routerLogin = params.get('link-login-only') || params.get('link-login') || 'http://10.5.50.1/login'; 
+    const dst = params.get('dst') || 'https://google.com';
+    const mac = params.get('mac');
+
+    setMtParams({ loginUrl: routerLogin, dst, mac });
+
+    // B. Fetch REAL Ad from Database
+    const fetchAd = async () => {
+        try {
+            // Get the first active ad from 'isp_ads_campaigns' 
+            const adCollection = collection(db, 'artifacts', appId, 'public', 'data', 'isp_ads_campaigns');
+            const q = query(adCollection, where('status', '==', 'active'), limit(1));
+            const snapshot = await getDocs(q);
+
+            if (!snapshot.empty) {
+                setAdData(snapshot.docs[0].data());
+            } else {
+                // Fallback ONLY if no campaign is active in DB
+                setAdData({
+                    title: "Default Sponsor",
+                    sponsor: "SwiftNet ISP",
+                    videoUrl: "https://www.w3schools.com/html/mov_bbb.mp4"
+                });
+            }
+        } catch (e) { console.error("Ad fetch error", e); }
+    };
+    fetchAd();
+  }, [db, appId]);
+
+  const startAd = () => {
+    if (!adData) return;
+    setStep('watching');
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          completeAd();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const completeAd = async () => {
+    // 1. Log Real View to Database
+    try {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_ad_views_v1'), {
+            date: new Date().toISOString(),
+            sponsor: adData.sponsor,
+            mac: mtParams.mac || 'unknown',
+            revenue: 0.50 // Hardcoded value or fetch from adData.cpm
+        });
+    } catch(e) { console.error("Log error", e); }
+
+    setStep('logging_in');
+    
+    // 2. TRIGGER REAL MIKROTIK LOGIN
+    // We submit the hidden form below automatically
+    setTimeout(() => {
+        const form = document.getElementById('mikrotik-login-form');
+        if (form) form.submit();
+    }, 1000);
+  };
+
+  if (!adData) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading Portal...</div>;
+
+  return (
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
+      
+      {/* --- HIDDEN FORM FOR REAL MIKROTIK AUTH --- */}
+      {/* You must create a user in MikroTik: Name="free_ad_user", Pass="12345" */}
+      <form id="mikrotik-login-form" action={mtParams.loginUrl} method="post" className="hidden">
+          <input type="hidden" name="username" value="free_ad_user" />
+          <input type="hidden" name="password" value="12345" />
+          <input type="hidden" name="dst" value={mtParams.dst} />
+      </form>
+
+      <div className="max-w-md w-full bg-white rounded-3xl overflow-hidden shadow-2xl relative">
+        {/* Header */}
+        <div className="bg-red-600 p-6 text-center">
+            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 backdrop-blur-md">
+                <Wifi size={32} className="text-white"/>
+            </div>
+            <h1 className="text-2xl font-black text-white uppercase tracking-wider">SwiftNet<span className="text-red-200">Free</span></h1>
+            <p className="text-white/80 text-sm">Sponsored Public WiFi</p>
+        </div>
+
+        <div className="p-8 text-center">
+            
+            {step === 'landing' && (
+                <div className="animate-in fade-in slide-in-from-bottom-4">
+                    <h2 className="text-xl font-bold text-slate-800 mb-2">Get Free Internet Access</h2>
+                    <p className="text-slate-500 mb-8 text-sm">
+                        Watch a short video from our sponsor to unlock 30 minutes of browsing time.
+                    </p>
+                    
+                    <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl mb-6 flex items-center gap-3 text-left">
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold shrink-0">
+                            <Bot size={20}/>
+                        </div>
+                        <div>
+                            <p className="text-xs text-slate-400 uppercase font-bold">Today's Sponsor</p>
+                            <p className="font-bold text-slate-800">{adData.sponsor}</p>
+                        </div>
+                    </div>
+
+                    <button onClick={startAd} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-red-200 transition-all flex items-center justify-center gap-2">
+                        <PlayCircle size={20}/> Watch to Connect
+                    </button>
+                    
+                    <button onClick={onLogin} className="mt-6 text-slate-400 text-xs font-bold hover:text-red-600 transition-colors">
+                        Existing Member Login
+                    </button>
+                </div>
+            )}
+
+            {step === 'watching' && (
+                <div className="animate-in zoom-in-95">
+                    <p className="text-xs font-bold text-slate-400 uppercase mb-4">Ad ending in {timeLeft}s</p>
+                    <div className="relative rounded-xl overflow-hidden bg-black aspect-video shadow-lg mb-6 group">
+                        <video autoPlay muted className="w-full h-full object-cover">
+                            <source src={adData.videoUrl} type="video/mp4" />
+                        </video>
+                        <div className="absolute inset-0 bg-black/10"></div>
+                        <div className="absolute top-2 right-2 bg-black/60 text-white px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm">
+                            {timeLeft}s
+                        </div>
+                    </div>
+                    <p className="text-sm text-slate-600 italic">"Please wait while we configure your connection..."</p>
+                </div>
+            )}
+
+            {step === 'logging_in' && (
+                <div className="flex flex-col items-center py-10">
+                    <Loader2 size={48} className="text-red-600 animate-spin mb-4"/>
+                    <h3 className="font-bold text-slate-700">Connecting to Network...</h3>
+                    <p className="text-xs text-slate-400">Submitting credentials to Router...</p>
+                </div>
+            )}
+
+        </div>
+        <div className="bg-slate-50 p-4 text-center border-t border-slate-100">
+            <p className="text-[10px] text-slate-400">Powered by SwiftNet Hotspot System v2.0</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- [FEATURE 4] ADMIN AD MANAGER ---
+const AdManager = ({ db, appId }) => {
+    const [stats, setStats] = useState({ views: 0, revenue: 0 });
+    useEffect(() => {
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_ad_views_v1'));
+        const unsub = onSnapshot(q, (snapshot) => {
+            let totalViews = 0, totalRev = 0;
+            snapshot.forEach(doc => { const data = doc.data(); totalViews += 1; totalRev += (data.revenue || 0); });
+            setStats({ views: totalViews, revenue: totalRev });
+        });
+        return () => unsub();
+    }, [db, appId]);
+
+    return (
+        <div className="space-y-6 animate-in fade-in">
+            <div className="bg-gradient-to-r from-purple-900 to-slate-900 p-8 rounded-2xl text-white shadow-xl relative overflow-hidden">
+                <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                <div className="relative z-10 flex justify-between items-center">
+                    <div><h2 className="text-3xl font-black mb-1">Sponsored WiFi</h2><p className="text-purple-200">Monetize your free users.</p></div>
+                    <div className="text-right"><p className="text-xs font-bold uppercase tracking-widest text-purple-300">Total Earnings</p><p className="text-4xl font-black text-white">₱{stats.revenue.toFixed(2)}</p></div>
+                </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><div className="flex items-center gap-3 mb-2"><div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Eye size={20}/></div><span className="text-sm font-bold text-slate-500 uppercase">Total Views</span></div><p className="text-2xl font-black text-slate-800">{stats.views}</p></div>
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><div className="flex items-center gap-3 mb-2"><div className="bg-green-50 p-2 rounded-lg text-green-600"><Clock size={20}/></div><span className="text-sm font-bold text-slate-500 uppercase">Time Sold</span></div><p className="text-2xl font-black text-slate-800">{((stats.views * 15) / 60).toFixed(1)} <span className="text-sm font-medium text-slate-400">mins</span></p></div>
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><div className="flex items-center gap-3 mb-2"><div className="bg-orange-50 p-2 rounded-lg text-orange-600"><TrendingUp size={20}/></div><span className="text-sm font-bold text-slate-500 uppercase">eCPM</span></div><p className="text-2xl font-black text-slate-800">₱500.00</p></div>
+            </div>
+        </div>
+    );
+};
 
 // Fix for default Leaflet marker icons in React
 delete L.Icon.Default.prototype._getIconUrl;
@@ -1623,6 +1823,7 @@ const DigitalID = ({ user }) => {
   );
 };
 
+// --- [FEATURE 1] AI PAYMENT OCR COMPONENT ---
 const PaymentProofModal = ({ user, onClose, db, appId }) => {
   const [refNumber, setRefNumber] = useState('');
   const [amount, setAmount] = useState('');
@@ -1630,62 +1831,102 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
   const [preview, setPreview] = useState(null);
   const [base64Image, setBase64Image] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [isImageReady, setIsImageReady] = useState(false); // New safety state
+  const [scanning, setScanning] = useState(false); // New Scanning State
+  const [ocrStatus, setOcrStatus] = useState(''); // Text feedback
 
-  // Magic Function: Compress image to text
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     // 1. Show preview immediately
-    setPreview(URL.createObjectURL(file));
-    setIsImageReady(false); // Disable submit button while processing
+    const objectUrl = URL.createObjectURL(file);
+    setPreview(objectUrl);
+    setScanning(true);
+    setOcrStatus("Initializing AI Scanner...");
 
+    // 2. Compress Image Logic (Existing)
     const reader = new FileReader();
-
-    // 2. DEFINE listener FIRST (Fixes the bug)
     reader.onload = (event) => {
-        const img = new window.Image();
-        img.src = event.target.result;
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 600; // Resize to 600px width
-            const scaleSize = MAX_WIDTH / img.width;
-            
-            // Fix aspect ratio calculation
-            if (img.width > MAX_WIDTH) {
-                canvas.width = MAX_WIDTH;
-                canvas.height = img.height * scaleSize;
-            } else {
-                canvas.width = img.width;
-                canvas.height = img.height;
-            }
+      const img = new window.Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800; // Increased slightly for better OCR
+        const scaleSize = MAX_WIDTH / img.width;
+        
+        if (img.width > MAX_WIDTH) {
+            canvas.width = MAX_WIDTH;
+            canvas.height = img.height * scaleSize;
+        } else {
+            canvas.width = img.width;
+            canvas.height = img.height;
+        }
 
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        // Save compressed for upload
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+        setBase64Image(compressedBase64);
 
-            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
-            setBase64Image(compressedBase64);
-            setIsImageReady(true); // Re-enable submit button
-        };
+        // 3. START AI SCANNING (Tesseract)
+        runOCR(compressedBase64);
+      };
     };
-
-    // 3. EXECUTE read LAST
     reader.readAsDataURL(file);
+  };
+
+  const runOCR = async (imageSrc) => {
+    setOcrStatus("Reading Receipt Details...");
+    try {
+      const result = await Tesseract.recognize(
+        imageSrc,
+        'eng',
+        { logger: m => {
+            if(m.status === 'recognizing text') setOcrStatus(`Scanning... ${(m.progress * 100).toFixed(0)}%`);
+          } 
+        }
+      );
+
+      const text = result.data.text;
+      console.log("OCR Result:", text); // For debugging
+
+      // --- SMART REGEX FOR GCASH / MAYA ---
+      // Look for Reference Numbers (Usually 8-13 digits)
+      const refMatch = text.match(/(Ref|Reference|No\.|Trans ID)[\s:.]*([0-9]{8,15})/i);
+      
+      // Look for Amounts (P 1,500.00 or 1500.00)
+      // Matches "P 100", "Amount 100.00", "Total 100"
+      const amountMatch = text.match(/(Amount|Total|Paid|P)[\s:.]*P?[\s]*([\d,]+\.\d{2})/i);
+
+      if (refMatch && refMatch[2]) {
+        setRefNumber(refMatch[2]);
+        setOcrStatus("✅ Reference Found!");
+      } else {
+        setOcrStatus("⚠️ Could not read Ref No. Please type manually.");
+      }
+
+      if (amountMatch && amountMatch[2]) {
+        // Remove commas for the number input
+        const cleanAmount = amountMatch[2].replace(/,/g, '');
+        setAmount(cleanAmount);
+      }
+
+      setScanning(false);
+
+    } catch (err) {
+      console.error(err);
+      setScanning(false);
+      setOcrStatus("Manual entry required.");
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!amount || !refNumber) return alert("Please fill in all fields.");
-    
-    // Safety check
-    if (!base64Image) {
-        if (preview && !isImageReady) return alert("Image is still processing. Please wait a moment.");
-        return alert("Please attach a screenshot.");
-    }
+    if (!base64Image) return alert("Please wait for image processing.");
     
     setLoading(true);
-
     try {
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
             userId: user.uid,
@@ -1695,19 +1936,11 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
             method: method,
             date: new Date().toISOString(),
             status: 'pending_approval',
-            proofImage: base64Image // Saving image as text!
+            proofImage: base64Image
         });
-
         alert("Proof submitted successfully!");
         onClose();
-    } catch(e) {
-        console.error("Save Error:", e);
-        if (e.message.includes('exceeds the maximum allowed size')) {
-            alert("Image too large. Please crop it.");
-        } else {
-            alert("Error: " + e.message);
-        }
-    }
+    } catch(e) { alert("Error: " + e.message); }
     setLoading(false);
   };
 
@@ -1719,6 +1952,7 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
             </h3>
             
             <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto p-1">
+                {/* Method Selection */}
                 <div>
                     <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Payment Method</label>
                     <div className="flex gap-2">
@@ -1730,39 +1964,49 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Amount Paid</label>
-                        <input type="number" required className="w-full border p-2 rounded-lg" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Ref No.</label>
-                        <input type="text" required className="w-full border p-2 rounded-lg" placeholder="e.g. 100234" value={refNumber} onChange={e => setRefNumber(e.target.value)} />
-                    </div>
-                </div>
-
-                <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:bg-slate-50 relative overflow-hidden">
+                {/* Image Upload Area */}
+                <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:bg-slate-50 relative overflow-hidden transition-colors">
                     <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" onChange={handleFileChange} />
                     {preview ? (
                         <div className="relative">
-                            <img src={preview} alt="Preview" className="mx-auto h-32 object-contain rounded-lg shadow-sm" />
-                            {isImageReady ? (
-                                <p className="text-xs text-green-600 font-bold mt-2">Ready to submit</p>
-                            ) : (
-                                <p className="text-xs text-blue-600 font-bold mt-2 animate-pulse">Processing image...</p>
+                            <img src={preview} alt="Preview" className="mx-auto h-40 object-contain rounded-lg shadow-sm" />
+                            {scanning && (
+                                <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-lg">
+                                    <div className="animate-spin text-white mb-2"><Bot size={24}/></div>
+                                    <p className="text-white text-xs font-bold animate-pulse">AI Scanning...</p>
+                                </div>
                             )}
+                            <p className={`text-xs font-bold mt-2 ${scanning ? 'text-blue-500' : 'text-green-600'}`}>
+                                {scanning ? ocrStatus : ocrStatus || "Image Ready"}
+                            </p>
                         </div>
                     ) : (
-                        <div>
-                            <div className="mx-auto bg-blue-50 w-10 h-10 rounded-full flex items-center justify-center text-blue-500 mb-2"><Image size={20}/></div>
+                        <div className="py-4">
+                            <div className="mx-auto bg-blue-50 w-12 h-12 rounded-full flex items-center justify-center text-blue-500 mb-2"><Image size={24}/></div>
                             <p className="text-sm font-bold text-slate-600 px-4">Tap to attach screenshot</p>
+                            <p className="text-[10px] text-slate-400 mt-1">Our AI will read the details for you</p>
                         </div>
                     )}
                 </div>
 
-                <button disabled={loading || (preview && !isImageReady)} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:opacity-50 flex justify-center items-center gap-2">
+                {/* Fields (Auto-filled) */}
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Amount Paid</label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-slate-400 font-bold">₱</span>
+                            <input type="number" required className={`w-full border p-2 pl-7 rounded-lg font-bold ${amount ? 'bg-green-50 border-green-200 text-green-700' : ''}`} placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Ref No.</label>
+                        <input type="text" required className={`w-full border p-2 rounded-lg font-mono ${refNumber ? 'bg-green-50 border-green-200 text-green-700' : ''}`} placeholder="e.g. 100234" value={refNumber} onChange={e => setRefNumber(e.target.value)} />
+                    </div>
+                </div>
+
+                <button disabled={loading || scanning} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 disabled:opacity-50 flex justify-center items-center gap-2">
                     {loading ? <RefreshCw className="animate-spin" size={18}/> : <CheckCircle size={18}/>}
-                    {loading ? 'Sending...' : (preview && !isImageReady) ? 'Compressing...' : 'Submit Proof'}
+                    {loading ? 'Sending...' : 'Submit Proof'}
                 </button>
             </form>
             <button onClick={onClose} className="w-full mt-2 text-slate-400 text-xs font-bold hover:text-slate-600">Cancel</button>
@@ -2735,6 +2979,189 @@ const SwitchCalculator = () => {
             </div>
          </div>
        </div>
+    </div>
+  );
+};
+
+// --- [FEATURE: MULTI-SITE BUSINESS DASHBOARD] ---
+const BusinessDashboard = ({ user, db, appId, onPay }) => {
+  const [sites, setSites] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddSite, setShowAddSite] = useState(false);
+  const [newSite, setNewSite] = useState({ name: '', address: '', plan: 'Business Fiber 100' });
+
+  // 1. Real Data Fetch: Find all accounts linked to this Business Owner
+  useEffect(() => {
+    const fetchSites = async () => {
+        // Query users where 'linkedTo' equals the current user's UID
+        // OR users where 'uid' is the current user (include self)
+        const q = query(
+            collection(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1'),
+            where('linkedTo', '==', user.uid)
+        );
+        
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const linkedSites = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Combined list: Self + Linked Accounts
+            const allSites = [
+                { ...user, isMaster: true, siteName: 'Main HQ' }, 
+                ...linkedSites
+            ];
+            setSites(allSites);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    };
+    fetchSites();
+  }, [user, db, appId]);
+
+  // 2. Aggregate Calculations
+  const totalBalance = sites.reduce((acc, site) => acc + (site.balance || 0), 0);
+  const activeSites = sites.filter(s => s.status === 'active').length;
+  const issueSites = sites.filter(s => s.status !== 'active').length;
+
+  // 3. Request New Branch Installation
+  const handleRequestBranch = async (e) => {
+      e.preventDefault();
+      if(!newSite.address) return;
+      
+      const ticketId = Math.floor(Math.random() * 9000000).toString();
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_tickets_v1'), {
+          ticketId,
+          userId: user.uid,
+          username: user.username,
+          subject: `New Branch Request: ${newSite.name}`,
+          message: `BUSINESS EXPANSION: Requesting new line for ${newSite.name} at ${newSite.address}. Plan: ${newSite.plan}. Please link to my master account (${user.accountNumber}).`,
+          status: 'open',
+          date: new Date().toISOString(),
+          isApplication: true,
+          targetPlan: newSite.plan,
+          isBusinessExpansion: true // Special tag for Admins
+      });
+      alert(`Request Sent! Ticket #${ticketId}`);
+      setShowAddSite(false);
+  };
+
+  // 4. Pay All Logic
+  const handlePayAll = () => {
+      // In a real scenario, this would loop through IDs or create a bulk payment record
+      // For now, we direct them to pay the Main Account, and Admin distributes
+      // OR we just summon the payment modal for the total amount
+      alert("Please generate a specialized Payment QR for ₱" + totalBalance.toLocaleString());
+      // Logic to trigger onPay would go here
+  };
+
+  if (loading) return <div className="p-10 text-center"><Loader2 className="animate-spin inline mr-2"/> Loading Enterprise Data...</div>;
+
+  return (
+    <div className="min-h-screen bg-slate-50 pb-20 animate-in fade-in">
+        
+        {/* Enterprise Header */}
+        <div className="bg-slate-900 text-white pt-10 pb-24 px-6 md:px-10">
+            <div className="max-w-7xl mx-auto flex justify-between items-center">
+                <div>
+                    <h1 className="text-3xl font-black tracking-tight">{user.username} <span className="text-yellow-400">Enterprise</span></h1>
+                    <p className="text-slate-400">Multi-Site Management Console</p>
+                </div>
+                <div className="flex gap-4">
+                    <button onClick={() => setShowAddSite(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg font-bold flex items-center gap-2 transition-all">
+                        <PlusCircle size={18}/> Add Branch
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-6 -mt-16">
+            
+            {/* Status Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white p-6 rounded-xl shadow-lg border-b-4 border-blue-500">
+                    <p className="text-xs font-bold text-slate-400 uppercase">Total Balance Due</p>
+                    <h2 className="text-3xl font-black text-slate-800 mt-1">₱{totalBalance.toLocaleString()}</h2>
+                    {totalBalance > 0 && <button onClick={handlePayAll} className="mt-3 text-xs font-bold text-blue-600 uppercase tracking-widest hover:underline">Pay All Now &rarr;</button>}
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-lg border-b-4 border-green-500">
+                    <p className="text-xs font-bold text-slate-400 uppercase">Online Sites</p>
+                    <h2 className="text-3xl font-black text-green-600 mt-1">{activeSites}</h2>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-lg border-b-4 border-red-500">
+                    <p className="text-xs font-bold text-slate-400 uppercase">Offline / Issues</p>
+                    <h2 className="text-3xl font-black text-red-600 mt-1">{issueSites}</h2>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-lg border-b-4 border-purple-500">
+                    <p className="text-xs font-bold text-slate-400 uppercase">Total Bandwidth</p>
+                    {/* Sum of speeds logic or static value */}
+                    <h2 className="text-3xl font-black text-purple-600 mt-1">{(sites.length * 100)} <span className="text-sm text-slate-400">Mbps</span></h2> 
+                </div>
+            </div>
+
+            {/* Sites Grid */}
+            <h3 className="font-bold text-slate-700 text-xl mb-4 flex items-center gap-2"><Briefcase size={20}/> Your Locations</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {sites.map(site => (
+                    <div key={site.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col md:flex-row hover:shadow-md transition-shadow">
+                        <div className={`w-full md:w-2 bg-${site.status === 'active' ? 'green' : 'red'}-500`}></div>
+                        <div className="p-6 flex-1">
+                            <div className="flex justify-between items-start mb-2">
+                                <div>
+                                    <h4 className="font-bold text-lg text-slate-800">{site.siteName || site.username} {site.isMaster && '(HQ)'}</h4>
+                                    <p className="text-xs text-slate-500 flex items-center gap-1"><MapPin size={12}/> {site.address || 'Address not updated'}</p>
+                                </div>
+                                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${site.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                    {site.status}
+                                </span>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4 mt-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                <div>
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold">Account No.</p>
+                                    <p className="font-mono text-sm font-bold text-slate-700">{site.accountNumber}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold">Current Bill</p>
+                                    <p className={`font-mono text-sm font-bold ${site.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                        ₱{(site.balance || 0).toLocaleString()}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 flex gap-2">
+                                <button onClick={() => alert(`Switching view to ${site.siteName}... (Logic to swap dashboard context goes here)`)} className="flex-1 bg-white border border-slate-200 text-slate-600 py-2 rounded-lg text-xs font-bold hover:bg-slate-50">
+                                    Manage Site
+                                </button>
+                                {site.balance > 0 && (
+                                    <button onClick={() => onPay(site.id, 'CASH-SITE', site.username)} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-blue-700">
+                                        Pay Bill
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        {/* Modal: Add New Branch */}
+        {showAddSite && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                    <h3 className="text-xl font-bold mb-4">Add New Branch</h3>
+                    <form onSubmit={handleRequestBranch} className="space-y-3">
+                        <input className="w-full border p-3 rounded-lg" placeholder="Branch Name (e.g. Downtown Cafe)" value={newSite.name} onChange={e=>setNewSite({...newSite, name: e.target.value})} required/>
+                        <input className="w-full border p-3 rounded-lg" placeholder="Full Installation Address" value={newSite.address} onChange={e=>setNewSite({...newSite, address: e.target.value})} required/>
+                        <select className="w-full border p-3 rounded-lg" value={newSite.plan} onChange={e=>setNewSite({...newSite, plan: e.target.value})}>
+                            <option>Business Fiber 100 (₱2,500)</option>
+                            <option>Business Fiber 300 (₱3,500)</option>
+                            <option>Enterprise Dedicated (Quote)</option>
+                        </select>
+                        <div className="flex gap-2 pt-2">
+                            <button type="button" onClick={() => setShowAddSite(false)} className="flex-1 py-3 text-slate-500 font-bold">Cancel</button>
+                            <button className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">Submit Request</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        )}
     </div>
   );
 };
@@ -3756,6 +4183,7 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
     status: user.status || 'active',
     balance: user.balance || 0,
     kycStatus: user.kycStatus || 'none'
+    role: user.role || 'subscriber',
   });
   const [loading, setLoading] = useState(false);
 
@@ -3811,6 +4239,13 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
                     <div>
                         <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Account No.</label>
                         <input className="w-full border p-2 rounded-lg bg-slate-50 font-mono" value={formData.accountNumber} onChange={e => setFormData({...formData, accountNumber: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">User Role</label>
+                        <select className="w-full border p-2 rounded-lg bg-yellow-50" value={formData.role || 'subscriber'} onChange={e => setFormData({...formData, role: e.target.value})}>
+                            <option value="subscriber">Residential</option>
+                            <option value="business">Business Owner (Multi-Site)</option>
+                        </select>
                     </div>
                     <div>
                         <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Status</label>
@@ -5336,7 +5771,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex space-x-1 overflow-x-auto max-w-[95vw] mx-auto md:mx-0 scrollbar-hide">
-         {['analytics', 'status', 'reports', 'cashier', 'coverage', 'expenses', 'store', 'digital_goods', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest', 'setting'].map(tab => (
+         {['analytics', 'status', 'ads', 'reports', 'cashier', 'coverage', 'expenses', 'store', 'digital_goods', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest', 'setting'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
                 {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'status' ? <><Activity size={16}/> Network Status</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'digital_goods' ? <><Server size={16}/> Digital Goods</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
@@ -5346,6 +5781,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       {activeTab === 'store' && <ProductManager appId={appId} db={db} />}
       {activeTab === 'digital_goods' && <DigitalGoodsAdmin db={db} appId={appId} />}
       {activeTab === 'status' && <NetworkStatusManager db={db} appId={appId} />}
+      {activeTab === 'ads' && <AdManager db={db} appId={appId} />}
       {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} payments={payments} />}
       {activeTab === 'speedtest' && <SpeedTest />}
       {activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} db={db} appId={appId} />}
@@ -6182,6 +6618,16 @@ const LandingPage = ({ onLoginClick, onNavigate, plans }) => {
 // 6. Main App Logic
 // 6. Main App Logic
 export default function App() {
+  const [isHotspotMode, setIsHotspotMode] = useState(false);
+
+  useEffect(() => {
+    // Check URL for ?mode=hotspot which is set by MikroTik redirection
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') === 'hotspot') {
+        setIsHotspotMode(true);
+    }
+  }, []);
+
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
@@ -6335,24 +6781,36 @@ export default function App() {
   // --- RENDER LOGIC ---
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-red-600 font-bold bg-white">Loading SwiftNet Home...</div>;
+  // --- RENDER HOTSPOT PORTAL (Before Auth Check) ---
+  if (isHotspotMode) {
+      return <HotspotPortal onLogin={() => setIsHotspotMode(false)} db={db} appId={appId} />;
+  }
 
-  // 1. If User is Logged In -> Show Dashboard
+ // 1. If User is Logged In -> Show Dashboard
   if (user) {
     return (
-  <Layout user={user} onLogout={handleLogout}>
-    {user.role === 'admin' ? (
-      <AdminDashboard subscribers={subscribers} announcements={announcements} payments={payments} tickets={tickets} repairs={repairs} user={user} />
-    ) : user.role === 'cashier' ? (
-      <CashierDashboard subscribers={subscribers} db={db} appId={appId} />
-    ) : user.role === 'technician' ? (
-      <TechnicianDashboard repairs={repairs} onTechUpdate={handleTechUpdateStatus} />
-    ) : user.role === 'retailer' ? (
-      <RetailerDashboard user={user} db={db} appId={appId} onLogout={handleLogout} />
-    ) : (
-      <SubscriberDashboard userData={mySubscriberData || {}} onPay={handlePayment} announcements={announcements} notifications={notifications} tickets={tickets} repairs={repairs} onConfirmRepair={handleConfirmRepair} />
-    )}
-  </Layout>
-);
+      <Layout user={user} onLogout={handleLogout}>
+        {user.role === 'admin' ? (
+          <AdminDashboard subscribers={subscribers} announcements={announcements} payments={payments} tickets={tickets} repairs={repairs} user={user} />
+        ) : user.role === 'cashier' ? (
+          <CashierDashboard subscribers={subscribers} db={db} appId={appId} />
+        ) : user.role === 'technician' ? (
+          <TechnicianDashboard repairs={repairs} onTechUpdate={handleTechUpdateStatus} />
+        ) : user.role === 'retailer' ? (
+          <RetailerDashboard user={user} db={db} appId={appId} onLogout={handleLogout} />
+        ) : user.role === 'business' ? (
+          // --- NEW BUSINESS DASHBOARD RENDER ---
+          <BusinessDashboard 
+             user={user} 
+             db={db} 
+             appId={appId} 
+             onPay={handlePayment} 
+          />
+        ) : (
+          <SubscriberDashboard userData={mySubscriberData || {}} onPay={handlePayment} announcements={announcements} notifications={notifications} tickets={tickets} repairs={repairs} onConfirmRepair={handleConfirmRepair} />
+        )}
+      </Layout>
+    );
   }
 
   // 2. If User is NOT Logged In but clicked "Login" -> Show Login Modal
