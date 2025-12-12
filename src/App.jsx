@@ -6420,12 +6420,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
               <AdManager db={db} appId={appId} /> 
           </div>
       )}
-      {activeTab === 'marketing' && (
-          <div className="space-y-6">
-              <FlashPromoManager db={db} appId={appId} />
-              <AdManager db={db} appId={appId} /> 
-          </div>
-      )}
+
       {activeTab === 'speedtest' && <SpeedTest />}
       {activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} db={db} appId={appId} />}
       {activeTab === 'reports' && <ReportGenerator payments={payments} expenses={expenses || []} subscribers={subscribers} />}
@@ -7110,7 +7105,7 @@ const PrivacyPage = ({ onNavigate, onLogin }) => (
 );
 
 // --- NEW LANDING PAGE COMPONENT (PLDT STYLE) ---
-const LandingPage = ({ onLoginClick, onNavigate, plans }) => {
+const LandingPage = ({ onLoginClick, onNavigate, plans, onQuickPay }) => {
   // Default fallback plans if none loaded or database is empty
   const displayPlans = plans && plans.length > 0 ? plans : [
     { name: 'Fiber Starter', speed: '50 Mbps', price: '999', features: ['Unlimited Data', 'Free Installation'], category: 'Home' },
@@ -7120,7 +7115,12 @@ const LandingPage = ({ onLoginClick, onNavigate, plans }) => {
   return (
     <div className="min-h-screen bg-white font-sans text-slate-800">
       {/* USE SHARED NAVBAR */}
-      <PublicNavbar onNavigate={onNavigate} onLogin={onLoginClick} activePage="landing" />
+      <PublicNavbar 
+            onNavigate={onNavigate} 
+            onLogin={onLoginClick} 
+            activePage="landing" 
+            onQuickPay={onQuickPay} 
+       />
 
       {/* HERO */}
       <div className="relative bg-slate-900 overflow-hidden">
@@ -7589,13 +7589,14 @@ export default function App() {
             {/* Default Landing Page */}
             {publicPage === 'landing' && (
                 <div className="min-h-screen bg-white font-sans text-slate-800">
-                    <PublicNavbar 
-                        onNavigate={setPublicPage} 
-                        onLogin={handleLoginClick} 
-                        activePage="landing" 
-                        onQuickPay={()=>setShowGuestPay(true)} // Hook up the new Guest Pay button
-                    />
-                    <LandingPage onLoginClick={handleLoginClick} onNavigate={setPublicPage} plans={plans} /> 
+                    {publicPage === 'landing' && (
+                        <LandingPage 
+                            onLoginClick={handleLoginClick} 
+                            onNavigate={setPublicPage} 
+                            plans={plans} 
+                            onQuickPay={() => setShowGuestPay(true)} 
+                        />
+                    )}
                 </div>
             )}
             
