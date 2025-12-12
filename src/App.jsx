@@ -4182,7 +4182,7 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
     address: user.address || '',
     status: user.status || 'active',
     balance: user.balance || 0,
-    kycStatus: user.kycStatus || 'none'
+    kycStatus: user.kycStatus || 'none',
     role: user.role || 'subscriber',
   });
   const [loading, setLoading] = useState(false);
