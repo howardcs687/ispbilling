@@ -95,6 +95,28 @@ if (typeof window !== 'undefined') {
 
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'swiftnet-production';
 
+// --- Cookie Helper Functions ---
+const setCookie = (name, value, days) => {
+  let expires = "";
+  if (days) {
+    const date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = "; expires=" + date.toUTCString();
+  }
+  document.cookie = name + "=" + (value || "")  + expires + "; path=/";
+};
+
+const getCookie = (name) => {
+  const nameEQ = name + "=";
+  const ca = document.cookie.split(';');
+  for(let i=0;i < ca.length;i++) {
+    let c = ca[i];
+    while (c.charAt(0) === ' ') c = c.substring(1,c.length);
+    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length,c.length);
+  }
+  return null;
+};
+
 // --- Constants ---
 const COLLECTION_NAME = 'isp_users_v1'; 
 const PLANS_COLLECTION = 'isp_plans_v1';
@@ -182,6 +204,199 @@ const sendCustomEmail = async (type, data) => {
 };
 
 // --- COMPONENTS (Ordered bottom-up to avoid hoisting issues) ---
+
+// --- [PROFESSIONAL FEATURE 1] TOAST NOTIFICATIONS ---
+const ToastContainer = ({ toasts, removeToast }) => {
+  return (
+    <div className="fixed top-4 right-4 z-[300] flex flex-col gap-2 pointer-events-none">
+      {toasts.map((toast) => (
+        <div 
+          key={toast.id} 
+          className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-xl text-white text-sm font-bold animate-in slide-in-from-right-10 fade-in duration-300 pointer-events-auto ${
+            toast.type === 'success' ? 'bg-emerald-600' : 
+            toast.type === 'error' ? 'bg-red-600' : 'bg-slate-800'
+          }`}
+        >
+          {toast.type === 'success' ? <CheckCircle size={18}/> : 
+           toast.type === 'error' ? <AlertCircle size={18}/> : <Info size={18}/>}
+          {toast.message}
+          <button onClick={() => removeToast(toast.id)} className="ml-4 opacity-70 hover:opacity-100"><X size={14}/></button>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// --- [PROFESSIONAL FEATURE 2] SKELETON LOADER ---
+const Skeleton = ({ className }) => (
+  <div className={`animate-pulse bg-slate-200 rounded ${className}`}></div>
+);
+
+// --- [PROFESSIONAL FEATURE 3] AUDIT LOGGER ---
+const logAudit = async (db, appId, actor, action, target, details = '') => {
+  try {
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_audit_logs'), {
+      timestamp: new Date().toISOString(),
+      actor: actor.username || actor.email || 'System',
+      role: actor.role || 'system',
+      action: action,
+      target: target,
+      details: details
+    });
+    console.log(`Audit: ${action} on ${target}`);
+  } catch (e) {
+    console.error("Audit Log Failed", e);
+  }
+};
+
+// --- [PROFESSIONAL FEATURE 4] GUEST PAY MODAL ---
+const GuestPayModal = ({ onClose, db, appId, onAddToast }) => {
+  const [accountNo, setAccountNo] = useState('');
+  const [amount, setAmount] = useState('');
+  const [refNo, setRefNo] = useState('');
+  const [step, setStep] = useState(1);
+  const [targetUser, setTargetUser] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const findUser = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    // Find user by Account Number
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), where('accountNumber', '==', accountNo));
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) {
+      onAddToast("Account not found. Please check the number.", "error");
+      setLoading(false);
+    } else {
+      const user = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+      setTargetUser(user);
+      setStep(2);
+      setLoading(false);
+    }
+  };
+
+  const submitPayment = async () => {
+    if(!amount || !refNo) return onAddToast("Please fill all fields", "error");
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
+        userId: targetUser.id,
+        username: targetUser.username,
+        refNumber: refNo,
+        amount: parseFloat(amount),
+        method: 'Guest Pay',
+        date: new Date().toISOString(),
+        status: 'pending_approval'
+      });
+      onAddToast("Payment Submitted! Admin will verify shortly.", "success");
+      onClose();
+    } catch(e) {
+      onAddToast("Error submitting payment.", "error");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
+      <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-6 relative">
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20}/></button>
+        
+        <div className="text-center mb-6">
+          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3 text-blue-600">
+            <Zap size={24}/>
+          </div>
+          <h3 className="font-bold text-xl text-slate-800">Quick Pay</h3>
+          <p className="text-slate-500 text-xs">Pay bills for friends & family instantly.</p>
+        </div>
+
+        {step === 1 ? (
+          <form onSubmit={findUser} className="space-y-4">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">Account Number</label>
+              <input className="w-full border p-3 rounded-xl text-center font-mono text-lg tracking-widest" placeholder="100000" value={accountNo} onChange={e=>setAccountNo(e.target.value)} required autoFocus/>
+            </div>
+            <button disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all">
+              {loading ? <Loader2 className="animate-spin mx-auto"/> : 'Find Account'}
+            </button>
+          </form>
+        ) : (
+          <div className="space-y-4 animate-in slide-in-from-right-10">
+            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-center">
+              <p className="text-xs text-blue-500 font-bold uppercase">Paying For</p>
+              <p className="font-bold text-lg text-blue-900">{targetUser.username}</p>
+              <p className="text-xs text-slate-500">Current Balance: ₱{(targetUser.balance||0).toLocaleString()}</p>
+            </div>
+            
+            <input className="w-full border p-3 rounded-xl text-sm" type="number" placeholder="Amount Paid (₱)" value={amount} onChange={e=>setAmount(e.target.value)} />
+            <input className="w-full border p-3 rounded-xl text-sm" placeholder="Reference No. (GCash/Maya)" value={refNo} onChange={e=>setRefNo(e.target.value)} />
+            
+            <button onClick={submitPayment} disabled={loading} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-green-200">
+               {loading ? <Loader2 className="animate-spin mx-auto"/> : 'Submit Payment'}
+            </button>
+            <button onClick={()=>setStep(1)} className="w-full text-slate-400 text-xs hover:text-slate-600">Back</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const CookieConsentBanner = () => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // Check if user has already accepted cookies
+    const consent = getCookie("swiftnet_cookie_consent");
+    if (!consent) {
+      setTimeout(() => setIsVisible(true), 2000); // 2 second delay before showing
+    }
+  }, []);
+
+  const handleAccept = () => {
+    setCookie("swiftnet_cookie_consent", "true", 365); // Remember for 1 year
+    setIsVisible(false);
+  };
+
+  const handleDecline = () => {
+    setCookie("swiftnet_cookie_consent", "false", 7); // Ask again in a week
+    setIsVisible(false);
+  };
+
+  if (!isVisible) return null;
+
+  return (
+    <div className="fixed bottom-0 left-0 w-full bg-slate-900/95 backdrop-blur-md text-white p-6 z-[200] border-t border-slate-700 shadow-2xl animate-in slide-in-from-bottom-10">
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="flex items-center gap-4">
+          <div className="bg-blue-600 p-3 rounded-full hidden md:block">
+            <ShieldCheck size={24} className="text-white"/>
+          </div>
+          <div>
+            <h4 className="font-bold text-lg mb-1">We value your privacy</h4>
+            <p className="text-slate-300 text-sm max-w-2xl">
+              We use cookies to enhance your browsing experience, serve personalized ads, and analyze our traffic. By clicking "Accept All", you consent to our use of cookies.
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-3 w-full md:w-auto">
+          <button 
+            onClick={handleDecline}
+            className="flex-1 md:flex-none px-6 py-3 rounded-xl font-bold text-slate-300 hover:bg-white/10 transition-colors"
+          >
+            Decline
+          </button>
+          <button 
+            onClick={handleAccept}
+            className="flex-1 md:flex-none px-8 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-white shadow-lg transition-all hover:scale-105"
+          >
+            Accept All
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // --- [FEATURE 4] REAL SPONSORED WIFI PORTAL (MIKROTIK) ---
 const HotspotPortal = ({ onLogin, db, appId }) => {
@@ -1676,20 +1891,48 @@ const AgentDashboard = ({ user, db, appId, onLogout }) => {
 const Layout = ({ children, user, onLogout }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // Initialize dark mode from localStorage or default to false
+  // Initialize dark mode from Cookie or default to false
   const [darkMode, setDarkMode] = useState(() => {
       if (typeof window !== 'undefined') {
-          return localStorage.getItem('swiftnet_theme') === 'dark';
+          // Changed from localStorage to getCookie
+          return getCookie('swiftnet_theme') === 'dark';
       }
       return false;
   });
 
   useEffect(() => {
-      // Persist to localStorage
-      localStorage.setItem('swiftnet_theme', darkMode ? 'dark' : 'light');
+      // Persist to Cookie instead of localStorage
+      setCookie('swiftnet_theme', darkMode ? 'dark' : 'light', 365);
   }, [darkMode]);
 
   const toggleTheme = () => setDarkMode(!darkMode);
-  
+  // --- [PROFESSIONAL FEATURE 5] IDLE TIMER ---
+  useEffect(() => {
+    let timeoutId;
+    
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      // Logout after 15 minutes (900000ms) of inactivity
+      timeoutId = setTimeout(() => {
+        alert("Session expired due to inactivity."); // Keeping basic alert here for safety disconnect
+        onLogout();
+      }, 900000); 
+    };
+
+    // Listen for activity
+    window.addEventListener('mousemove', resetTimer);
+    window.addEventListener('keydown', resetTimer);
+    window.addEventListener('click', resetTimer);
+
+    resetTimer(); // Start timer
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('keydown', resetTimer);
+      window.removeEventListener('click', resetTimer);
+    };
+  }, [onLogout]);
   return (
     <div className={`min-h-screen font-sans flex flex-col relative overflow-x-hidden transition-colors duration-300 ${darkMode ? 'text-slate-100 selection:bg-blue-500 selection:text-white' : 'text-slate-800 selection:bg-indigo-200 selection:text-indigo-900'}`}>
       
@@ -6059,7 +6302,18 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   
   const handleSendNotification = async (e) => { e.preventDefault(); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', NOTIFICATIONS_COLLECTION), { userId: notifyData.targetId, title: notifyData.title, message: notifyData.message, date: new Date().toISOString(), type: 'info', read: false }); setShowNotifyModal(false); alert("Sent!"); } catch (e) { alert("Failed."); } };
   
-  const handleDeleteSubscriber = async (id) => { if (confirm("Delete subscriber?")) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id)); alert("Deleted."); } catch (e) { alert("Failed."); } } };
+  const handleDeleteSubscriber = async (id) => { 
+      if (confirm("Delete subscriber? This action is irreversible.")) { 
+          try { 
+              await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id)); 
+              // --- AUDIT LOG ENTRY ---
+              await logAudit(db, appId, user, 'DELETE_USER', id, 'Admin removed subscriber');
+              alert("Deleted."); // You can replace this with addToast("Deleted", "success") if you pass addToast prop to AdminDashboard
+          } catch (e) { 
+              alert("Failed."); 
+          } 
+      } 
+  };
   
   const handleVerifyPayment = async (paymentId, userId, amountPaid, refNumber) => { 
       if (!confirm("Verify payment and generate Official Receipt?")) return; 
@@ -6629,7 +6883,7 @@ const TechnicianDashboard = ({ repairs, onTechUpdate }) => {
 };
 
 // --- SHARED PUBLIC NAVBAR ---
-const PublicNavbar = ({ onNavigate, onLogin, activePage }) => (
+const PublicNavbar = ({ onNavigate, onLogin, activePage, onQuickPay }) => (
   <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="flex justify-between items-center h-20">
@@ -6652,9 +6906,15 @@ const PublicNavbar = ({ onNavigate, onLogin, activePage }) => (
             </button>
           ))}
         </div>
-        <button onClick={onLogin} className="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-lg shadow-red-200">
-          My Account
-        </button>
+        <div className="flex items-center gap-2">
+            {/* NEW QUICK PAY BUTTON */}
+            <button onClick={onQuickPay} className="hidden md:flex items-center gap-1 text-slate-600 hover:text-blue-600 font-bold text-sm mr-2 px-3 py-2 rounded-lg hover:bg-blue-50 transition-all">
+                <Zap size={16}/> Quick Pay
+            </button>
+            <button onClick={onLogin} className="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-lg shadow-red-200">
+            My Account
+            </button>
+        </div>
       </div>
     </div>
   </nav>
@@ -7015,34 +7275,50 @@ const LandingPage = ({ onLoginClick, onNavigate, plans }) => {
 };
 // 6. Main App Logic
 // 6. Main App Logic
+// 6. Main App Logic
 export default function App() {
+  // --- STATE: SYSTEM & UI ---
   const [isHotspotMode, setIsHotspotMode] = useState(false);
-
-  useEffect(() => {
-    // Check URL for ?mode=hotspot which is set by MikroTik redirection
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('mode') === 'hotspot') {
-        setIsHotspotMode(true);
-    }
-  }, []);
-
-  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
+  const [publicPage, setPublicPage] = useState('landing');
   
-  // --- NEW STATE FOR PUBLIC NAVIGATION ---
-  const [publicPage, setPublicPage] = useState('landing'); // 'landing', 'support', 'coverage', 'plans', 'about', 'privacy'
+  // --- STATE: PROFESSIONAL FEATURES (NEW) ---
+  const [showGuestPay, setShowGuestPay] = useState(false);
+  const [toasts, setToasts] = useState([]);
 
+  // --- STATE: DATA ---
+  const [user, setUser] = useState(null);
+  const [mySubscriberData, setMySubscriberData] = useState(null);
   const [plans, setPlans] = useState([]);
   const [subscribers, setSubscribers] = useState([]);
-  const [mySubscriberData, setMySubscriberData] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
   const [payments, setPayments] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [repairs, setRepairs] = useState([]);
-  const [notifications, setNotifications] = useState([]); 
+  const [notifications, setNotifications] = useState([]);
 
-  // --- Fetch Plans for Landing Page (Runs even if not logged in) ---
+  // --- HELPER: TOASTS ---
+  const addToast = (message, type = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    // Auto remove after 3.5 seconds
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 3500);
+  };
+
+  const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
+
+  // --- EFFECT: CHECK HOTSPOT MODE ---
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') === 'hotspot') {
+      setIsHotspotMode(true);
+    }
+  }, []);
+
+  // --- EFFECT: FETCH PUBLIC PLANS ---
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', PLANS_COLLECTION));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -7052,41 +7328,62 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // --- EFFECT: AUTHENTICATION CHECK ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, currentUser.uid);
-        const docSnap = await getDoc(docRef);
-        let firestoreData = {};
-        
-        if (docSnap.exists()) {
-          firestoreData = { id: docSnap.id, ...docSnap.data() };
-        } else {
-          if (currentUser.email !== ADMIN_EMAIL) {
-             console.log("User profile missing. Re-initializing as applicant.");
-             firestoreData = {
-                uid: currentUser.uid,
-                username: currentUser.displayName || currentUser.email.split('@')[0],
-                email: currentUser.email,
-                role: 'subscriber',
-                status: 'applicant', 
-                accountNumber: 'PENDING', 
-                plan: null,
-                balance: 0,
-                dueDate: new Date().toISOString()
-             };
-             await setDoc(docRef, firestoreData);
+        try {
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, currentUser.uid);
+          const docSnap = await getDoc(docRef);
+          
+          let firestoreData = {};
+          if (docSnap.exists()) {
+            firestoreData = { id: docSnap.id, ...docSnap.data() };
+          } else {
+            // Fallback for missing profiles (auto-heal)
+            if (currentUser.email !== ADMIN_EMAIL) {
+               firestoreData = {
+                 uid: currentUser.uid,
+                 username: currentUser.displayName || currentUser.email.split('@')[0],
+                 email: currentUser.email,
+                 role: 'subscriber',
+                 status: 'applicant', 
+                 accountNumber: 'PENDING', 
+                 plan: null,
+                 balance: 0,
+                 dueDate: new Date().toISOString()
+               };
+               await setDoc(docRef, firestoreData);
+            }
           }
-        }
 
-        const isAdmin = currentUser.email === ADMIN_EMAIL || firestoreData.role === 'admin';
-        const isTechnician = firestoreData.role === 'technician';
+          // Role Determination
+          const isAdmin = currentUser.email === ADMIN_EMAIL || firestoreData.role === 'admin';
+          const isTechnician = firestoreData.role === 'technician';
+          const isCashier = firestoreData.role === 'cashier';
+          const isRetailer = firestoreData.role === 'retailer';
+          const isAgent = firestoreData.role === 'agent';
+          const isBusiness = firestoreData.role === 'business';
 
-        if (isAdmin) setUser({ ...currentUser, role: 'admin', ...firestoreData });
-        else if (isTechnician) setUser({ ...currentUser, role: 'technician', ...firestoreData });
-        else {
-           setMySubscriberData(firestoreData);
-           setUser({ ...currentUser, role: 'subscriber', ...firestoreData });
+          let finalRole = 'subscriber';
+          if (isAdmin) finalRole = 'admin';
+          else if (isTechnician) finalRole = 'technician';
+          else if (isCashier) finalRole = 'cashier';
+          else if (isRetailer) finalRole = 'retailer';
+          else if (isAgent) finalRole = 'agent';
+          else if (isBusiness) finalRole = 'business';
+
+          setUser({ ...currentUser, role: finalRole, ...firestoreData });
+
+          if (finalRole === 'subscriber' || finalRole === 'business') {
+            setMySubscriberData(firestoreData);
+          }
+          
+          addToast(`Welcome back, ${firestoreData.username || 'User'}`, 'success');
+
+        } catch (e) {
+          console.error("Auth Error", e);
+          addToast("Error loading profile", "error");
         }
       } else {
         setUser(null);
@@ -7097,61 +7394,77 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Data Subscriptions (Only run when user is logged in)
+  // --- EFFECT: DATA SUBSCRIPTIONS (Based on Role) ---
   useEffect(() => {
     if (!user) return;
+
+    // 1. ADMIN & CASHIER: See Everything
     if (user.role === 'admin' || user.role === 'cashier') {
-       onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), s => setSubscribers(s.docs.map(d => ({id: d.id, ...d.data()}))));
-       onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), orderBy('date', 'desc')), s => setPayments(s.docs.map(d => ({id: d.id, ...d.data()}))));
-       onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), orderBy('dateFiled', 'desc')), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()}))));
+       const unsubSubscribers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME), s => setSubscribers(s.docs.map(d => ({id: d.id, ...d.data()}))));
+       const unsubPayments = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), orderBy('date', 'desc')), s => setPayments(s.docs.map(d => ({id: d.id, ...d.data()}))));
+       const unsubRepairs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), orderBy('dateFiled', 'desc')), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()}))));
        
        const ticketCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'isp_tickets_v1');
-       const unsubscribeTickets = onSnapshot(ticketCollectionRef, (snapshot) => {
+       const unsubTickets = onSnapshot(ticketCollectionRef, (snapshot) => {
          const fetchedTickets = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
-         const sortedTickets = fetchedTickets.sort((a,b) => new Date(b.date) - new Date(a.date));
-         setTickets(sortedTickets);
+         setTickets(fetchedTickets.sort((a,b) => new Date(b.date) - new Date(a.date)));
        });
-       return () => unsubscribeTickets();
+       
+       return () => { unsubSubscribers(); unsubPayments(); unsubRepairs(); unsubTickets(); };
     } 
+    // 2. TECHNICIAN: See Assigned Jobs
     else if (user.role === 'technician') {
-        const q = query(
-            collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION),
-            where('assignedTechId', '==', user.uid)
-        );
-        onSnapshot(q, s => {
-            const allAssigned = s.docs.map(d => ({id: d.id, ...d.data()}));
-            setRepairs(allAssigned); 
-        });
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), where('assignedTechId', '==', user.uid));
+        const unsub = onSnapshot(q, s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()}))));
+        return () => unsub();
     }
-    else {
-       onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.uid), s => setMySubscriberData({id: s.id, ...s.data()}));
-       onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), where('userId', '==', user.uid)), s => setTickets(s.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b)=>new Date(b.date)-new Date(a.date))));
-       onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), where('userId', '==', user.uid)), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b)=>new Date(b.dateFiled)-new Date(a.dateFiled))));
-       onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', NOTIFICATIONS_COLLECTION), where('userId', '==', user.uid)), s => {
-           setNotifications(s.docs.map(d => ({id: d.id, ...d.data()})));
-       });
+    // 3. SUBSCRIBER/BUSINESS: See Own Data
+    else if (user.role === 'subscriber' || user.role === 'business') {
+       const unsubSelf = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.uid), s => setMySubscriberData({id: s.id, ...s.data()}));
+       const unsubTickets = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), where('userId', '==', user.uid)), s => setTickets(s.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b)=>new Date(b.date)-new Date(a.date))));
+       const unsubRepairs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), where('userId', '==', user.uid)), s => setRepairs(s.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b)=>new Date(b.dateFiled)-new Date(a.dateFiled))));
+       const unsubNotifs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', NOTIFICATIONS_COLLECTION), where('userId', '==', user.uid)), s => setNotifications(s.docs.map(d => ({id: d.id, ...d.data()}))));
+       
+       return () => { unsubSelf(); unsubTickets(); unsubRepairs(); unsubNotifs(); };
     }
-    onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), orderBy('date', 'desc')), s => setAnnouncements(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    
+    // Global Announcements (Everyone sees this)
+    const unsubAnnounce = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', ANNOUNCEMENTS_COLLECTION), orderBy('date', 'desc')), s => setAnnouncements(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    return () => unsubAnnounce();
+
   }, [user]);
+
+  // --- HANDLERS ---
 
   const handleLogout = async () => {
       await signOut(auth);
       setShowLogin(false);
-      setPublicPage('landing'); // Go back to landing page
+      setPublicPage('landing');
+      addToast("Logged out successfully", "info");
   };
 
-  const handleLoginClick = () => {
-    setShowLogin(true);
-  };
+  const handleLoginClick = () => setShowLogin(true);
 
-  const handlePayment = async (id, refNumber) => {
-    if (!refNumber) return;
+  // Core Function: Handle Payments (Passed to Subscriber/Business Dash)
+  const handlePayment = async (id, refNumber, username) => {
+    if (!refNumber) return addToast("Reference number missing", "error");
     try {
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), { userId: id, username: user.displayName || user.email, refNumber, date: new Date().toISOString(), status: 'submitted' });
-      alert(`Payment Submitted for Verification! Ref: ${refNumber}`);
-    } catch (e) { alert("Payment failed."); }
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), { 
+          userId: id, 
+          username: username || user.username, 
+          refNumber, 
+          date: new Date().toISOString(), 
+          status: 'pending_approval', // Changed from 'submitted' to match your other logic
+          amount: 0 // Optional: can be updated by admin later
+      });
+      addToast(`Payment Submitted! Ref: ${refNumber}`, "success");
+    } catch (e) { 
+        console.error(e);
+        addToast("Payment submission failed.", "error"); 
+    }
   };
 
+  // Core Function: Technician Updates (Passed to Tech Dash)
   const handleTechUpdateStatus = async (repairId, currentStep) => {
       let nextStatus = '';
       let nextStepIndex = currentStep + 1;
@@ -7159,81 +7472,137 @@ export default function App() {
       if (currentStep === 1) { nextStatus = 'Processing'; note = 'Technician has started repairs.'; } 
       else if (currentStep === 2) { nextStatus = 'Customer Confirmation'; note = 'Repairs completed. Pending customer verification.'; } 
       else { return; }
-      try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId); await updateDoc(docRef, { stepIndex: nextStepIndex, status: nextStatus, technicianNote: note }); } catch (e) { console.error(e); alert("Update failed."); }
+      
+      try { 
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId); 
+          await updateDoc(docRef, { stepIndex: nextStepIndex, status: nextStatus, technicianNote: note }); 
+          addToast("Status Updated", "success");
+      } catch (e) { 
+          console.error(e); 
+          addToast("Update failed.", "error"); 
+      }
   };
 
+  // Core Function: Subscriber Confirms Repair (Passed to Sub Dash)
   const handleConfirmRepair = async (repairId) => {
       try {
           const docRef = doc(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION, repairId);
           await updateDoc(docRef, { stepIndex: 4, status: 'Completed', completedDate: new Date().toISOString() });
-          await sendCustomEmail('feedback', {
-              name: user.displayName || user.email,
-              email: user.email,
-              message: `Your repair #${repairId} is complete. How did we do? Click the link to rate us.`,
-              link: 'https://www.facebook.com/SwiftnetISP/reviews' 
-          });
-          alert("Thank you! The repair is now marked as completed.");
-      } catch(e) { console.error(e); alert("Failed to confirm."); }
+          
+          // Send Feedback Email
+          if (user?.email) {
+             await sendCustomEmail('feedback', {
+                name: user.displayName || user.username,
+                email: user.email,
+                message: `Your repair #${repairId} is complete. How did we do?`,
+                link: 'https://www.facebook.com/SwiftnetISP/reviews' 
+             });
+          }
+          addToast("Repair marked as completed. Thank you!", "success");
+      } catch(e) { 
+          console.error(e); 
+          addToast("Failed to confirm repair.", "error"); 
+      }
   };
 
-  // --- RENDER LOGIC ---
+  // --- RENDER ---
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-red-600 font-bold bg-white">Loading SwiftNet Home...</div>;
-  // --- RENDER HOTSPOT PORTAL (Before Auth Check) ---
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="text-center animate-pulse">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
+                <Wifi size={32} />
+            </div>
+            <p className="text-slate-500 font-bold tracking-widest uppercase text-sm">Loading SwiftNet...</p>
+        </div>
+    </div>
+  );
+
+  // 1. Hotspot Portal (No Auth Required)
   if (isHotspotMode) {
       return <HotspotPortal onLogin={() => setIsHotspotMode(false)} db={db} appId={appId} />;
   }
 
-// 1. If User is Logged In -> Show Dashboard
-  if (user) {
-    return (
-      <Layout user={user} onLogout={handleLogout}>
-        {user.role === 'admin' ? (
-          <AdminDashboard subscribers={subscribers} announcements={announcements} payments={payments} tickets={tickets} repairs={repairs} user={user} />
-        ) : user.role === 'cashier' ? (
-          <CashierDashboard subscribers={subscribers} db={db} appId={appId} />
-        ) : user.role === 'technician' ? (
-          <TechnicianDashboard repairs={repairs} onTechUpdate={handleTechUpdateStatus} />
-        ) : user.role === 'retailer' ? (
-          <RetailerDashboard user={user} db={db} appId={appId} onLogout={handleLogout} />
-        ) : user.role === 'agent' ? ( 
-          // --- [NEW] AGENT DASHBOARD ---
-          <AgentDashboard user={user} db={db} appId={appId} onLogout={handleLogout} />
-        ) : user.role === 'business' ? (
-          <BusinessDashboard user={user} db={db} appId={appId} onPay={handlePayment} />
-        ) : (
-          <SubscriberDashboard userData={mySubscriberData || {}} onPay={handlePayment} announcements={announcements} notifications={notifications} tickets={tickets} repairs={repairs} onConfirmRepair={handleConfirmRepair} />
-        )}
-      </Layout>
-    );
-  }
-
-  // 2. If User is NOT Logged In but clicked "Login" -> Show Login Modal
-  if (showLogin) {
-    return (
-      <div className="relative">
-        <Login onLogin={() => {}} />
-        <button onClick={() => setShowLogin(false)} className="fixed top-6 right-6 text-white bg-black/20 hover:bg-black/40 p-2 rounded-full z-50">
-          <X size={24} />
-        </button>
-      </div>
-    );
-  }
-
-  // 3. If User is NOT Logged In -> Show Public Pages based on State
-  switch (publicPage) {
-    case 'support':
-      return <SupportPage onNavigate={setPublicPage} onLogin={handleLoginClick} />;
-    case 'coverage':
-      return <CoveragePage onNavigate={setPublicPage} onLogin={handleLoginClick} db={db} appId={appId} />;
-    case 'plans':
-      return <PlansPage onNavigate={setPublicPage} onLogin={handleLoginClick} plans={plans} />;
-    case 'about':
-      return <AboutPage onNavigate={setPublicPage} onLogin={handleLoginClick} />;
-    case 'privacy':
-      return <PrivacyPage onNavigate={setPublicPage} onLogin={handleLoginClick} />;
-    default:
- 
-      return <LandingPage onLoginClick={handleLoginClick} onNavigate={setPublicPage} plans={plans} />;
-  }
+  // 2. Main Application
+  return (
+    <>
+      {/* Global Overlays */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      {showGuestPay && <GuestPayModal onClose={()=>setShowGuestPay(false)} db={db} appId={appId} onAddToast={addToast} />}
+      
+      {/* 3. Authenticated Views */}
+      {user ? (
+        <Layout user={user} onLogout={handleLogout}>
+           {user.role === 'admin' ? (
+             <AdminDashboard 
+                subscribers={subscribers} 
+                announcements={announcements} 
+                payments={payments} 
+                tickets={tickets} 
+                repairs={repairs} 
+                user={user} 
+                db={db} 
+                appId={appId} 
+             />
+           ) : user.role === 'cashier' ? (
+             <CashierDashboard subscribers={subscribers} db={db} appId={appId} />
+           ) : user.role === 'technician' ? (
+             <TechnicianDashboard repairs={repairs} onTechUpdate={handleTechUpdateStatus} />
+           ) : user.role === 'retailer' ? (
+             <RetailerDashboard user={user} db={db} appId={appId} onLogout={handleLogout} />
+           ) : user.role === 'agent' ? ( 
+             <AgentDashboard user={user} db={db} appId={appId} onLogout={handleLogout} />
+           ) : user.role === 'business' ? (
+             <BusinessDashboard user={user} db={db} appId={appId} onPay={handlePayment} />
+           ) : (
+             // Default Subscriber View
+             <SubscriberDashboard 
+                userData={mySubscriberData || {}} 
+                onPay={handlePayment} 
+                announcements={announcements} 
+                notifications={notifications} 
+                tickets={tickets} 
+                repairs={repairs} 
+                onConfirmRepair={handleConfirmRepair} 
+                db={db} 
+                appId={appId}
+             />
+           )}
+        </Layout>
+      ) : showLogin ? (
+        // 4. Login Modal Overlay
+        <div className="relative">
+          <Login onLogin={() => {}} />
+          <button onClick={() => setShowLogin(false)} className="fixed top-6 right-6 text-white bg-black/20 hover:bg-black/40 p-2 rounded-full z-50 transition-colors">
+            <X size={24} />
+          </button>
+        </div>
+      ) : (
+        // 5. Public Pages (Landing, Support, Coverage, etc.)
+        <>
+            {publicPage === 'support' && <SupportPage onNavigate={setPublicPage} onLogin={handleLoginClick} />}
+            {publicPage === 'coverage' && <CoveragePage onNavigate={setPublicPage} onLogin={handleLoginClick} db={db} appId={appId} />}
+            {publicPage === 'plans' && <PlansPage onNavigate={setPublicPage} onLogin={handleLoginClick} plans={plans} />}
+            {publicPage === 'about' && <AboutPage onNavigate={setPublicPage} onLogin={handleLoginClick} />}
+            {publicPage === 'privacy' && <PrivacyPage onNavigate={setPublicPage} onLogin={handleLoginClick} />}
+            
+            {/* Default Landing Page */}
+            {publicPage === 'landing' && (
+                <div className="min-h-screen bg-white font-sans text-slate-800">
+                    <PublicNavbar 
+                        onNavigate={setPublicPage} 
+                        onLogin={handleLoginClick} 
+                        activePage="landing" 
+                        onQuickPay={()=>setShowGuestPay(true)} // Hook up the new Guest Pay button
+                    />
+                    <LandingPage onLoginClick={handleLoginClick} onNavigate={setPublicPage} plans={plans} /> 
+                </div>
+            )}
+            
+            {/* Cookie Consent Banner (Only on public pages) */}
+            <CookieConsentBanner />
+        </>
+      )}
+    </>
+  );
 }
