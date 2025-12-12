@@ -7106,7 +7106,7 @@ const PrivacyPage = ({ onNavigate, onLogin }) => (
 
 // --- NEW LANDING PAGE COMPONENT (PLDT STYLE) ---
 const LandingPage = ({ onLoginClick, onNavigate, plans, onQuickPay }) => {
-  // Default fallback plans if none loaded or database is empty
+  // Default fallback plans if none loaded or database is empty--
   const displayPlans = plans && plans.length > 0 ? plans : [
     { name: 'Fiber Starter', speed: '50 Mbps', price: '999', features: ['Unlimited Data', 'Free Installation'], category: 'Home' },
     { name: 'Fiber Pro', speed: '100 Mbps', price: '1499', features: ['Unlimited Data', 'Priority Support'], category: 'Home' },
