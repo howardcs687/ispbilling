@@ -69,7 +69,7 @@ import {
   Server, Cloud, Copy, Phone,
   Headphones, ArrowDownCircle, HardDrive, PhoneCall, Video, CloudRain, Info, XCircle, LifeBuoy,
   Bot,       // <--- ADDED THIS
-  Loader2, Save,
+  Loader2, Save, Tv, Film, Users, Trophy, Target, Timer, Sparkles, Rocket, Flag, ThumbsUp, TimerReset,
 } from 'lucide-react';
 
 // --- Firebase Configuration --
@@ -1415,6 +1415,263 @@ const GeminiChatWidget = ({ user }) => {
     </>
   );
 };
+
+// --- [START NEW COMPONENTS] ---
+
+// 1. Flash Promo Manager (Admin)
+const FlashPromoManager = ({ db, appId }) => {
+  const [promo, setPromo] = useState({ title: '', discount: '', active: false });
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'flash_promo'), (snap) => {
+      if (snap.exists()) setPromo(snap.data());
+    });
+    return () => unsub();
+  }, [db, appId]);
+
+  const handleSave = async () => {
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'flash_promo'), promo);
+    alert("Promo Updated! Subscribers will see this immediately.");
+  };
+
+  return (
+    <div className="bg-gradient-to-r from-purple-900 to-indigo-900 p-6 rounded-2xl text-white shadow-xl mb-6">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-bold text-xl flex items-center gap-2"><Sparkles className="text-yellow-400"/> Flash Promo Controller</h3>
+        <div className="flex items-center gap-2">
+            <span className="text-sm font-bold uppercase">{promo.active ? 'LIVE' : 'OFF'}</span>
+            <button onClick={() => setPromo({...promo, active: !promo.active})} className={`w-12 h-6 rounded-full transition-colors relative ${promo.active ? 'bg-green-500' : 'bg-slate-600'}`}>
+                <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${promo.active ? 'left-7' : 'left-1'}`}></div>
+            </button>
+        </div>
+      </div>
+      <div className="space-y-3 text-slate-900">
+        <input className="w-full p-2 rounded-lg" placeholder="Promo Title (e.g. 50% OFF Next Month)" value={promo.title} onChange={e => setPromo({...promo, title: e.target.value})} />
+        <input className="w-full p-2 rounded-lg" placeholder="Offer Details (e.g. Upgrade to Fiber 200Mbps now!)" value={promo.discount} onChange={e => setPromo({...promo, discount: e.target.value})} />
+        <button onClick={handleSave} className="bg-yellow-400 hover:bg-yellow-300 text-purple-900 font-bold w-full py-2 rounded-lg">Update Promo</button>
+      </div>
+    </div>
+  );
+};
+
+// 2. Flash Promo Banner (Subscriber)
+const FlashPromoBanner = ({ user, db, appId }) => {
+  const [promo, setPromo] = useState(null);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'flash_promo'), (snap) => {
+      if (snap.exists() && snap.data().active) setPromo(snap.data());
+      else setPromo(null);
+    });
+    return () => unsub();
+  }, [db, appId]);
+
+  const handleClaim = async () => {
+    if(!confirm("Claim this offer? Admin will adjust your billing.")) return;
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+        ticketId: Math.floor(Math.random() * 9000000).toString(),
+        userId: user.uid,
+        username: user.username,
+        subject: `CLAIMED PROMO: ${promo.title}`,
+        message: `User claimed the Flash Sale: ${promo.discount}`,
+        status: 'open',
+        date: new Date().toISOString(),
+        isOrder: true
+    });
+    alert("Offer Claimed! Check your ticket status.");
+  };
+
+  if (!promo) return null;
+
+  return (
+    <div className="bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white p-4 rounded-2xl shadow-lg mb-6 flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2 border-2 border-white/20 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
+        <div className="flex items-center gap-4 relative z-10">
+            <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm animate-pulse"><Timer size={24}/></div>
+            <div>
+                <h3 className="font-black text-lg uppercase tracking-tight">{promo.title}</h3>
+                <p className="text-sm font-medium opacity-90">{promo.discount}</p>
+            </div>
+        </div>
+        <button onClick={handleClaim} className="relative z-10 bg-white text-red-600 px-6 py-2 rounded-xl font-bold shadow-xl hover:scale-105 transition-transform whitespace-nowrap">
+            CLAIM NOW
+        </button>
+    </div>
+  );
+};
+
+// 3. Entertainment Widget (Subscriber)
+const EntertainmentWidget = ({ user, db, appId }) => {
+  const bundles = [
+    { name: 'Netflix Premium', price: 549, icon: <Film size={24} className="text-red-600"/>, color: 'bg-black text-white' },
+    { name: 'Disney+ Mobile', price: 159, icon: <Tv size={24} className="text-blue-400"/>, color: 'bg-blue-900 text-white' },
+    { name: 'NBA League Pass', price: 499, icon: <Trophy size={24} className="text-orange-500"/>, color: 'bg-slate-100 text-slate-800 border' }
+  ];
+
+  const handleSubscribe = async (bundle) => {
+    if(!confirm(`Add ${bundle.name} to your monthly bill for ₱${bundle.price}?`)) return;
+    
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+        ticketId: Math.floor(Math.random() * 9000000).toString(),
+        userId: user.uid,
+        username: user.username,
+        subject: `Subscription: ${bundle.name}`,
+        message: `Please activate ${bundle.name} for my account. I accept the +₱${bundle.price} monthly charge.`,
+        status: 'open',
+        date: new Date().toISOString(),
+        isOrder: true
+    });
+    alert("Request Sent! You will receive an email with your login details.");
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Tv size={20} className="text-purple-600"/> Entertainment Add-ons</h3>
+        <div className="space-y-3">
+            {bundles.map((b, i) => (
+                <div key={i} className={`p-4 rounded-xl flex justify-between items-center ${b.color} shadow-sm transition-transform hover:scale-[1.02] cursor-pointer`} onClick={() => handleSubscribe(b)}>
+                    <div className="flex items-center gap-3">
+                        <div className="bg-white/10 p-2 rounded-lg">{b.icon}</div>
+                        <div>
+                            <p className="font-bold text-sm">{b.name}</p>
+                            <p className="text-xs opacity-70">Add to plan</p>
+                        </div>
+                    </div>
+                    <span className="font-bold text-sm">+₱{b.price}</span>
+                </div>
+            ))}
+        </div>
+    </div>
+  );
+};
+
+// 4. Agent Dashboard (Reseller)
+const AgentDashboard = ({ user, db, appId, onLogout }) => {
+  const [leads, setLeads] = useState([]);
+  const [newLead, setNewLead] = useState({ name: '', address: '', phone: '', plan: 'Fiber 1699' });
+  
+  useEffect(() => {
+    const q = query(
+        collection(db, 'artifacts', appId, 'public', 'data', 'isp_leads_v1'), 
+        where('agentId', '==', user.uid),
+        orderBy('date', 'desc')
+    );
+    const unsub = onSnapshot(q, (s) => setLeads(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    return () => unsub();
+  }, [user, db, appId]);
+
+  const handleSubmitLead = async (e) => {
+    e.preventDefault();
+    if(!newLead.name || !newLead.address) return;
+
+    try {
+        const leadRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_leads_v1'), {
+            ...newLead,
+            agentId: user.uid,
+            agentName: user.username,
+            status: 'Pending',
+            date: new Date().toISOString()
+        });
+
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+            ticketId: Math.floor(Math.random() * 900000).toString(),
+            userId: user.uid,
+            username: user.username,
+            subject: `New Lead: ${newLead.name}`,
+            message: `Agent ${user.username} submitted a new application for ${newLead.name} at ${newLead.address}. Plan: ${newLead.plan}. Contact: ${newLead.phone}. Check Leads Database.`,
+            status: 'open',
+            date: new Date().toISOString(),
+            isApplication: true,
+            isAgentLead: true
+        });
+
+        setNewLead({ name: '', address: '', phone: '', plan: 'Fiber 1699' });
+        alert("Lead Submitted! Commission will be credited once installed.");
+    } catch(e) { alert("Error: " + e.message); }
+  };
+
+  const totalComm = leads.filter(l => l.status === 'Paid').length * 500;
+  const pending = leads.filter(l => l.status === 'Pending').length;
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans">
+        <nav className="bg-teal-700 text-white p-4 shadow-lg sticky top-0 z-50">
+            <div className="max-w-6xl mx-auto flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                    <Target className="text-teal-200"/>
+                    <span className="font-bold text-lg">SwiftNet<span className="text-teal-200">Agent</span></span>
+                </div>
+                <button onClick={onLogout} className="bg-teal-800 p-2 rounded-lg hover:bg-teal-900"><LogOut size={18}/></button>
+            </div>
+        </nav>
+
+        <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border-b-4 border-teal-500">
+                    <p className="text-xs font-bold text-slate-400 uppercase">Total Earnings</p>
+                    <h2 className="text-3xl font-black text-teal-700">₱{totalComm.toLocaleString()}</h2>
+                </div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border-b-4 border-orange-500">
+                    <p className="text-xs font-bold text-slate-400 uppercase">Pending Installs</p>
+                    <h2 className="text-3xl font-black text-orange-600">{pending}</h2>
+                </div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border-b-4 border-blue-500">
+                    <p className="text-xs font-bold text-slate-400 uppercase">Total Leads</p>
+                    <h2 className="text-3xl font-black text-blue-600">{leads.length}</h2>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
+                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><UserPlus size={20}/> Submit New Application</h3>
+                    <form onSubmit={handleSubmitLead} className="space-y-3">
+                        <input className="w-full border p-3 rounded-xl bg-slate-50" placeholder="Customer Name" value={newLead.name} onChange={e=>setNewLead({...newLead, name: e.target.value})} required/>
+                        <input className="w-full border p-3 rounded-xl bg-slate-50" placeholder="Full Address" value={newLead.address} onChange={e=>setNewLead({...newLead, address: e.target.value})} required/>
+                        <input className="w-full border p-3 rounded-xl bg-slate-50" placeholder="Phone Number" value={newLead.phone} onChange={e=>setNewLead({...newLead, phone: e.target.value})} required/>
+                        <select className="w-full border p-3 rounded-xl bg-slate-50" value={newLead.plan} onChange={e=>setNewLead({...newLead, plan: e.target.value})}>
+                            <option>Fiber 1699 (Up to 200Mbps)</option>
+                            <option>Fiber 2099 (Up to 400Mbps)</option>
+                            <option>Fiber 999 (Prepaid)</option>
+                        </select>
+                        <button className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg">Submit Application</button>
+                    </form>
+                </div>
+
+                <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="p-6 border-b border-slate-100 bg-slate-50">
+                        <h3 className="font-bold text-slate-700">Application History</h3>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                        {leads.map(lead => (
+                            <div key={lead.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
+                                <div>
+                                    <p className="font-bold text-slate-800">{lead.name}</p>
+                                    <p className="text-xs text-slate-500">{lead.address} • {lead.plan}</p>
+                                    <p className="text-[10px] text-slate-400 mt-1">{new Date(lead.date).toLocaleDateString()}</p>
+                                </div>
+                                <div className="text-right">
+                                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                                        lead.status === 'Paid' ? 'bg-green-100 text-green-700' : 
+                                        lead.status === 'Installed' ? 'bg-blue-100 text-blue-700' : 
+                                        'bg-yellow-100 text-yellow-700'
+                                    }`}>
+                                        {lead.status}
+                                    </span>
+                                    {lead.status === 'Paid' && <p className="text-xs font-bold text-green-600 mt-1">+₱500.00</p>}
+                                </div>
+                            </div>
+                        ))}
+                        {leads.length === 0 && <p className="p-8 text-center text-slate-400">No applications submitted yet.</p>}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+  );
+};
+// --- [END NEW COMPONENTS] ---
+
+// Existing Code continues...
 
 const Layout = ({ children, user, onLogout }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -3302,21 +3559,23 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       {activeTab === 'overview' && (
         <div className="space-y-8">
           
-          {/* --- NEW: Referral System --- */}
+          {/* --- [NEW] FLASH PROMO BANNER --- */}
+          <FlashPromoBanner user={userData} db={db} appId={appId} />
+
+          {/* --- Referral System (Existing) --- */}
           <ReferralSystem user={userData} />
           
-          {/* FEATURE 1: CCTV PROMO BANNER */}
+          {/* ... [Keep your CCTV Banner Here] ... */}
           <div className="bg-slate-900 rounded-2xl p-6 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl border border-slate-700">
+             {/* ... (Existing CCTV code content) ... */}
+             {/* Note: I'm abbreviating for brevity, keep your original CCTV div content here */}
              <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl -mr-10 -mt-10"></div>
              <div className="relative z-10">
                 <div className="inline-flex items-center gap-2 bg-red-600 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2">Limited Offer</div>
                 <h3 className="text-2xl font-bold text-white mb-1">Secure Your Home with SwiftCam</h3>
                 <p className="text-slate-400 text-sm max-w-md">Get 2 HD CCTV Cameras installed + Mobile App Access. Add to your plan for only <span className="text-white font-bold">₱300/mo</span>.</p>
              </div>
-             <button 
-                onClick={() => handlePurchase({name: 'CCTV Bundle (2 Cameras)', price: '300/mo or 2500 Cash', id: 'promo_cctv'})}
-                className="relative z-10 bg-white text-slate-900 px-6 py-3 rounded-xl font-bold text-sm hover:bg-blue-50 transition-colors flex items-center gap-2 whitespace-nowrap"
-             >
+             <button onClick={() => handlePurchase({name: 'CCTV Bundle (2 Cameras)', price: '300/mo or 2500 Cash', id: 'promo_cctv'})} className="relative z-10 bg-white text-slate-900 px-6 py-3 rounded-xl font-bold text-sm hover:bg-blue-50 transition-colors flex items-center gap-2 whitespace-nowrap">
                 <ShieldCheck size={18}/> Get Protected
              </button>
           </div>
@@ -3344,6 +3603,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
              {/* Balance Card */}
              <div className="lg:col-span-2 relative overflow-hidden rounded-3xl p-8 shadow-xl border border-white/40 bg-white/60 backdrop-blur-xl transition-all hover:shadow-2xl group">
+                {/* ... [Keep your existing Balance Card content exactly as is] ... */}
                 <div className="flex justify-between items-start mb-8">
                     <div>
                         <p className="text-slate-500 font-bold uppercase tracking-wider text-xs mb-1">Total Balance Due</p>
@@ -3386,26 +3646,32 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
              </div>
 
              {/* Notifications Column */}
-             <div className="bg-white/60 backdrop-blur-md border border-white/40 rounded-3xl p-6 shadow-xl h-fit">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="font-bold text-slate-700">Notifications</h3>
-                    <div className="bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded-full">{allAlerts.length} New</div>
-                </div>
-                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                    {allAlerts.length > 0 ? allAlerts.map((ann) => (
-                        <div key={ann.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100/50 hover:bg-blue-50/50 transition-colors">
-                            <div className="flex items-start gap-3">
-                                <div className={`mt-1 p-1.5 rounded-full ${getBgColor(ann.type)}`}>{getIcon(ann.type)}</div>
-                                <div>
-                                    <p className="text-xs font-bold text-slate-700 mb-0.5">{ann.title}</p>
-                                    <p className="text-[10px] text-slate-500 leading-relaxed">{ann.message}</p>
-                                    <p className="text-[9px] text-slate-400 mt-2 font-medium">{new Date(ann.date).toLocaleDateString()}</p>
+             <div className="space-y-6">
+                
+                {/* --- [NEW] ENTERTAINMENT BUNDLES WIDGET --- */}
+                <EntertainmentWidget user={userData} db={db} appId={appId} />
+
+                <div className="bg-white/60 backdrop-blur-md border border-white/40 rounded-3xl p-6 shadow-xl h-fit">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="font-bold text-slate-700">Notifications</h3>
+                        <div className="bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded-full">{allAlerts.length} New</div>
+                    </div>
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                        {allAlerts.length > 0 ? allAlerts.map((ann) => (
+                            <div key={ann.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100/50 hover:bg-blue-50/50 transition-colors">
+                                <div className="flex items-start gap-3">
+                                    <div className={`mt-1 p-1.5 rounded-full ${getBgColor(ann.type)}`}>{getIcon(ann.type)}</div>
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-700 mb-0.5">{ann.title}</p>
+                                        <p className="text-[10px] text-slate-500 leading-relaxed">{ann.message}</p>
+                                        <p className="text-[9px] text-slate-400 mt-2 font-medium">{new Date(ann.date).toLocaleDateString()}</p>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    )) : (
-                        <div className="text-center py-8 text-slate-400 text-sm">All caught up!</div>
-                    )}
+                        )) : (
+                            <div className="text-center py-8 text-slate-400 text-sm">All caught up!</div>
+                        )}
+                    </div>
                 </div>
              </div>
           </div>
@@ -4744,6 +5010,7 @@ const AddStaffModal = ({ onClose }) => {
                         <option value="cashier">Cashier (Billing Only)</option>
                         <option value="technician">Technician (Repairs Only)</option>
                         <option value="retailer">Retailer (Digital Goods)</option>
+                        <option value="agent">Sales Agent (Reseller)</option>
                         <option value="admin">Admin (Full Access)</option>
                     </select>
                 </div>
@@ -5497,7 +5764,117 @@ const RetailerDashboard = ({ user, db, appId, onLogout }) => {
     </div>
   );
 };
+// --- [FEATURE 3] ZONE STARTER MANAGER (ADMIN) ---
+const CrowdfundManager = ({ db, appId }) => {
+  const [campaigns, setCampaigns] = useState([]);
+  const [newCamp, setNewCamp] = useState({ area: '', target: 20, deadline: '', description: '' });
 
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_crowdfunds_v1'));
+    const unsub = onSnapshot(q, (s) => setCampaigns(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    return () => unsub();
+  }, [db, appId]);
+
+  const handleLaunch = async (e) => {
+    e.preventDefault();
+    if(!newCamp.area) return;
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_crowdfunds_v1'), {
+        ...newCamp, current: 0, status: 'Active', dateCreated: new Date().toISOString()
+    });
+    setNewCamp({ area: '', target: 20, deadline: '', description: '' });
+    alert("Campaign Launched!");
+  };
+
+  const handleClose = async (id) => {
+      if(!confirm("End this campaign?")) return;
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_crowdfunds_v1', id), { status: 'Closed' });
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+        <div className="bg-gradient-to-r from-blue-900 to-slate-900 p-8 rounded-2xl text-white shadow-xl relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16"></div>
+            <div className="relative z-10"><h2 className="text-3xl font-black mb-2 flex items-center gap-3"><Rocket className="text-orange-500"/> Zone Starter</h2><p className="text-blue-200">Launch crowdfunding campaigns to fund new expansion areas risk-free.</p></div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
+                <h3 className="font-bold text-slate-800 mb-4">Launch New Zone</h3>
+                <form onSubmit={handleLaunch} className="space-y-4">
+                    <div><label className="text-xs font-bold text-slate-500 uppercase">Target Area</label><input className="w-full border p-2 rounded-lg" placeholder="e.g. Brgy. San Juan" value={newCamp.area} onChange={e=>setNewCamp({...newCamp, area: e.target.value})} required/></div>
+                    <div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-slate-500 uppercase">Target Signups</label><input type="number" className="w-full border p-2 rounded-lg" value={newCamp.target} onChange={e=>setNewCamp({...newCamp, target: e.target.value})} required/></div><div><label className="text-xs font-bold text-slate-500 uppercase">Deadline</label><input type="date" className="w-full border p-2 rounded-lg" value={newCamp.deadline} onChange={e=>setNewCamp({...newCamp, deadline: e.target.value})} required/></div></div>
+                    <div><label className="text-xs font-bold text-slate-500 uppercase">Description / Hook</label><textarea className="w-full border p-2 rounded-lg h-20" placeholder="e.g. If we reach 20 signups, we build fiber next week!" value={newCamp.description} onChange={e=>setNewCamp({...newCamp, description: e.target.value})}></textarea></div>
+                    <button className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700">Launch Campaign</button>
+                </form>
+            </div>
+            <div className="lg:col-span-2 space-y-4">
+                {campaigns.map(camp => (
+                    <div key={camp.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-6">
+                        <div className="flex-1"><div className="flex justify-between items-start mb-2"><h3 className="font-bold text-xl text-slate-800">{camp.area}</h3><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${camp.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>{camp.status}</span></div><p className="text-sm text-slate-500 mb-4">{camp.description}</p><div className="space-y-2"><div className="flex justify-between text-xs font-bold text-slate-600"><span>{camp.current} Reserved</span><span>Goal: {camp.target}</span></div><div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-1000" style={{width: `${(camp.current/camp.target)*100}%`}}></div></div></div></div>
+                        <div className="flex flex-col justify-center border-l border-slate-100 pl-6 gap-2"><div className="text-center"><p className="text-3xl font-black text-slate-800">{Math.round((camp.current/camp.target)*100)}%</p><p className="text-xs text-slate-400 uppercase font-bold">Funded</p></div>{camp.status === 'Active' && <button onClick={() => handleClose(camp.id)} className="text-red-500 text-xs font-bold hover:underline mt-2">End Campaign</button>}</div>
+                    </div>
+                ))}
+                {campaigns.length === 0 && <div className="p-10 text-center text-slate-400">No active campaigns.</div>}
+            </div>
+        </div>
+    </div>
+  );
+};
+
+// --- [FEATURE 3] PUBLIC ZONE WIDGET ---
+const ZoneStarterWidget = ({ db, appId }) => {
+  const [campaigns, setCampaigns] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [form, setForm] = useState({ name: '', contact: '' });
+
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_crowdfunds_v1'), where('status', '==', 'Active'));
+    const unsub = onSnapshot(q, (s) => setCampaigns(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    return () => unsub();
+  }, [db, appId]);
+
+  const handleReserve = async (e) => {
+      e.preventDefault();
+      if(!selected || !form.name) return;
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_crowdfunds_v1', selected.id), { current: increment(1) });
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+          ticketId: Math.floor(Math.random() * 9000000).toString(),
+          subject: `Zone Pre-Order: ${selected.area}`,
+          message: `NEW RESERVATION: ${form.name} (${form.contact}) wants to join the ${selected.area} expansion.`,
+          status: 'open',
+          date: new Date().toISOString(),
+          isApplication: true,
+          userId: 'GUEST', username: form.name
+      });
+      alert("Reservation Confirmed! We will contact you once the zone is activated.");
+      setSelected(null); setForm({ name: '', contact: '' });
+  };
+
+  if(campaigns.length === 0) return null;
+
+  return (
+    <div className="my-12">
+        <div className="text-center mb-8"><h2 className="text-3xl font-black text-slate-900 mb-2 flex justify-center items-center gap-2"><Rocket className="text-red-600"/> Expansion Zones</h2><p className="text-slate-500">Vote for your area! If we reach the target, we build fiber lines next week.</p></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {campaigns.map(camp => (
+                <div key={camp.id} className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden hover:-translate-y-1 transition-transform">
+                    <div className="bg-slate-900 p-4 text-white flex justify-between items-center"><h3 className="font-bold text-lg">{camp.area}</h3><div className="flex items-center gap-1 text-xs bg-white/20 px-2 py-1 rounded"><TimerReset size={12}/> {new Date(camp.deadline).toLocaleDateString()}</div></div>
+                    <div className="p-6">
+                        <p className="text-sm text-slate-600 mb-6 h-10">{camp.description}</p>
+                        <div className="mb-6"><div className="flex justify-between text-xs font-bold text-slate-500 mb-2"><span>{camp.current} Joined</span><span>Target: {camp.target}</span></div><div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${camp.current >= camp.target ? 'bg-green-500' : 'bg-red-500'} transition-all duration-1000`} style={{width: `${Math.min((camp.current/camp.target)*100, 100)}%`}}></div></div></div>
+                        {selected?.id === camp.id ? (
+                            <form onSubmit={handleReserve} className="animate-in fade-in">
+                                <input className="w-full border p-2 rounded mb-2 text-sm" placeholder="Your Name" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} required/>
+                                <input className="w-full border p-2 rounded mb-2 text-sm" placeholder="Phone Number" value={form.contact} onChange={e=>setForm({...form, contact: e.target.value})} required/>
+                                <div className="flex gap-2"><button type="button" onClick={()=>setSelected(null)} className="flex-1 bg-slate-200 text-slate-600 py-2 rounded text-xs font-bold">Cancel</button><button className="flex-1 bg-green-600 text-white py-2 rounded text-xs font-bold hover:bg-green-700">Confirm</button></div>
+                            </form>
+                        ) : (<button onClick={()=>setSelected(camp)} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-red-600 transition-colors flex items-center justify-center gap-2"><ThumbsUp size={18}/> Pre-Order Now</button>)}
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+  );
+};
 
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs, user }) => {
   const [activeTab, setActiveTab] = useState('subscribers');
@@ -5771,9 +6148,9 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex space-x-1 overflow-x-auto max-w-[95vw] mx-auto md:mx-0 scrollbar-hide">
-         {['analytics', 'status', 'ads', 'reports', 'cashier', 'coverage', 'expenses', 'store', 'digital_goods', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest', 'setting'].map(tab => (
+         {['analytics', 'marketing', 'status', 'ads', 'reports', 'cashier', 'coverage', 'expansion', 'expenses', 'store', 'digital_goods', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest', 'setting'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'status' ? <><Activity size={16}/> Network Status</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'digital_goods' ? <><Server size={16}/> Digital Goods</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
+                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'marketing' ? <><Sparkles size={16}/> Marketing</> : tab === 'status' ? <><Activity size={16}/> Network Status</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'expansion' ? <><Rocket size={16}/> Expansion</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'digital_goods' ? <><Server size={16}/> Digital Goods</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
          ))}
       </div>
@@ -5783,12 +6160,30 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       {activeTab === 'status' && <NetworkStatusManager db={db} appId={appId} />}
       {activeTab === 'ads' && <AdManager db={db} appId={appId} />}
       {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} payments={payments} />}
+      {activeTab === 'marketing' && (
+          <div className="space-y-6">
+              <FlashPromoManager db={db} appId={appId} />
+              <AdManager db={db} appId={appId} /> 
+          </div>
+      )}
+      {activeTab === 'marketing' && (
+          <div className="space-y-6">
+              <FlashPromoManager db={db} appId={appId} />
+              <AdManager db={db} appId={appId} /> 
+          </div>
+      )}
       {activeTab === 'speedtest' && <SpeedTest />}
       {activeTab === 'analytics' && <AdminAnalytics subscribers={subscribers} payments={payments} tickets={tickets} db={db} appId={appId} />}
       {activeTab === 'reports' && <ReportGenerator payments={payments} expenses={expenses || []} subscribers={subscribers} />}
       {activeTab === 'cashier' && <CashierMode subscribers={subscribers} db={db} appId={appId} />}
       {activeTab === 'setting' && <PaymentQRSettings db={db} appId={appId} />}
       {activeTab === 'coverage' && <ServiceAreaManager appId={appId} db={db} />}
+      {activeTab === 'expansion' && (
+        <div className="space-y-6">
+            <CrowdfundManager db={db} appId={appId} />
+            <ServiceAreaManager db={db} appId={appId} /> 
+        </div>
+      )}
       
       {activeTab === 'subscribers' && (
         <>
@@ -6342,6 +6737,9 @@ const CoveragePage = ({ onNavigate, onLogin, db, appId }) => {
           <p className="text-slate-500">Check if SwiftNet Fiber is available in your area.</p>
         </div>
 
+        <ZoneStarterWidget db={db} appId={appId} />
+        <div className="border-t border-slate-200 my-12"></div>
+
         <div className="max-w-md mx-auto mb-12 relative">
           <Search className="absolute left-4 top-3.5 text-slate-400" size={20}/>
           <input 
@@ -6786,7 +7184,7 @@ export default function App() {
       return <HotspotPortal onLogin={() => setIsHotspotMode(false)} db={db} appId={appId} />;
   }
 
- // 1. If User is Logged In -> Show Dashboard
+// 1. If User is Logged In -> Show Dashboard
   if (user) {
     return (
       <Layout user={user} onLogout={handleLogout}>
@@ -6798,14 +7196,11 @@ export default function App() {
           <TechnicianDashboard repairs={repairs} onTechUpdate={handleTechUpdateStatus} />
         ) : user.role === 'retailer' ? (
           <RetailerDashboard user={user} db={db} appId={appId} onLogout={handleLogout} />
+        ) : user.role === 'agent' ? ( 
+          // --- [NEW] AGENT DASHBOARD ---
+          <AgentDashboard user={user} db={db} appId={appId} onLogout={handleLogout} />
         ) : user.role === 'business' ? (
-          // --- NEW BUSINESS DASHBOARD RENDER ---
-          <BusinessDashboard 
-             user={user} 
-             db={db} 
-             appId={appId} 
-             onPay={handlePayment} 
-          />
+          <BusinessDashboard user={user} db={db} appId={appId} onPay={handlePayment} />
         ) : (
           <SubscriberDashboard userData={mySubscriberData || {}} onPay={handlePayment} announcements={announcements} notifications={notifications} tickets={tickets} repairs={repairs} onConfirmRepair={handleConfirmRepair} />
         )}
