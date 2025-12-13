@@ -329,7 +329,19 @@ const GuestPayModal = ({ onClose, db, appId, onAddToast }) => {
             </div>
             
             <input className="w-full border p-3 rounded-xl text-sm" type="number" placeholder="Amount Paid (₱)" value={amount} onChange={e=>setAmount(e.target.value)} />
-            <input className="w-full border p-3 rounded-xl text-sm" placeholder="Reference No. (GCash/Maya)" value={refNo} onChange={e=>setRefNo(e.target.value)} />
+            <input 
+              className="w-full border p-3 rounded-xl text-sm" 
+              placeholder="Reference No. (GCash/Maya)" 
+              value={refNo} 
+              onChange={(e) => {
+                const val = e.target.value;
+                if (/^\d*$/.test(val)) {
+                  setRefNo(val);
+                } else {
+                  alert("Please enter only a number that matches the reference number on your proof of payment.");
+                }
+              }} 
+            />
             
             <button onClick={submitPayment} disabled={loading} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-green-200">
                {loading ? <Loader2 className="animate-spin mx-auto"/> : 'Submit Payment'}
@@ -2500,7 +2512,21 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
                     </div>
                     <div>
                         <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Ref No.</label>
-                        <input type="text" required className={`w-full border p-2 rounded-lg font-mono ${refNumber ? 'bg-green-50 border-green-200 text-green-700' : ''}`} placeholder="e.g. 100234" value={refNumber} onChange={e => setRefNumber(e.target.value)} />
+                        <input 
+                          type="text" 
+                          required 
+                          className={`w-full border p-2 rounded-lg font-mono ${refNumber ? 'bg-green-50 border-green-200 text-green-700' : ''}`} 
+                          placeholder="e.g. 100234" 
+                          value={refNumber} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (/^\d*$/.test(val)) {
+                              setRefNumber(val);
+                            } else {
+                              alert("Please enter only a number that matches the reference number on your proof of payment.");
+                            }
+                          }} 
+                        />
                     </div>
                 </div>
 
@@ -4128,7 +4154,21 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           </div>
       )}
 
-      {showQR && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"><div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center space-x-2"><CreditCard size={20} /><span>Scan to Pay</span></h3><button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full"><X size={20} /></button></div><div className="p-8 flex flex-col items-center text-center"><p className="text-slate-600 text-sm mb-6">Scan the QR code with your banking app to pay <span className="font-bold text-slate-900 block text-2xl mt-2">₱{userData.balance.toFixed(2)}</span></p><div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8"><img src={paymentQRUrl || "/qr-code.png"} alt="Payment QR" className="w-48 h-48 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/200x200?text=Ask+Admin+for+QR"; }} /></div><div className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 mb-4">Payment posting will reflect once the admin verifies your payment. Your reference number provided should match on the payment they received.</div><div className="w-full text-left"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reference Number</label><form onSubmit={handlePaymentSubmit} className="flex gap-3"><input type="text" required placeholder="e.g. Ref-123456" className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium" value={refNumber} onChange={(e) => setRefNumber(e.target.value)} /><button type="submit" disabled={submitting} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200">{submitting ? '...' : 'Verify'}</button></form></div></div></div></div>)}
+      {showQR && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"><div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center space-x-2"><CreditCard size={20} /><span>Scan to Pay</span></h3><button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full"><X size={20} /></button></div><div className="p-8 flex flex-col items-center text-center"><p className="text-slate-600 text-sm mb-6">Scan the QR code with your banking app to pay <span className="font-bold text-slate-900 block text-2xl mt-2">₱{userData.balance.toFixed(2)}</span></p><div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8"><img src={paymentQRUrl || "/qr-code.png"} alt="Payment QR" className="w-48 h-48 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/200x200?text=Ask+Admin+for+QR"; }} /></div><div className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 mb-4">Payment posting will reflect once the admin verifies your payment. Your reference number provided should match on the payment they received.</div><div className="w-full text-left"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reference Number</label><form onSubmit={handlePaymentSubmit} className="flex gap-3"><input 
+  type="text" 
+  required 
+  placeholder="e.g. 123456" 
+  className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium" 
+  value={refNumber} 
+  onChange={(e) => {
+    const val = e.target.value;
+    if (/^\d*$/.test(val)) {
+      setRefNumber(val);
+    } else {
+      alert("Please enter only a number that matches the reference number on your proof of payment.");
+    }
+  }} 
+/><button type="submit" disabled={submitting} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200">{submitting ? '...' : 'Verify'}</button></form></div></div></div></div>)}
       {showRepairModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-red-600 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center gap-2"><Hammer size={20} /> Request Service Repair</h3><button onClick={() => setShowRepairModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><div className="p-6"><p className="text-slate-600 text-sm mb-4">Please describe the issue.</p><textarea className="w-full border border-slate-300 rounded-lg p-3 h-32" value={repairNote} onChange={(e) => setRepairNote(e.target.value)}></textarea><div className="mt-4 flex justify-end gap-2"><button onClick={() => setShowRepairModal(false)} className="px-4 py-2 text-slate-500 font-bold">Cancel</button><button onClick={handleRequestRepair} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700">Submit</button></div></div></div></div>)}
       {showProofModal && <PaymentProofModal user={userData} db={db} appId={appId} onClose={() => setShowProofModal(false)} />}
       {showKYC && <KYCModal user={userData} db={db} appId={appId} onClose={() => setShowKYC(false)} />}
