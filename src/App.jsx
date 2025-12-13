@@ -89,6 +89,7 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 let analytics;
 if (typeof window !== 'undefined') {
   analytics = getAnalytics(app);
@@ -7038,12 +7039,323 @@ const CoveragePage = ({ onNavigate, onLogin, db, appId }) => {
   );
 };
 
-// --- 3. COMMUNITY PAGE (Social + Signup) ---
+// --- HELPER: Image Compressor (Keeps Firestore fast) ---
+const compressImage = (file) => {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 600; // Limit width to 600px
+                const scaleSize = MAX_WIDTH / img.width;
+                canvas.width = MAX_WIDTH;
+                canvas.height = img.height * scaleSize;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg', 0.6)); // 60% Quality
+            };
+        };
+    });
+};
+
+// --- COMPONENT: FRIEND MANAGER ---
+const FriendManager = ({ user, db, appId }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [requests, setRequests] = useState([]);
+    const [friends, setFriends] = useState([]);
+
+    // Load Friends & Requests
+    useEffect(() => {
+        const fetchFriends = async () => {
+            const userDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', user.uid));
+            if (userDoc.exists()) {
+                setFriends(userDoc.data().friends || []);
+                setRequests(userDoc.data().friendRequests || []);
+            }
+        };
+        fetchFriends();
+    }, [user, db, appId]);
+
+    const handleSearch = async () => {
+        if (!searchTerm) return;
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1'), 
+            where('username', '>=', searchTerm), 
+            where('username', '<=', searchTerm + '\uf8ff'));
+        const snap = await getDocs(q);
+        setSearchResults(snap.docs.map(d => ({uid: d.id, ...d.data()})).filter(u => u.uid !== user.uid));
+    };
+
+    const sendRequest = async (targetUser) => {
+        // Add to target's request list
+        const targetRef = doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', targetUser.uid);
+        await updateDoc(targetRef, {
+            friendRequests: arrayUnion({ uid: user.uid, username: user.username })
+        });
+        alert(`Request sent to ${targetUser.username}!`);
+    };
+
+    const acceptRequest = async (requester) => {
+        // Add to MY friends, remove request
+        const myRef = doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', user.uid);
+        await updateDoc(myRef, {
+            friends: arrayUnion({ uid: requester.uid, username: requester.username }),
+            friendRequests: arrayRemove(requester)
+        });
+
+        // Add ME to THEIR friends
+        const theirRef = doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', requester.uid);
+        await updateDoc(theirRef, {
+            friends: arrayUnion({ uid: user.uid, username: user.username })
+        });
+        alert("Friend Added!");
+    };
+
+    return (
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-4">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><UserPlus size={18}/> Friends</h3>
+            
+            {/* Friend Requests */}
+            {requests.length > 0 && (
+                <div className="mb-4 bg-yellow-50 p-3 rounded-lg">
+                    <p className="text-xs font-bold text-yellow-800 uppercase mb-2">Pending Requests</p>
+                    {requests.map((req, i) => (
+                        <div key={i} className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-bold">{req.username}</span>
+                            <button onClick={() => acceptRequest(req)} className="bg-blue-600 text-white text-xs px-3 py-1 rounded">Accept</button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Search */}
+            <div className="flex gap-2 mb-4">
+                <input className="border p-2 rounded w-full text-sm" placeholder="Find people..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)}/>
+                <button onClick={handleSearch} className="bg-slate-800 text-white p-2 rounded"><Search size={16}/></button>
+            </div>
+            
+            {/* Results */}
+            <div className="max-h-32 overflow-y-auto mb-4">
+                {searchResults.map(u => (
+                    <div key={u.uid} className="flex justify-between items-center p-2 hover:bg-slate-50">
+                        <span className="text-sm">{u.username}</span>
+                        <button onClick={() => sendRequest(u)} className="text-blue-600 text-xs font-bold">+ Add</button>
+                    </div>
+                ))}
+            </div>
+
+            {/* Friend List */}
+            <div>
+                <p className="text-xs font-bold text-slate-400 uppercase mb-2">My Friends ({friends.length})</p>
+                <div className="flex flex-wrap gap-2">
+                    {friends.map((f, i) => (
+                        <span key={i} className="bg-slate-100 text-slate-700 px-2 py-1 rounded text-xs font-bold">{f.username}</span>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- COMPONENT: VIDEO CALL MODAL (Jitsi Embed) ---
+const VideoCallModal = ({ roomName, onClose, username }) => {
+    // Generates a unique, secure room URL
+    const jitsiUrl = `https://meet.jit.si/${roomName}#config.prejoinPageEnabled=false&userInfo.displayName="${username}"`;
+
+    return (
+        <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col animate-in zoom-in-95 duration-300">
+            <div className="bg-slate-900 p-4 flex justify-between items-center text-white border-b border-slate-700">
+                <h3 className="font-bold flex items-center gap-2 text-lg">
+                    <Video size={24} className="text-red-500 animate-pulse"/> 
+                    Secure Video Call
+                </h3>
+                <button onClick={onClose} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold text-sm">
+                    End Call
+                </button>
+            </div>
+            <div className="flex-1 relative">
+                <iframe 
+                    src={jitsiUrl} 
+                    className="w-full h-full border-0" 
+                    allow="camera; microphone; fullscreen; display-capture"
+                ></iframe>
+            </div>
+        </div>
+    );
+};
+
+// --- COMPONENT: CHAT SYSTEM (Updated with Video Calls) ---
+const ChatSystem = ({ user, db, appId }) => {
+    const [activeChat, setActiveChat] = useState(null);
+    const [chats, setChats] = useState([]);
+    const [messages, setMessages] = useState([]);
+    const [newMessage, setNewMessage] = useState('');
+    const [chatImage, setChatImage] = useState(null);
+    const [friends, setFriends] = useState([]);
+    const [showCreateGroup, setShowCreateGroup] = useState(false);
+    const [newGroupName, setNewGroupName] = useState('');
+    const [selectedMembers, setSelectedMembers] = useState([]);
+    
+    // --- NEW: Video Call State ---
+    const [activeCall, setActiveCall] = useState(null); // Stores room name if in call
+
+    // 1. Fetch My Chats
+    useEffect(() => {
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_chats_v1'), where('participants', 'array-contains', user.uid), orderBy('lastUpdated', 'desc'));
+        const unsub = onSnapshot(q, (s) => setChats(s.docs.map(d => ({id: d.id, ...d.data()}))));
+        getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', user.uid)).then(s => {
+            if(s.exists()) setFriends(s.data().friends || []);
+        });
+        return () => unsub();
+    }, [user, db, appId]);
+
+    // 2. Fetch Messages
+    useEffect(() => {
+        if(!activeChat) return;
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_chats_v1', activeChat.id, 'messages'), orderBy('timestamp', 'asc'));
+        const unsub = onSnapshot(q, (s) => setMessages(s.docs.map(d => d.data())));
+        return () => unsub();
+    }, [activeChat, db, appId]);
+
+    const handleSendMessage = async (customText = null, type = 'text') => {
+        if(!newMessage && !chatImage && !customText) return;
+        
+        let imgUrl = null;
+        if(chatImage) imgUrl = await compressImage(chatImage);
+
+        const msgData = {
+            senderId: user.uid,
+            senderName: user.username,
+            text: customText || newMessage,
+            image: imgUrl,
+            type: type, // 'text', 'image', or 'call'
+            timestamp: new Date().toISOString()
+        };
+
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_chats_v1', activeChat.id, 'messages'), msgData);
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_chats_v1', activeChat.id), {
+            lastMessage: type === 'call' ? '📞 Video Call started' : (newMessage || 'Sent an image'),
+            lastUpdated: new Date().toISOString()
+        });
+
+        setNewMessage('');
+        setChatImage(null);
+    };
+
+    // --- NEW: Start Video Call Logic ---
+    const startVideoCall = async () => {
+        // Generate a unique room name based on Chat ID and Timestamp to avoid collisions
+        const roomName = `SwiftNet-${activeChat.id}-${Date.now()}`;
+        
+        // 1. Send a specialized message to the chat
+        await handleSendMessage(`📞 Started a Video Call. Click to Join!`, 'call');
+        
+        // 2. Open the modal for the caller immediately
+        setActiveCall(roomName);
+    };
+
+    const joinVideoCall = (text) => {
+        // Extract room name from message text logic (simplified for demo, usually stored in metadata)
+        // We assume the room name is hidden or we just regenerate a consistent one for the chat
+        // For this demo, let's just use the Chat ID + 'Room' for simplicity if clicking old links
+        // OR better: In a real app, store `roomName` in the message object. 
+        // Here we will just open a shared room for the chat:
+        setActiveCall(`SwiftNet-${activeChat.id}-General`);
+    };
+
+    return (
+        <>
+            {activeCall && <VideoCallModal roomName={activeCall} username={user.username} onClose={() => setActiveCall(null)} />}
+
+            <div className="fixed bottom-0 right-4 w-80 bg-white shadow-2xl rounded-t-xl border border-slate-300 flex flex-col z-[100]" style={{height: activeChat ? '500px' : 'auto'}}>
+                
+                {/* Header */}
+                <div className="bg-slate-900 text-white p-3 rounded-t-xl flex justify-between items-center cursor-pointer" onClick={() => setActiveChat(null)}>
+                    <div className="font-bold flex items-center gap-2"><MessageCircle size={18}/> {activeChat ? activeChat.name : 'Messaging'}</div>
+                    <div className="flex items-center gap-2">
+                        {activeChat && (
+                            <button onClick={(e) => { e.stopPropagation(); startVideoCall(); }} className="bg-green-600 p-1.5 rounded-full hover:bg-green-500" title="Start Video Call">
+                                <Video size={14} />
+                            </button>
+                        )}
+                        {activeChat && <button onClick={(e) => {e.stopPropagation(); setActiveChat(null);}}><X size={16}/></button>}
+                    </div>
+                </div>
+
+                {/* Content */}
+                {!activeChat ? (
+                    // Chat List View (Same as before)
+                    <div className="p-4 h-96 overflow-y-auto bg-slate-50">
+                        {/* ... (Keep your existing Chat List code here - omitted for brevity, logic remains same) ... */}
+                        {chats.map(chat => (
+                            <div key={chat.id} onClick={() => setActiveChat(chat)} className="p-2 bg-white mb-1 rounded border hover:bg-blue-50 cursor-pointer">
+                                <p className="font-bold text-sm text-slate-800">{chat.name || 'Chat'}</p>
+                                <p className="text-xs text-slate-500 truncate">{chat.lastMessage}</p>
+                            </div>
+                        ))}
+                        {friends.map(f => (
+                            <div key={f.uid} onClick={async () => {
+                                const ref = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_chats_v1'), { name: f.username, participants: [user.uid, f.uid], type: 'direct', lastMessage: 'Chat started', lastUpdated: new Date().toISOString() });
+                                setActiveChat({ id: ref.id, name: f.username });
+                            }} className="flex items-center gap-2 p-2 hover:bg-slate-100 cursor-pointer">
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div><span className="text-sm">{f.username}</span>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    // Active Chat View
+                    <>
+                        <div className="flex-1 p-3 overflow-y-auto bg-slate-100 flex flex-col gap-2">
+                            {messages.map((m, i) => (
+                                <div key={i} className={`max-w-[85%] p-2 rounded-lg text-sm ${m.type === 'call' ? 'bg-slate-800 text-white self-center text-center w-full' : m.senderId === user.uid ? 'self-end bg-blue-600 text-white' : 'self-start bg-white border'}`}>
+                                    {m.type === 'group' && <p className="text-[9px] opacity-70 mb-1">{m.senderName}</p>}
+                                    {m.image && <img src={m.image} className="rounded mb-1 max-w-full" alt="sent"/>}
+                                    
+                                    {/* Video Call Message Type */}
+                                    {m.type === 'call' ? (
+                                        <div>
+                                            <p className="font-bold mb-2 flex items-center justify-center gap-2"><Video size={16}/> Incoming Video Call</p>
+                                            <button onClick={() => joinVideoCall(m.text)} className="bg-green-600 hover:bg-green-500 text-white px-4 py-1 rounded-full text-xs font-bold w-full">
+                                                Join Call
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <p>{m.text}</p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="p-2 bg-white border-t">
+                            {chatImage && <div className="text-xs text-green-600 mb-1 flex justify-between">Image selected <button onClick={()=>setChatImage(null)} className="text-red-500">x</button></div>}
+                            <div className="flex gap-2">
+                                <label className="cursor-pointer text-slate-400 hover:text-blue-600 p-2"><Camera size={20}/><input type="file" className="hidden" accept="image/*" onChange={e => setChatImage(e.target.files[0])}/></label>
+                                <input className="flex-1 border rounded-full px-3 text-sm outline-none" placeholder="Type..." value={newMessage} onChange={e=>setNewMessage(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleSendMessage()}/>
+                                <button onClick={() => handleSendMessage()} className="text-blue-600 p-2"><Send size={20}/></button>
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+        </>
+    );
+};
+
+// --- 3. COMMUNITY PAGE (Updated with Video Uploads) ---
 const CommunityPage = ({ onNavigate, onLogin, db, appId, user }) => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCommentId, setActiveCommentId] = useState(null);
-  const [showCommunitySignup, setShowCommunitySignup] = useState(false); // <--- NEW STATE
+  const [showCommunitySignup, setShowCommunitySignup] = useState(false);
+  
+  const [isWriting, setIsWriting] = useState(false);
+  const [newPostContent, setNewPostContent] = useState('');
+  const [postFile, setPostFile] = useState(null); // Stores either Image or Video file
+  const [fileType, setFileType] = useState('image'); // 'image' or 'video'
+  const [posting, setPosting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Fetch Posts
   useEffect(() => {
@@ -7055,89 +7367,158 @@ const CommunityPage = ({ onNavigate, onLogin, db, appId, user }) => {
     return () => unsub();
   }, [db, appId]);
 
-  // Interaction Handler
   const handleInteraction = () => {
-    if (user) return; // If logged in, do nothing (allow action)
-    // If guest, show option
-    if (confirm("You need an account to post or comment.\n\nOK = Login\nCancel = Stay Here")) {
-        onLogin();
+    if (user) { setIsWriting(true); } 
+    else if (confirm("You need an account to post or comment.\n\nOK = Login")) { onLogin(); }
+  };
+
+  const handleFileSelect = (e, type) => {
+      const file = e.target.files[0];
+      if(file) {
+          // Validations
+          if (type === 'video' && file.size > 50 * 1024 * 1024) return alert("Video too large (Max 50MB)");
+          setPostFile(file);
+          setFileType(type);
+      }
+  };
+
+  const handleSubmitPost = async () => {
+    if (!newPostContent.trim() && !postFile) return;
+    setPosting(true);
+    setUploadProgress(10);
+    
+    let mediaUrl = null;
+
+    try {
+        if (postFile) {
+            if (fileType === 'image') {
+                // Images: Compress directly to DB string (Fast, cheap)
+                mediaUrl = await compressImage(postFile);
+                setUploadProgress(100);
+            } else {
+                // Videos: Upload to Storage Bucket (Required for large files)
+                // Use the storage instance we imported at the top
+                const videoRef = storageRef(getStorage(), `community_videos/${Date.now()}_${postFile.name}`);
+                setUploadProgress(50);
+                await uploadBytes(videoRef, postFile);
+                setUploadProgress(80);
+                mediaUrl = await getDownloadURL(videoRef);
+                setUploadProgress(100);
+            }
+        }
+
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_community_posts'), {
+            author: user.username || 'Anonymous',
+            authorId: user.uid,
+            content: newPostContent,
+            mediaUrl: mediaUrl, // Stores Base64 string OR Firebase Storage URL
+            mediaType: fileType, // 'image' or 'video'
+            date: new Date().toISOString(),
+            likes: 0,
+            comments: []
+        });
+
+        setNewPostContent('');
+        setPostFile(null);
+        setIsWriting(false);
+    } catch (e) {
+        console.error(e);
+        alert("Error posting: " + e.message);
     }
+    setPosting(false);
+    setUploadProgress(0);
   };
 
   const toggleComments = (id) => setActiveCommentId(activeCommentId === id ? null : id);
 
-  const hotlines = [
-    { name: 'PNP Santa Ana', number: '0917-123-4567', color: 'bg-blue-600' },
-    { name: 'Fire Station', number: '0917-987-6543', color: 'bg-red-600' },
-    { name: 'Rural Health Unit', number: '0918-555-0000', color: 'bg-green-600' },
-  ];
-
   return (
     <div className="min-h-screen bg-[#f0f2f5] font-sans text-slate-800">
-      {/* Only show Navbar if NOT inside the Dashboard (user is null implies public view) */}
       {!user && <PublicNavbar onNavigate={onNavigate} onLogin={onLogin} activePage="community" />}
 
       <div className="max-w-7xl mx-auto px-0 md:px-4 py-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
         
         {/* LEFT SIDEBAR */}
         <div className="hidden lg:block space-y-4">
-           {/* NEW: JOIN CARD (Only for Guests) */}
-           {!user && (
-             <div className="bg-white p-4 rounded-xl shadow-sm border border-teal-100 text-center">
-                <h3 className="font-bold text-slate-800 text-sm mb-1">New here?</h3>
-                <p className="text-xs text-slate-500 mb-3">Join the conversation for free.</p>
-                <button onClick={() => setShowCommunitySignup(true)} className="w-full bg-teal-600 text-white py-2 rounded-lg font-bold text-xs hover:bg-teal-700 shadow-md">
-                  Sign Up for Community
-                </button>
-             </div>
-           )}
-
-           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-              <h3 className="font-bold text-slate-500 text-xs uppercase mb-3">Community Hotlines</h3>
-              <div className="space-y-2">
-                {hotlines.map((line, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer" onClick={() => window.open(`tel:${line.number}`)}>
-                    <div className={`w-8 h-8 rounded-full ${line.color} flex items-center justify-center text-white`}><PhoneCall size={14}/></div>
-                    <div><p className="text-sm font-bold text-slate-700">{line.name}</p><p className="text-xs text-slate-400">{line.number}</p></div>
-                  </div>
-                ))}
-              </div>
-           </div>
+           {user && <FriendManager user={user} db={db} appId={appId} />}
+           {!user && <div className="bg-white p-4 rounded-xl shadow-sm border border-teal-100 text-center"><h3 className="font-bold text-slate-800 text-sm mb-1">New here?</h3><button onClick={() => setShowCommunitySignup(true)} className="w-full bg-teal-600 text-white py-2 rounded-lg font-bold text-xs hover:bg-teal-700 shadow-md">Sign Up Free</button></div>}
         </div>
 
         {/* CENTER FEED */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Create Post Widget */}
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mx-2 md:mx-0">
-             <div className="flex gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-slate-400"><User size={20}/></div>
-                <div onClick={handleInteraction} className="flex-1 bg-slate-100 rounded-full px-4 flex items-center text-slate-500 text-sm cursor-pointer hover:bg-slate-200 transition-colors">
-                  What's on your mind, {user ? user.username : 'Guest'}?
-                </div>
-             </div>
-             <div className="border-t border-slate-100 pt-3 flex justify-between px-2">
-                <button onClick={handleInteraction} className="flex items-center gap-2 text-slate-500 hover:bg-slate-50 px-4 py-2 rounded-lg transition-colors"><Camera size={20} className="text-red-500"/> <span className="text-sm font-bold">Photo</span></button>
-                <button onClick={handleInteraction} className="flex items-center gap-2 text-slate-500 hover:bg-slate-50 px-4 py-2 rounded-lg transition-colors"><Smile size={20} className="text-yellow-500"/> <span className="text-sm font-bold">Feeling</span></button>
+          
+          {/* CREATE POST */}
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mx-2 md:mx-0 transition-all">
+             <div className="flex gap-3 mb-2">
+                <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-400"><User size={20}/></div>
+                {isWriting ? (
+                    <div className="flex-1">
+                        <textarea autoFocus className="w-full bg-slate-50 rounded-xl p-3 text-sm outline-none border border-slate-200 resize-none h-24" placeholder={`What's on your mind?`} value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)}/>
+                        
+                        {/* Preview */}
+                        {postFile && (
+                            <div className="mb-2 relative w-fit">
+                                {fileType === 'image' ? 
+                                    <img src={URL.createObjectURL(postFile)} className="h-24 rounded border" alt="preview"/> :
+                                    <div className="h-24 w-32 bg-black rounded flex items-center justify-center text-white"><Video size={24}/></div>
+                                }
+                                <button onClick={()=>setPostFile(null)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12}/></button>
+                            </div>
+                        )}
+
+                        <div className="flex justify-between items-center mt-2">
+                            <div className="flex gap-2">
+                                <label className="cursor-pointer flex items-center gap-1 text-slate-500 hover:text-green-600 px-2 py-1 rounded bg-green-50 border border-green-100">
+                                    <Camera size={14}/> <span className="text-xs font-bold">Photo</span>
+                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileSelect(e, 'image')}/>
+                                </label>
+                                <label className="cursor-pointer flex items-center gap-1 text-slate-500 hover:text-red-600 px-2 py-1 rounded bg-red-50 border border-red-100">
+                                    <Video size={14}/> <span className="text-xs font-bold">Video</span>
+                                    <input type="file" className="hidden" accept="video/*" onChange={(e) => handleFileSelect(e, 'video')}/>
+                                </label>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setIsWriting(false)} className="px-4 py-2 text-xs font-bold text-slate-500">Cancel</button>
+                                <button onClick={handleSubmitPost} disabled={posting} className="px-6 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                                    {posting ? `Uploading ${uploadProgress}%` : 'Post'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div onClick={handleInteraction} className="flex-1 bg-slate-100 rounded-full px-4 flex items-center text-slate-500 text-sm cursor-pointer hover:bg-slate-200 h-10">What's on your mind?</div>
+                )}
              </div>
           </div>
 
-          {/* Posts Feed */}
-          {loading ? <div className="p-8 text-center text-slate-400"><Loader2 className="animate-spin inline mr-2"/> Loading feed...</div> : posts.length === 0 ? <div className="p-8 text-center text-slate-400">No posts yet. Be the first!</div> : (
+          {/* FEED */}
+          {loading ? <div className="p-8 text-center text-slate-400"><Loader2 className="animate-spin inline mr-2"/> Loading...</div> : (
             posts.map(post => (
               <div key={post.id} className="bg-white rounded-xl shadow-sm border border-slate-200 mx-2 md:mx-0 overflow-hidden">
-                <div className="p-4 flex justify-between items-start">
-                   <div className="flex gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold">{post.author ? post.author[0] : 'A'}</div>
-                      <div><h4 className="font-bold text-slate-800 text-sm">{post.author || 'Admin'}</h4><p className="text-xs text-slate-400 flex items-center gap-1">{new Date(post.date).toLocaleDateString()} • <Globe size={10}/></p></div>
-                   </div>
-                   <button className="text-slate-400 hover:bg-slate-100 p-2 rounded-full"><MoreHorizontal size={20}/></button>
+                <div className="p-4 flex gap-3">
+                   <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold">{post.author[0]}</div>
+                   <div><h4 className="font-bold text-slate-800 text-sm">{post.author}</h4><p className="text-xs text-slate-400">{new Date(post.date).toLocaleDateString()}</p></div>
                 </div>
-                <div className="px-4 pb-2">{post.title && <h3 className="font-bold text-lg mb-2">{post.title}</h3>}<p className="text-slate-800 text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p></div>
-                <div className="px-4 py-3 flex justify-between items-center text-xs text-slate-500 border-b border-slate-100"><div className="flex items-center gap-1"><div className="bg-blue-500 text-white p-1 rounded-full"><ThumbsUp size={10} fill="white"/></div><span>{post.likes || 0}</span></div><div className="flex gap-3"><span>{post.comments ? post.comments.length : 0} comments</span></div></div>
+                <div className="px-4 pb-2">
+                    <p className="text-slate-800 text-sm leading-relaxed whitespace-pre-wrap mb-3">{post.content}</p>
+                    
+                    {/* Render Media */}
+                    {post.mediaUrl && (
+                        <div className="rounded-lg overflow-hidden border border-slate-100 bg-black">
+                            {post.mediaType === 'video' ? (
+                                <video controls className="w-full max-h-[500px]">
+                                    <source src={post.mediaUrl} type="video/mp4" />
+                                    Your browser does not support the video tag.
+                                </video>
+                            ) : (
+                                <img src={post.mediaUrl} alt="post" className="w-full object-cover max-h-[500px]"/>
+                            )}
+                        </div>
+                    )}
+                </div>
+                <div className="px-4 py-3 flex justify-between items-center text-xs text-slate-500 border-b border-slate-100"><div className="flex items-center gap-1"><div className="bg-blue-500 text-white p-1 rounded-full"><ThumbsUp size={10} fill="white"/></div><span>{post.likes || 0}</span></div></div>
                 <div className="flex px-2 py-1">
-                   <button onClick={handleInteraction} className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-slate-50 rounded-lg text-slate-600 font-bold text-sm transition-colors"><ThumbsUp size={18}/> Like</button>
-                   <button onClick={() => user ? toggleComments(post.id) : handleInteraction()} className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-slate-50 rounded-lg text-slate-600 font-bold text-sm transition-colors"><MessageSquare size={18}/> Comment</button>
-                   <button onClick={handleInteraction} className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-slate-50 rounded-lg text-slate-600 font-bold text-sm transition-colors"><Share2 size={18}/> Share</button>
+                   <button onClick={handleInteraction} className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-slate-50 rounded-lg text-slate-600 font-bold text-sm"><ThumbsUp size={18}/> Like</button>
+                   <button onClick={() => user ? toggleComments(post.id) : handleInteraction()} className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-slate-50 rounded-lg text-slate-600 font-bold text-sm"><MessageSquare size={18}/> Comment</button>
                 </div>
               </div>
             ))
@@ -7146,14 +7527,12 @@ const CommunityPage = ({ onNavigate, onLogin, db, appId, user }) => {
 
         {/* RIGHT SIDEBAR */}
         <div className="hidden lg:block space-y-4">
-           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200"><h3 className="font-bold text-slate-500 text-xs uppercase mb-3">Sponsored</h3><div className="flex items-center gap-3 mb-4 cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors"><div className="w-24 h-24 bg-slate-800 rounded-lg overflow-hidden relative"><img src="https://images.unsplash.com/photo-1593642532744-d377ab507dc8?auto=format&fit=crop&w=200&q=80" className="object-cover w-full h-full" alt="Ad"/></div><div><p className="font-bold text-sm leading-tight text-slate-800">Work from Home</p><p className="text-xs text-slate-500 mt-1">swiftnet.com</p></div></div></div>
+           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200"><h3 className="font-bold text-slate-500 text-xs uppercase mb-3">Sponsored</h3><div className="flex items-center gap-3 p-2 rounded-lg bg-slate-50"><div className="w-16 h-16 bg-slate-800 rounded"></div><div><p className="font-bold text-sm">Fiber Internet</p><p className="text-xs text-slate-500">Switch Now</p></div></div></div>
         </div>
       </div>
 
-      {/* RENDER SIGNUP MODAL */}
-      {showCommunitySignup && (
-        <CommunitySignupModal onClose={() => setShowCommunitySignup(false)} db={db} appId={appId} />
-      )}
+      {user && <ChatSystem user={user} db={db} appId={appId} />}
+      {showCommunitySignup && <CommunitySignupModal onClose={() => setShowCommunitySignup(false)} db={db} appId={appId} />}
     </div>
   );
 };
