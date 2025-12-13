@@ -21,6 +21,12 @@ import { 
   sendPasswordResetEmail, 
   signInAnonymously 
 } from 'firebase/auth';
+import { 
+  getStorage, 
+  ref as storageRef, 
+  uploadBytes, 
+  getDownloadURL 
+} from "firebase/storage";
 import { 
   getFirestore, 
   collection, 
@@ -36,7 +42,7 @@ import { 
   orderBy,
   serverTimestamp,
   getDocs,
-  increment 
+  increment, arrayUnion, arrayRemove 
 } from 'firebase/firestore';
 import { getDatabase, ref, onValue } from "firebase/database";
 import html2canvas from 'html2canvas';
