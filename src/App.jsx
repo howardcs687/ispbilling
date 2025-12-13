@@ -70,6 +70,7 @@ import {
   Headphones, ArrowDownCircle, HardDrive, PhoneCall, Video, CloudRain, Info, XCircle, LifeBuoy,
   Bot,       // <--- ADDED THIS
   Loader2, Save, Tv, Film, Users, Trophy, Target, Timer, Sparkles, Rocket, Flag, ThumbsUp, TimerReset,
+  Flame, Heart, Share2, MoreHorizontal, CornerDownRight, Smile, Camera, 
 } from 'lucide-react';
 
 // --- Firebase Configuration --
@@ -3692,10 +3693,77 @@ const BusinessDashboard = ({ user, db, appId, onPay }) => {
   );
 };
 
+// --- NEW COMPONENT: Community Sign Up Modal ---
+const CommunitySignupModal = ({ onClose, db, appId, onLoginSuccess }) => {
+  const [formData, setFormData] = useState({ username: '', email: '', password: '' });
+  const [loading, setLoading] = useState(false);
+
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      // 1. Create Auth User using the global 'auth' object
+      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+      const uid = userCredential.user.uid;
+
+      // 2. Create Profile (Role: community_member)
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', uid), {
+        uid: uid,
+        username: formData.username,
+        email: formData.email,
+        role: 'community_member', // <--- SPECIAL ROLE
+        status: 'active',         // Active immediately so they can login
+        plan: null,               // No internet plan yet
+        balance: 0,
+        dateCreated: new Date().toISOString()
+      });
+
+      alert("Welcome to the Community! You can now post and comment.");
+      if(onLoginSuccess) onLoginSuccess();
+      onClose();
+
+    } catch (error) {
+      alert("Error: " + error.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
+      <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-6 relative">
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20}/></button>
+        
+        <div className="text-center mb-6">
+          <div className="w-12 h-12 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-3 text-teal-600">
+            <Users size={24}/>
+          </div>
+          <h3 className="font-bold text-xl text-slate-800">Join the Community</h3>
+          <p className="text-slate-500 text-xs">Create a free account to post updates, buy & sell, and comment.</p>
+        </div>
+
+        <form onSubmit={handleSignup} className="space-y-4">
+          <input className="w-full border p-3 rounded-xl text-sm" placeholder="Full Name (e.g. Juan Dela Cruz)" value={formData.username} onChange={e=>setFormData({...formData, username: e.target.value})} required/>
+          <input className="w-full border p-3 rounded-xl text-sm" type="email" placeholder="Email Address" value={formData.email} onChange={e=>setFormData({...formData, email: e.target.value})} required/>
+          <input className="w-full border p-3 rounded-xl text-sm" type="password" placeholder="Create Password" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} required/>
+          
+          <button disabled={loading} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl shadow-lg transition-all">
+            {loading ? 'Creating...' : 'Sign Up Free'}
+          </button>
+        </form>
+        
+        <p className="text-xs text-center text-slate-400 mt-4">
+          Want internet? You can apply for a SwiftNet Fiber plan inside using this same account.
+        </p>
+      </div>
+    </div>
+  );
+};
+
 // 3. Subscriber Dashboard
-// 3. Subscriber Dashboard (UPDATED)
-const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair, outages }) => {
-  const [activeTab, setActiveTab] = useState('overview'); 
+const SubscriberDashboard = ({ userData, onPay, announcements, notifications, tickets, repairs, onConfirmRepair, outages, db, appId }) => {
+  // --- STATE ---
+  // Default tab logic: If they are just a community member, start on 'community' tab
+  const [activeTab, setActiveTab] = useState(userData.role === 'community_member' ? 'community' : 'overview');
   const [showQR, setShowQR] = useState(false);
   const [showProofModal, setShowProofModal] = useState(false);
   const [refNumber, setRefNumber] = useState('');
@@ -3716,10 +3784,14 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   const [showContract, setShowContract] = useState(false);
   const [showKYC, setShowKYC] = useState(false);
   const [paymentQRUrl, setPaymentQRUrl] = useState(null);
-  
-  // --- NEW: Custom Modal State ---
   const [customModal, setCustomModal] = useState(null); 
 
+  // --- LOGIC: DETERMINE USER TYPE ---
+  const isCommunityMember = userData.role === 'community_member';
+  // A "Pure Applicant" is someone who applied for internet immediately (not via community sign up)
+  const isPureApplicant = userData.status === 'applicant' && userData.role === 'subscriber';
+
+  // --- EFFECTS ---
   useEffect(() => {
     if (!userData?.id) return;
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', INVOICES_COLLECTION), where('userId', '==', userData.id), orderBy('date', 'desc'));
@@ -3750,7 +3822,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
     return () => unsubscribe();
   }, []);
 
-  // --- HANDLER FUNCTIONS ---
+  // --- HANDLERS ---
   const handlePurchase = async (product) => {
     if (!confirm(`Request to order: ${product.name}? An agent will contact you.`)) return;
     try {
@@ -3777,13 +3849,45 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   };
 
   const handlePaymentSubmit = async (e) => { e.preventDefault(); setSubmitting(true); await onPay(userData.id, refNumber, userData.username); setSubmitting(false); setShowQR(false); setRefNumber(''); };
-  const handleCreateTicket = async (e) => { if(e) e.preventDefault(); if (!newTicket.subject || !newTicket.message) return; setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: newTicket.subject, message: newTicket.message, status: 'open', adminReply: '', date: new Date().toISOString() }); setNewTicket({ subject: '', message: '' }); await sendCustomEmail('auto_reply', { name: userData.username, email: userData.email, message: `We received your ticket #${ticketId}: "${newTicket.subject}". Our support team is reviewing it now.` }); alert(`Ticket #${ticketId} submitted successfully!`); setActiveTab('support'); } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } setTicketLoading(false); };
-  const handleFollowUpTicket = async (ticketId, originalMessage) => { if(!followUpText) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId); const timestamp = new Date().toLocaleString(); const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`; await updateDoc(docRef, { message: newMessage, status: 'open', date: new Date().toISOString() }); setFollowingUpTo(null); setFollowUpText(''); alert("Follow-up sent successfully!"); } catch(e) { console.error(e); alert("Failed to send follow-up"); } };
-  const handleRequestRepair = async (e) => { e.preventDefault(); if(!repairNote) return; try { const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0'); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: randomId, userId: userData.uid, username: userData.username, address: userData.address || "No address provided", type: 'Service Repair - Internet', notes: repairNote, status: 'Submission', stepIndex: 0, technicianNote: 'Waiting for initial evaluation.', dateFiled: new Date().toISOString() }); setRepairNote(''); setShowRepairModal(false); alert("Repair request filed successfully!"); } catch(e) { console.error(e); alert("Failed to request repair."); } };
-  const handleApplyPlan = (planName) => { if(confirm(`Apply for ${planName}?`)) { const msg = `Requesting plan change.\n\nCurrent: ${userData.plan}\nNew: ${planName}`; const submitPlanTicket = async () => { setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'Plan Change Request', message: msg, status: 'open', adminReply: '', date: new Date().toISOString(), isPlanChange: true, targetPlan: planName }); alert(`Application submitted! Ticket #${ticketId}.`); setActiveTab('support'); } catch(e) { alert("Failed."); } setTicketLoading(false); }; submitPlanTicket(); } };
-  const handleUpdatePassword = async (e) => { e.preventDefault(); if (managePass.length < 6) return alert("Min 6 chars."); setUpdatingCreds(true); try { await updatePassword(auth.currentUser, managePass); setManagePass(''); alert("Password updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
-  const handleUpdateEmail = async (e) => { e.preventDefault(); if (!manageEmail) return; setUpdatingCreds(true); try { await updateEmail(auth.currentUser, manageEmail); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { email: manageEmail }); setManageEmail(''); alert("Email updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
   
+  const handleCreateTicket = async (e) => { if(e) e.preventDefault(); if (!newTicket.subject || !newTicket.message) return; setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: newTicket.subject, message: newTicket.message, status: 'open', adminReply: '', date: new Date().toISOString() }); setNewTicket({ subject: '', message: '' }); await sendCustomEmail('auto_reply', { name: userData.username, email: userData.email, message: `We received your ticket #${ticketId}: "${newTicket.subject}". Our support team is reviewing it now.` }); alert(`Ticket #${ticketId} submitted successfully!`); setActiveTab('support'); } catch (error) { console.error("Error creating ticket", error); alert("Failed to submit request."); } setTicketLoading(false); };
+  
+  const handleFollowUpTicket = async (ticketId, originalMessage) => { if(!followUpText) return; try { const docRef = doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticketId); const timestamp = new Date().toLocaleString(); const newMessage = `${originalMessage}\n\n--- Follow-up by You (${timestamp}) ---\n${followUpText}`; await updateDoc(docRef, { message: newMessage, status: 'open', date: new Date().toISOString() }); setFollowingUpTo(null); setFollowUpText(''); alert("Follow-up sent successfully!"); } catch(e) { console.error(e); alert("Failed to send follow-up"); } };
+  
+  const handleRequestRepair = async (e) => { e.preventDefault(); if(!repairNote) return; try { const randomId = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0'); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', REPAIRS_COLLECTION), { requestId: randomId, userId: userData.uid, username: userData.username, address: userData.address || "No address provided", type: 'Service Repair - Internet', notes: repairNote, status: 'Submission', stepIndex: 0, technicianNote: 'Waiting for initial evaluation.', dateFiled: new Date().toISOString() }); setRepairNote(''); setShowRepairModal(false); alert("Repair request filed successfully!"); } catch(e) { console.error(e); alert("Failed to request repair."); } };
+  
+  const handleApplyPlan = (planName) => { if(confirm(`Apply for ${planName}?`)) { const msg = `Requesting plan change.\n\nCurrent: ${userData.plan}\nNew: ${planName}`; const submitPlanTicket = async () => { setTicketLoading(true); try { const ticketId = Math.floor(10000000 + Math.random() * 90000000).toString(); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), { ticketId, userId: userData.uid, username: userData.username, subject: 'Plan Change Request', message: msg, status: 'open', adminReply: '', date: new Date().toISOString(), isPlanChange: true, targetPlan: planName }); alert(`Application submitted! Ticket #${ticketId}.`); setActiveTab('support'); } catch(e) { alert("Failed."); } setTicketLoading(false); }; submitPlanTicket(); } };
+  
+  const handleUpdatePassword = async (e) => { e.preventDefault(); if (managePass.length < 6) return alert("Min 6 chars."); setUpdatingCreds(true); try { await updatePassword(auth.currentUser, managePass); setManagePass(''); alert("Password updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
+  
+  const handleUpdateEmail = async (e) => { e.preventDefault(); if (!manageEmail) return; setUpdatingCreds(true); try { await updateEmail(auth.currentUser, manageEmail); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userData.id), { email: manageEmail }); setManageEmail(''); alert("Email updated!"); } catch (error) { if (error.code === 'auth/requires-recent-login') alert("Please re-login."); else alert("Error: " + error.message); } setUpdatingCreds(false); };
+
+  // --- NEW HANDLER: Upgrade from Community to Internet ---
+  const handleUpgrade = async (plan) => {
+      if(!confirm(`Apply for ${plan.name}? We will review your application.`)) return;
+      
+      // Update User Doc with Plan (Status remains active, but they become an 'applicant' for internet effectively)
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', userData.id), {
+          plan: plan.name,
+          applicationDate: new Date().toISOString(),
+      });
+
+      // Create Ticket for Admin to Approve & Assign Account No.
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_tickets_v1'), {
+          ticketId: Math.floor(Math.random() * 900000).toString(),
+          userId: userData.uid,
+          username: userData.username,
+          subject: "Existing Community Member Applying for Internet",
+          message: `User ${userData.username} (Community Account) wants to upgrade to ${plan.name}. Please approve and assign Account Number.`,
+          status: 'open',
+          date: new Date().toISOString(),
+          isApplication: true,
+          targetPlan: plan.name,
+          targetUserId: userData.uid 
+      });
+      alert("Application Sent! You can continue using the Community features while we process your internet line.");
+  };
+
   const getIcon = (type) => { switch(type) { case 'warning': return <AlertCircle size={18} />; case 'success': return <CheckCircle size={18} />; default: return <Megaphone size={18} />; } };
   const getBgColor = (type) => { switch(type) { case 'warning': return 'bg-orange-50 text-orange-600'; case 'success': return 'bg-green-50 text-green-600'; default: return 'bg-blue-50 text-blue-600'; } };
 
@@ -3794,8 +3898,9 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   const activeRepairs = (repairs || []).filter(r => r.status !== 'Completed');
   const historyRepairs = (repairs || []).filter(r => r.status === 'Completed');
 
-  // --- APPLICANT VIEW ---
-  if (userData.status === 'applicant' || userData.accountNumber === 'PENDING') {
+  // --- APPLICANT VIEW (BLOCKING) ---
+  // Only block if they are a Pure Applicant. Community Members bypass this.
+  if (isPureApplicant || (userData.accountNumber === 'PENDING' && !isCommunityMember)) {
       return (
         <div className="w-full py-12 animate-in fade-in">
            <div className="text-center mb-12"><h1 className="text-3xl font-bold text-slate-800 mb-2">Welcome to SwiftNet!</h1><p className="text-slate-500">To get started, please select an internet plan below.</p></div>
@@ -3810,34 +3915,88 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       );
   }
 
-  // --- SUBSCRIBER VIEW ---
+  // --- DYNAMIC TABS LIST ---
+  const tabs = isCommunityMember 
+    ? ['community', 'plans', 'shop', 'settings']
+    : ['overview', 'community', 'family', 'auto_tech', 'wallet', 'shop', 'my_id', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'];
+
+  // --- SUBSCRIBER / COMMUNITY VIEW ---
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-    <OnboardingTour />
+      <OnboardingTour />
+      
+      {/* TABS MENU */}
       <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
-        {['overview', 'family', 'auto_tech', 'wallet', 'shop', 'my_id', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'].map(tab => (
+        {tabs.map(tab => (
            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-              {tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : tab === 'auto_tech' ? <><Zap size={16}/> Auto-Tech</> : tab === 'wallet' ? <><Wallet size={16}/> Wallet</> : tab === 'shop' ? <><ShoppingBag size={16}/> Shop</> : tab === 'my_id' ? <><CreditCard size={16}/> My ID</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'plans' ? <><Globe size={16}/> Plans</> : tab === 'documents' ? <><FileText size={16}/> Documents</> : tab === 'rewards' ? <><Gift size={16}/> Rewards</> : tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
+              {tab === 'community' ? <><Users size={16}/> Community</> : 
+               tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : 
+               tab === 'auto_tech' ? <><Zap size={16}/> Auto-Tech</> : 
+               tab === 'wallet' ? <><Wallet size={16}/> Wallet</> : 
+               tab === 'shop' ? <><ShoppingBag size={16}/> Shop</> : 
+               tab === 'my_id' ? <><CreditCard size={16}/> My ID</> : 
+               tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : 
+               tab === 'plans' ? (isCommunityMember ? <><Wifi size={16}/> Get Internet</> : <><Globe size={16}/> Plans</>) : 
+               tab === 'documents' ? <><FileText size={16}/> Documents</> : 
+               tab === 'rewards' ? <><Gift size={16}/> Rewards</> : 
+               tab === 'settings' ? <><UserCog size={16}/> Settings</> : tab}
            </button>
         ))}
       </div>
 
       {/* --- CONTENT TABS --- */}
-      {activeTab === 'speedtest' && <SpeedTest />}
       
+      {/* 1. COMMUNITY TAB */}
+      {activeTab === 'community' && (
+         <CommunityPage 
+            onNavigate={() => {}} 
+            onLogin={() => {}} 
+            db={db} 
+            appId={appId}
+            user={userData} 
+         />
+      )}
+
+      {/* 2. PLANS TAB (Modified for Community Members) */}
+      {activeTab === 'plans' && (
+          <div className="space-y-6">
+             {isCommunityMember ? (
+               <div className="bg-blue-600 text-white p-6 rounded-2xl shadow-lg mb-6">
+                  <h2 className="text-2xl font-bold">Upgrade to Fiber Internet</h2>
+                  <p>You are currently a Community Member. Choose a plan to activate your home internet.</p>
+               </div>
+             ) : (
+               <div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-slate-800">Available Internet Plans</h2><span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">Current: {userData.plan}</span></div>
+             )}
+             
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {availablePlans.map((plan) => (
+                   <div key={plan.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-slate-100 overflow-hidden flex flex-col">
+                      <div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow">
+                          <h3 className="text-lg font-bold text-slate-800 mb-2">{plan.name}</h3>
+                          <div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div>
+                          <ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li></ul>
+                      </div>
+                      <div className="p-4 bg-slate-50 border-t border-slate-100">
+                          <button 
+                            onClick={() => isCommunityMember ? handleUpgrade(plan) : handleApplyPlan(plan.name)} 
+                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
+                            {isCommunityMember ? 'Apply for This Plan' : 'Request Change'} <ArrowRight size={16} />
+                          </button>
+                      </div>
+                   </div>
+                ))}
+             </div>
+          </div>
+      )}
+
+      {/* 3. OVERVIEW TAB (Full Subscribers Only) */}
       {activeTab === 'overview' && (
         <div className="space-y-8">
-          
-          {/* --- [NEW] FLASH PROMO BANNER --- */}
           <FlashPromoBanner user={userData} db={db} appId={appId} />
-
-          {/* --- Referral System (Existing) --- */}
           <ReferralSystem user={userData} />
           
-          {/* ... [Keep your CCTV Banner Here] ... */}
           <div className="bg-slate-900 rounded-2xl p-6 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl border border-slate-700">
-             {/* ... (Existing CCTV code content) ... */}
-             {/* Note: I'm abbreviating for brevity, keep your original CCTV div content here */}
              <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl -mr-10 -mt-10"></div>
              <div className="relative z-10">
                 <div className="inline-flex items-center gap-2 bg-red-600 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2">Limited Offer</div>
@@ -3852,94 +4011,55 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
           <MaintenanceBanner db={db} appId={appId} />
           <NetworkStatusWidget db={db} appId={appId} />
           <LiveTrafficWidget />
-            
+           
           {/* Welcome Banner */}
           <div className="relative overflow-hidden rounded-3xl bg-slate-900 text-white p-8 shadow-2xl">
              <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-blue-500/20 rounded-full blur-3xl -mr-20 -mt-40"></div>
              <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-purple-500/20 rounded-full blur-3xl -ml-20 -mb-40"></div>
              <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
-                <div>
-                    <h2 className="text-3xl font-bold mb-2">Hello, {userData.username} 👋</h2>
-                    <p className="text-slate-400">Welcome back to your SwiftNet portal.</p>
-                </div>
+                <div><h2 className="text-3xl font-bold mb-2">Hello, {userData.username} 👋</h2><p className="text-slate-400">Welcome back to your SwiftNet portal.</p></div>
                 <div className={`px-4 py-2 rounded-full border flex items-center gap-2 ${userData.status === 'active' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
-                    <div className={`w-2 h-2 rounded-full ${userData.status === 'active' ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
-                    <span className="text-xs font-bold uppercase tracking-widest">{userData.status}</span>
+                   <div className={`w-2 h-2 rounded-full ${userData.status === 'active' ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
+                   <span className="text-xs font-bold uppercase tracking-widest">{userData.status}</span>
                 </div>
              </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-             {/* Balance Card */}
              <div className="lg:col-span-2 relative overflow-hidden rounded-3xl p-8 shadow-xl border border-white/40 bg-white/60 backdrop-blur-xl transition-all hover:shadow-2xl group">
-                {/* ... [Keep your existing Balance Card content exactly as is] ... */}
                 <div className="flex justify-between items-start mb-8">
-                    <div>
-                        <p className="text-slate-500 font-bold uppercase tracking-wider text-xs mb-1">Total Balance Due</p>
-                        <h3 className={`text-5xl font-black tracking-tight ${userData.balance > 0 ? 'text-slate-800' : 'text-green-600'}`}>
-                            ₱{userData.balance?.toFixed(2)}
-                        </h3>
-                    </div>
-                    <div className="bg-indigo-50 p-3 rounded-2xl text-indigo-600 group-hover:scale-110 transition-transform duration-300">
-                        <CreditCard size={32} />
-                    </div>
+                    <div><p className="text-slate-500 font-bold uppercase tracking-wider text-xs mb-1">Total Balance Due</p><h3 className={`text-5xl font-black tracking-tight ${userData.balance > 0 ? 'text-slate-800' : 'text-green-600'}`}>₱{userData.balance?.toFixed(2)}</h3></div>
+                    <div className="bg-indigo-50 p-3 rounded-2xl text-indigo-600 group-hover:scale-110 transition-transform duration-300"><CreditCard size={32} /></div>
                 </div>
                 
                 <div className="flex flex-col md:flex-row gap-4 items-center">
-                    <div className="flex-1 w-full bg-white/50 rounded-2xl p-4 border border-white/50">
-                        <p className="text-xs text-slate-400 font-bold uppercase mb-1">Due Date</p>
-                        <p className={`font-bold text-lg ${isOverdue ? 'text-red-500' : 'text-slate-700'}`}>
-                            {new Date(userData.dueDate).toLocaleDateString(undefined, {month:'long', day:'numeric', year:'numeric'})}
-                        </p>
-                    </div>
-                    <div className="flex-1 w-full bg-white/50 rounded-2xl p-4 border border-white/50">
-                        <p className="text-xs text-slate-400 font-bold uppercase mb-1">Current Plan</p>
-                        <p className="font-bold text-lg text-slate-700">{userData.plan}</p>
-                    </div>
+                    <div className="flex-1 w-full bg-white/50 rounded-2xl p-4 border border-white/50"><p className="text-xs text-slate-400 font-bold uppercase mb-1">Due Date</p><p className={`font-bold text-lg ${isOverdue ? 'text-red-500' : 'text-slate-700'}`}>{new Date(userData.dueDate).toLocaleDateString(undefined, {month:'long', day:'numeric', year:'numeric'})}</p></div>
+                    <div className="flex-1 w-full bg-white/50 rounded-2xl p-4 border border-white/50"><p className="text-xs text-slate-400 font-bold uppercase mb-1">Current Plan</p><p className="font-bold text-lg text-slate-700">{userData.plan}</p></div>
                 </div>
 
                 {userData.balance > 0 ? (
                     <>
-                        <button onClick={() => setShowQR(true)} className="w-full mt-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all flex items-center justify-center gap-3">
-                            <Smartphone size={20} /> Pay Now via QR
-                        </button>
-                        <button onClick={() => setShowProofModal(true)} className="w-full mt-3 py-3 bg-white border-2 border-blue-100 text-blue-600 rounded-xl font-bold hover:bg-blue-50 transition-all flex items-center justify-center gap-2">
-                            <UploadCloud size={20}/> Upload Payment Receipt
-                        </button>
+                        <button onClick={() => setShowQR(true)} className="w-full mt-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all flex items-center justify-center gap-3"><Smartphone size={20} /> Pay Now via QR</button>
+                        <button onClick={() => setShowProofModal(true)} className="w-full mt-3 py-3 bg-white border-2 border-blue-100 text-blue-600 rounded-xl font-bold hover:bg-blue-50 transition-all flex items-center justify-center gap-2"><UploadCloud size={20}/> Upload Payment Receipt</button>
                     </>
                 ) : (
-                    <div className="mt-6 bg-green-100/50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center justify-center gap-2 font-bold">
-                        <CheckCircle size={20} /> You are fully paid. Enjoy surfing!
-                    </div>
+                    <div className="mt-6 bg-green-100/50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center justify-center gap-2 font-bold"><CheckCircle size={20} /> You are fully paid. Enjoy surfing!</div>
                 )}
              </div>
 
-             {/* Notifications Column */}
              <div className="space-y-6">
-                
-                {/* --- [NEW] ENTERTAINMENT BUNDLES WIDGET --- */}
                 <EntertainmentWidget user={userData} db={db} appId={appId} />
-
                 <div className="bg-white/60 backdrop-blur-md border border-white/40 rounded-3xl p-6 shadow-xl h-fit">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="font-bold text-slate-700">Notifications</h3>
-                        <div className="bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded-full">{allAlerts.length} New</div>
-                    </div>
+                    <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-slate-700">Notifications</h3><div className="bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded-full">{allAlerts.length} New</div></div>
                     <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                         {allAlerts.length > 0 ? allAlerts.map((ann) => (
                             <div key={ann.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100/50 hover:bg-blue-50/50 transition-colors">
                                 <div className="flex items-start gap-3">
                                     <div className={`mt-1 p-1.5 rounded-full ${getBgColor(ann.type)}`}>{getIcon(ann.type)}</div>
-                                    <div>
-                                        <p className="text-xs font-bold text-slate-700 mb-0.5">{ann.title}</p>
-                                        <p className="text-[10px] text-slate-500 leading-relaxed">{ann.message}</p>
-                                        <p className="text-[9px] text-slate-400 mt-2 font-medium">{new Date(ann.date).toLocaleDateString()}</p>
-                                    </div>
+                                    <div><p className="text-xs font-bold text-slate-700 mb-0.5">{ann.title}</p><p className="text-[10px] text-slate-500 leading-relaxed">{ann.message}</p><p className="text-[9px] text-slate-400 mt-2 font-medium">{new Date(ann.date).toLocaleDateString()}</p></div>
                                 </div>
                             </div>
-                        )) : (
-                            <div className="text-center py-8 text-slate-400 text-sm">All caught up!</div>
-                        )}
+                        )) : <div className="text-center py-8 text-slate-400 text-sm">All caught up!</div>}
                     </div>
                 </div>
              </div>
@@ -3947,30 +4067,14 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
         </div>
       )}
 
-      {/* --- NEW: Family Plan Tab --- */}
+      {/* 4. OTHER TABS (Same logic as before) */}
+      {activeTab === 'speedtest' && <SpeedTest />}
       {activeTab === 'family' && (
         <div className="space-y-6 animate-in fade-in">
-           <div className="flex justify-between items-center">
-              <div>
-                 <h2 className="text-2xl font-bold text-slate-800">Family & Neighborhood</h2>
-                 <p className="text-slate-500">Manage linked accounts and shared savings.</p>
-              </div>
-           </div>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FamilyPlanWidget user={userData} db={db} appId={appId} />
-              
-              <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
-                 <h4 className="font-bold text-blue-800 mb-2">How it works</h4>
-                 <ul className="list-disc list-inside text-sm text-blue-700 space-y-2">
-                    <li>Invite neighbors using their registered email.</li>
-                    <li>Once 3 households are linked, a 5% discount is applied automatically.</li>
-                    <li>Bill payments remain separate.</li>
-                 </ul>
-              </div>
-           </div>
+           <div className="flex justify-between items-center"><div><h2 className="text-2xl font-bold text-slate-800">Family & Neighborhood</h2><p className="text-slate-500">Manage linked accounts and shared savings.</p></div></div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><FamilyPlanWidget user={userData} db={db} appId={appId} /><div className="bg-blue-50 p-6 rounded-2xl border border-blue-100"><h4 className="font-bold text-blue-800 mb-2">How it works</h4><ul className="list-disc list-inside text-sm text-blue-700 space-y-2"><li>Invite neighbors using their registered email.</li><li>Once 3 households are linked, a 5% discount is applied automatically.</li><li>Bill payments remain separate.</li></ul></div></div>
         </div>
       )}
-
       {activeTab === 'auto_tech' && <SmartDiagnostics user={userData} db={db} appId={appId} />}
       {activeTab === 'wallet' && <SwiftWallet user={userData} db={db} appId={appId} />}
       {activeTab === 'shop' && <Marketplace user={userData} db={db} appId={appId} />}
@@ -3978,205 +4082,75 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       
       {activeTab === 'repairs' && (
          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-               <div><h2 className="text-2xl font-bold text-slate-800">Repair Requests</h2><p className="text-sm text-slate-500">Track status.</p></div>
-               <button onClick={() => setShowRepairModal(true)} className="bg-red-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-red-700 shadow-lg flex items-center gap-2"><Hammer size={18} /> Request Repair</button>
-            </div>
-            <div className="space-y-4">
-               <h3 className="text-sm font-bold text-slate-500 uppercase">Active Requests</h3>
-               {activeRepairs && activeRepairs.length > 0 ? activeRepairs.map(repair => (<RepairStatusCard key={repair.id} repair={repair} isSubscriber={true} onConfirm={onConfirmRepair} />)) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400 text-sm">No active repairs.</div>}
-            </div>
+            <div className="flex justify-between items-center"><div><h2 className="text-2xl font-bold text-slate-800">Repair Requests</h2><p className="text-sm text-slate-500">Track status.</p></div><button onClick={() => setShowRepairModal(true)} className="bg-red-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-red-700 shadow-lg flex items-center gap-2"><Hammer size={18} /> Request Repair</button></div>
+            <div className="space-y-4"><h3 className="text-sm font-bold text-slate-500 uppercase">Active Requests</h3>{activeRepairs && activeRepairs.length > 0 ? activeRepairs.map(repair => (<RepairStatusCard key={repair.id} repair={repair} isSubscriber={true} onConfirm={onConfirmRepair} />)) : <div className="text-center py-10 bg-white rounded-xl border border-slate-200 text-slate-400 text-sm">No active repairs.</div>}</div>
             {historyRepairs.length > 0 && (<div className="pt-8 mt-8 border-t border-slate-200"><h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><Clock size={18}/> Repair History</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{historyRepairs.map(repair => (<RepairStatusCard key={repair.id} repair={repair} isSubscriber={true} />))}</div></div>)}
          </div>
       )}
 
       {activeTab === 'documents' && (
           <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                  <div><h2 className="text-2xl font-bold text-slate-800">My Documents</h2><p className="text-sm text-slate-500">View and download your contracts and statements.</p></div>
-              </div>
-              {!userData.contractSigned && (
-                  <div className="mb-6 p-6 bg-red-50 border-b border-red-100 rounded-2xl flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                          <div className="bg-red-100 p-3 rounded-xl text-red-600"><PenTool size={24}/></div>
-                          <div>
-                              <h4 className="font-bold text-red-800">Service Contract Pending</h4>
-                              <p className="text-xs text-red-600">Please sign your agreement to avoid interruption.</p>
-                          </div>
-                      </div>
-                      <button onClick={() => setShowContract(true)} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 shadow-md">
-                          Sign Now
-                      </button>
-                  </div>
-              )}
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="divide-y divide-slate-100">
-                      {documents.length > 0 ? documents.map(doc => (
-                          <div key={doc.id} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                              <div className="flex items-center gap-4">
-                                  <div className="bg-blue-50 p-3 rounded-xl text-blue-600"><FileText size={24} /></div>
-                                  <div>
-                                      <h4 className="font-bold text-slate-800">{doc.title}</h4>
-                                      <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
-                                          <span>{doc.type}</span> • <span>{new Date(doc.date).toLocaleDateString()}</span> • <span className="text-red-600 font-bold">₱{parseFloat(doc.amount).toLocaleString()}</span>
-                                      </p>
-                                  </div>
-                              </div>
-                              <button onClick={() => setSelectedDoc(doc)} className="flex items-center gap-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-4 py-2 rounded-lg font-bold text-sm transition-colors"><Eye size={18} /><span className="hidden sm:inline">View Invoice</span></button>
-                          </div>
-                      )) : <div className="p-8 text-center text-slate-400">No documents found.</div>}
-                  </div>
-              </div>
+              <div className="flex justify-between items-center"><div><h2 className="text-2xl font-bold text-slate-800">My Documents</h2><p className="text-sm text-slate-500">View and download your contracts and statements.</p></div></div>
+              {!userData.contractSigned && (<div className="mb-6 p-6 bg-red-50 border-b border-red-100 rounded-2xl flex items-center justify-between"><div className="flex items-center gap-4"><div className="bg-red-100 p-3 rounded-xl text-red-600"><PenTool size={24}/></div><div><h4 className="font-bold text-red-800">Service Contract Pending</h4><p className="text-xs text-red-600">Please sign your agreement to avoid interruption.</p></div></div><button onClick={() => setShowContract(true)} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 shadow-md">Sign Now</button></div>)}
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"><div className="divide-y divide-slate-100">{documents.length > 0 ? documents.map(doc => (<div key={doc.id} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors"><div className="flex items-center gap-4"><div className="bg-blue-50 p-3 rounded-xl text-blue-600"><FileText size={24} /></div><div><h4 className="font-bold text-slate-800">{doc.title}</h4><p className="text-xs text-slate-500 mt-1 flex items-center gap-2"><span>{doc.type}</span> • <span>{new Date(doc.date).toLocaleDateString()}</span> • <span className="text-red-600 font-bold">₱{parseFloat(doc.amount).toLocaleString()}</span></p></div></div><button onClick={() => setSelectedDoc(doc)} className="flex items-center gap-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-4 py-2 rounded-lg font-bold text-sm transition-colors"><Eye size={18} /><span className="hidden sm:inline">View Invoice</span></button></div>)) : <div className="p-8 text-center text-slate-400">No documents found.</div>}</div></div>
           </div>
       )}
 
       {activeTab === 'rewards' && (
           <div className="space-y-6">
-              <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-2xl p-8 text-white relative overflow-hidden shadow-lg">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-16 -mt-16"></div>
-                  <div className="relative z-10">
-                      <div className="flex items-center gap-3 mb-2">
-                          <Gift size={32} className="text-white" />
-                          <h2 className="text-3xl font-bold">SwiftPoints</h2>
-                      </div>
-                      <p className="text-yellow-100 font-medium text-lg">Your Balance: <span className="text-4xl font-bold text-white ml-2">{userData.points || 0}</span> pts</p>
-                      <p className="text-sm mt-4 text-yellow-50 opacity-90">Earn 50 points for every verified payment!</p>
-                  </div>
-              </div>
+              <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-2xl p-8 text-white relative overflow-hidden shadow-lg"><div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-16 -mt-16"></div><div className="relative z-10"><div className="flex items-center gap-3 mb-2"><Gift size={32} className="text-white" /><h2 className="text-3xl font-bold">SwiftPoints</h2></div><p className="text-yellow-100 font-medium text-lg">Your Balance: <span className="text-4xl font-bold text-white ml-2">{userData.points || 0}</span> pts</p><p className="text-sm mt-4 text-yellow-50 opacity-90">Earn 50 points for every verified payment!</p></div></div>
               <h3 className="text-xl font-bold text-slate-800">Redeem Rewards</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col">
-                      <div className="bg-blue-50 w-12 h-12 rounded-lg flex items-center justify-center text-blue-600 mb-4"><Zap size={24}/></div>
-                      <h4 className="font-bold text-slate-800 text-lg">24h Speed Boost</h4>
-                      <p className="text-sm text-slate-500 mb-4 flex-grow">Get an extra 50Mbps for 24 hours. Perfect for gaming or large downloads.</p>
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
-                          <span className="font-bold text-slate-800">150 pts</span>
-                          <button className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50" disabled={(userData.points || 0) < 150}>Redeem</button>
-                      </div>
-                  </div>
-                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col">
-                      <div className="bg-green-50 w-12 h-12 rounded-lg flex items-center justify-center text-green-600 mb-4"><span className="text-2xl font-bold font-sans">₱</span></div>
-                      <h4 className="font-bold text-slate-800 text-lg">₱50 Bill Rebate</h4>
-                      <p className="text-sm text-slate-500 mb-4 flex-grow">Deduct ₱50 from your next billing statement instantly.</p>
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
-                          <span className="font-bold text-slate-800">200 pts</span>
-                          <button className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50" disabled={(userData.points || 0) < 200}>Redeem</button>
-                      </div>
-                  </div>
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col"><div className="bg-blue-50 w-12 h-12 rounded-lg flex items-center justify-center text-blue-600 mb-4"><Zap size={24}/></div><h4 className="font-bold text-slate-800 text-lg">24h Speed Boost</h4><p className="text-sm text-slate-500 mb-4 flex-grow">Get an extra 50Mbps for 24 hours.</p><div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100"><span className="font-bold text-slate-800">150 pts</span><button className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50" disabled={(userData.points || 0) < 150}>Redeem</button></div></div>
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col"><div className="bg-green-50 w-12 h-12 rounded-lg flex items-center justify-center text-green-600 mb-4"><span className="text-2xl font-bold font-sans">₱</span></div><h4 className="font-bold text-slate-800 text-lg">₱50 Bill Rebate</h4><p className="text-sm text-slate-500 mb-4 flex-grow">Deduct ₱50 from your next billing statement.</p><div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100"><span className="font-bold text-slate-800">200 pts</span><button className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50" disabled={(userData.points || 0) < 200}>Redeem</button></div></div>
               </div>
           </div>
       )}
-
-      {activeTab === 'plans' && (<div className="space-y-6"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-slate-800">Available Internet Plans</h2><span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">Current: {userData.plan}</span></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{availablePlans.map((plan) => (<div key={plan.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-slate-100 overflow-hidden flex flex-col"><div className="p-6 bg-gradient-to-br from-slate-50 to-white flex-grow"><h3 className="text-lg font-bold text-slate-800 mb-2">{plan.name}</h3><div className="flex items-center gap-2 mb-4"><Zap size={18} className="text-yellow-500" /><span className="text-sm text-slate-500">High Speed Internet</span></div><ul className="space-y-2 mb-6"><li className="flex items-center gap-2 text-sm text-slate-600"><Check size={14} className="text-green-500"/> Unlimited Data</li></ul></div><div className="p-4 bg-slate-50 border-t border-slate-100"><button onClick={() => handleApplyPlan(plan.name)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">Request Change <ArrowRight size={16} /></button></div></div>))}</div></div>)}
       
       {activeTab === 'support' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 space-y-6">
-                <VideoSupport user={userData} />
-                <ScheduledCallback user={userData} db={db} appId={appId} />
-                <KnowledgeBase />
-            </div>
+            <div className="lg:col-span-1 space-y-6"><VideoSupport user={userData} /><ScheduledCallback user={userData} db={db} appId={appId} /><KnowledgeBase /></div>
             <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit">
-                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><MessageSquare size={20} className="text-blue-600"/> Create New Ticket</h3>
-                    <form onSubmit={handleCreateTicket} className="space-y-4">
-                        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-white" value={newTicket.subject} onChange={(e) => setNewTicket({...newTicket, subject: e.target.value})}><option value="">Select...</option><option value="No Internet">No Internet</option><option value="Billing">Billing</option><option value="Other">Other</option></select></div>
-                        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Message</label><textarea required className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none h-32 resize-none" value={newTicket.message} onChange={(e) => setNewTicket({...newTicket, message: e.target.value})}></textarea></div>
-                        <button type="submit" disabled={ticketLoading} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">{ticketLoading ? 'Submitting...' : 'Submit Ticket'}</button>
-                    </form>
-                </div>
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit">
-                      <h3 className="font-bold text-slate-800 mb-4">My Ticket History</h3>
-                      <div className="space-y-4 max-h-[600px] overflow-y-auto">
-                        {tickets && tickets.length > 0 ? tickets.map(ticket => (
-                            <div key={ticket.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50">
-                                <div className="flex justify-between items-start mb-2"><h4 className="font-bold text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject}</h4><span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${ticket.status==='open'?'bg-yellow-100 text-yellow-700':'bg-green-100 text-green-700'}`}>{ticket.status}</span></div>
-                                <p className="text-sm text-slate-600 mb-3">{ticket.message}</p>
-                                {ticket.adminReply && <div className="bg-white border-l-4 border-blue-500 p-3 rounded-r-lg mt-3"><p className="text-xs font-bold text-blue-600 mb-1">Admin Response:</p><p className="text-sm text-slate-700">{ticket.adminReply}</p></div>}
-                                <div className="mt-3 pt-2 border-t border-slate-100">{followingUpTo === ticket.id ? (<div className="mt-2"><textarea className="w-full border p-2 text-sm" rows="2" value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setFollowingUpTo(null)} className="text-xs font-bold px-3">Cancel</button><button onClick={() => handleFollowUpTicket(ticket.id, ticket.message)} className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded">Send</button></div></div>) : (<button onClick={() => setFollowingUpTo(ticket.id)} className="text-blue-600 text-xs font-bold flex items-center gap-1 mt-1"><MessageCircle size={14} /> Add Note</button>)}</div>
-                            </div>
-                        )) : <p className="text-center text-slate-400">No tickets found.</p>}
-                      </div>
-                </div>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><MessageSquare size={20} className="text-blue-600"/> Create New Ticket</h3><form onSubmit={handleCreateTicket} className="space-y-4"><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-white" value={newTicket.subject} onChange={(e) => setNewTicket({...newTicket, subject: e.target.value})}><option value="">Select...</option><option value="No Internet">No Internet</option><option value="Billing">Billing</option><option value="Other">Other</option></select></div><div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Message</label><textarea required className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none h-32 resize-none" value={newTicket.message} onChange={(e) => setNewTicket({...newTicket, message: e.target.value})}></textarea></div><button type="submit" disabled={ticketLoading} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">{ticketLoading ? 'Submitting...' : 'Submit Ticket'}</button></form></div>
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-fit"><h3 className="font-bold text-slate-800 mb-4">My Ticket History</h3><div className="space-y-4 max-h-[600px] overflow-y-auto">{tickets && tickets.length > 0 ? tickets.map(ticket => (<div key={ticket.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50"><div className="flex justify-between items-start mb-2"><h4 className="font-bold text-slate-800">#{ticket.ticketId || '---'} - {ticket.subject}</h4><span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${ticket.status==='open'?'bg-yellow-100 text-yellow-700':'bg-green-100 text-green-700'}`}>{ticket.status}</span></div><p className="text-sm text-slate-600 mb-3">{ticket.message}</p>{ticket.adminReply && <div className="bg-white border-l-4 border-blue-500 p-3 rounded-r-lg mt-3"><p className="text-xs font-bold text-blue-600 mb-1">Admin Response:</p><p className="text-sm text-slate-700">{ticket.adminReply}</p></div>}<div className="mt-3 pt-2 border-t border-slate-100">{followingUpTo === ticket.id ? (<div className="mt-2"><textarea className="w-full border p-2 text-sm" rows="2" value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}></textarea><div className="flex gap-2 justify-end"><button onClick={() => setFollowingUpTo(null)} className="text-xs font-bold px-3">Cancel</button><button onClick={() => handleFollowUpTicket(ticket.id, ticket.message)} className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded">Send</button></div></div>) : (<button onClick={() => setFollowingUpTo(ticket.id)} className="text-blue-600 text-xs font-bold flex items-center gap-1 mt-1"><MessageCircle size={14} /> Add Note</button>)}</div></div>)) : <p className="text-center text-slate-400">No tickets found.</p>}</div></div>
             </div>
         </div>
       )}
 
       {activeTab === 'settings' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="col-span-full bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4">
-                  <div>
-                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                          <ShieldCheck size={20} className={userData.kycStatus === 'verified' ? "text-green-500" : "text-slate-400"}/> 
-                          Identity Verification
-                      </h3>
-                      <p className="text-sm text-slate-500 mt-1">
-                          {userData.kycStatus === 'verified' ? 'Your identity is verified.' : 
-                           userData.kycStatus === 'pending' ? 'Verification is under review.' : 
-                           'Please upload an ID to secure your account.'}
-                      </p>
-                  </div>
-                  {userData.kycStatus === 'verified' ? (
-                      <span className="bg-green-100 text-green-700 px-4 py-1 rounded-full text-xs font-bold uppercase">Verified</span>
-                  ) : userData.kycStatus === 'pending' ? (
-                      <span className="bg-yellow-100 text-yellow-700 px-4 py-1 rounded-full text-xs font-bold uppercase">Pending</span>
-                  ) : (
-                      <button onClick={() => setShowKYC(true)} className="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 w-full md:w-auto">
-                          Verify Now
-                      </button>
-                  )}
-              </div>
-
-              {/* --- NEW: Student Discount Promo --- */}
-              <div className="col-span-full bg-gradient-to-r from-blue-600 to-indigo-600 p-6 rounded-2xl shadow-lg text-white flex justify-between items-center relative overflow-hidden">
-                <div className="relative z-10">
-                   <h3 className="font-bold text-lg flex items-center gap-2"><BookOpen size={20}/> Student & Teacher Discount</h3>
-                   <p className="text-blue-100 text-sm">Get 10% OFF your monthly service fee.</p>
-                </div>
-                <button onClick={() => setCustomModal('student')} className="relative z-10 bg-white text-blue-600 px-6 py-2 rounded-xl font-bold text-sm hover:bg-blue-50">Apply</button>
-                <div className="absolute -right-10 -bottom-20 text-white/10"><BookOpen size={150}/></div>
-              </div>
-
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit">
-                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Lock size={20} className="text-blue-600"/> Change Password</h3>
-                  <form onSubmit={handleUpdatePassword} className="space-y-4">
-                      <input type="password" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none text-slate-700" value={managePass} onChange={(e) => setManagePass(e.target.value)} placeholder="New password" />
-                      <button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">{updatingCreds ? 'Updating...' : 'Update'}</button>
-                  </form>
-              </div>
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit">
-                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Mail size={20} className="text-blue-600"/> Update Email</h3>
-                  <form onSubmit={handleUpdateEmail} className="space-y-4">
-                      <input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none text-slate-700" value={manageEmail} onChange={(e) => setManageEmail(e.target.value)} placeholder="new@email.com" />
-                      <button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900">{updatingCreds ? 'Updating...' : 'Update'}</button>
-                  </form>
-              </div>
+              <div className="col-span-full bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4"><div><h3 className="font-bold text-slate-800 flex items-center gap-2"><ShieldCheck size={20} className={userData.kycStatus === 'verified' ? "text-green-500" : "text-slate-400"}/> Identity Verification</h3><p className="text-sm text-slate-500 mt-1">{userData.kycStatus === 'verified' ? 'Your identity is verified.' : userData.kycStatus === 'pending' ? 'Verification is under review.' : 'Please upload an ID to secure your account.'}</p></div>{userData.kycStatus === 'verified' ? (<span className="bg-green-100 text-green-700 px-4 py-1 rounded-full text-xs font-bold uppercase">Verified</span>) : userData.kycStatus === 'pending' ? (<span className="bg-yellow-100 text-yellow-700 px-4 py-1 rounded-full text-xs font-bold uppercase">Pending</span>) : (<button onClick={() => setShowKYC(true)} className="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 w-full md:w-auto">Verify Now</button>)}</div>
+              <div className="col-span-full bg-gradient-to-r from-blue-600 to-indigo-600 p-6 rounded-2xl shadow-lg text-white flex justify-between items-center relative overflow-hidden"><div className="relative z-10"><h3 className="font-bold text-lg flex items-center gap-2"><BookOpen size={20}/> Student & Teacher Discount</h3><p className="text-blue-100 text-sm">Get 10% OFF your monthly service fee.</p></div><button onClick={() => setCustomModal('student')} className="relative z-10 bg-white text-blue-600 px-6 py-2 rounded-xl font-bold text-sm hover:bg-blue-50">Apply</button><div className="absolute -right-10 -bottom-20 text-white/10"><BookOpen size={150}/></div></div>
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Lock size={20} className="text-blue-600"/> Change Password</h3><form onSubmit={handleUpdatePassword} className="space-y-4"><input type="password" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none text-slate-700" value={managePass} onChange={(e) => setManagePass(e.target.value)} placeholder="New password" /><button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">{updatingCreds ? 'Updating...' : 'Update'}</button></form></div>
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Mail size={20} className="text-blue-600"/> Update Email</h3><form onSubmit={handleUpdateEmail} className="space-y-4"><input type="email" required className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none text-slate-700" value={manageEmail} onChange={(e) => setManageEmail(e.target.value)} placeholder="new@email.com" /><button type="submit" disabled={updatingCreds} className="w-full py-2.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-900">{updatingCreds ? 'Updating...' : 'Update'}</button></form></div>
           </div>
       )}
 
-      {showQR && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"><div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center space-x-2"><CreditCard size={20} /><span>Scan to Pay</span></h3><button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full"><X size={20} /></button></div><div className="p-8 flex flex-col items-center text-center"><p className="text-slate-600 text-sm mb-6">Scan the QR code with your banking app to pay <span className="font-bold text-slate-900 block text-2xl mt-2">₱{userData.balance.toFixed(2)}</span></p><div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8"><img src={paymentQRUrl || "/qr-code.png"} alt="Payment QR" className="w-48 h-48 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/200x200?text=Ask+Admin+for+QR"; }} /></div><div className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 mb-4">Payment posting will reflect once the admin verifies your payment. Your reference number provided should match on the payment they received.</div><div className="w-full text-left"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reference Number</label><form onSubmit={handlePaymentSubmit} className="flex gap-3"><input 
-  type="text" 
-  required 
-  placeholder="e.g. 123456" 
-  className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium" 
-  value={refNumber} 
-  onChange={(e) => {
-    const val = e.target.value;
-    if (/^\d*$/.test(val)) {
-      setRefNumber(val);
-    } else {
-      alert("Please enter only a number that matches the reference number on your proof of payment.");
-    }
-  }} 
-/><button type="submit" disabled={submitting} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200">{submitting ? '...' : 'Verify'}</button></form></div></div></div></div>)}
+      {showQR && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm px-4"><div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-blue-700 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center space-x-2"><CreditCard size={20} /><span>Scan to Pay</span></h3><button onClick={() => setShowQR(false)} className="text-white/80 hover:text-white bg-white/10 p-1 rounded-full"><X size={20} /></button></div><div className="p-8 flex flex-col items-center text-center"><p className="text-slate-600 text-sm mb-6">Scan the QR code with your banking app to pay <span className="font-bold text-slate-900 block text-2xl mt-2">₱{userData.balance.toFixed(2)}</span></p><div className="bg-white p-4 border-2 border-dashed border-blue-200 rounded-2xl shadow-sm mb-8"><img src={paymentQRUrl || "/qr-code.png"} alt="Payment QR" className="w-48 h-48 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/200x200?text=Ask+Admin+for+QR"; }} /></div><div className="text-xs text-center text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100 mb-4">Payment posting will reflect once the admin verifies your payment. Your reference number provided should match on the payment they received.</div><div className="w-full text-left"><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reference Number</label><form onSubmit={handlePaymentSubmit} className="flex gap-3">
+        <input 
+          type="text" 
+          required 
+          placeholder="e.g. 123456" 
+          className="flex-1 border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-medium" 
+          value={refNumber} 
+          onChange={(e) => {
+            const val = e.target.value;
+            if (/^\d*$/.test(val)) {
+              setRefNumber(val);
+            } else {
+              alert("Please enter only a number that matches the reference number on your proof of payment.");
+            }
+          }} 
+        />
+        <button type="submit" disabled={submitting} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 disabled:opacity-50 shadow-md shadow-green-200">{submitting ? '...' : 'Verify'}</button></form></div></div></div></div>)}
+      
       {showRepairModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200"><div className="bg-red-600 p-5 flex justify-between items-center"><h3 className="text-white font-bold flex items-center gap-2"><Hammer size={20} /> Request Service Repair</h3><button onClick={() => setShowRepairModal(false)} className="text-white/80 hover:text-white"><X size={24} /></button></div><div className="p-6"><p className="text-slate-600 text-sm mb-4">Please describe the issue.</p><textarea className="w-full border border-slate-300 rounded-lg p-3 h-32" value={repairNote} onChange={(e) => setRepairNote(e.target.value)}></textarea><div className="mt-4 flex justify-end gap-2"><button onClick={() => setShowRepairModal(false)} className="px-4 py-2 text-slate-500 font-bold">Cancel</button><button onClick={handleRequestRepair} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700">Submit</button></div></div></div></div>)}
       {showProofModal && <PaymentProofModal user={userData} db={db} appId={appId} onClose={() => setShowProofModal(false)} />}
       {showKYC && <KYCModal user={userData} db={db} appId={appId} onClose={() => setShowKYC(false)} />}
       <InvoiceModal doc={selectedDoc} user={userData} onClose={() => setSelectedDoc(null)} />
       {showContract && <ServiceContractModal user={userData} db={db} appId={appId} onClose={() => setShowContract(false)} />}
       
-      {/* --- RENDER CUSTOM MODAL --- */}
-              {customModal === 'student' && (
+      {customModal === 'student' && (
             <StudentPromoModal 
                 onClose={() => setCustomModal(null)} 
                 user={userData} 
@@ -6931,7 +6905,7 @@ const PublicNavbar = ({ onNavigate, onLogin, activePage, onQuickPay }) => (
           </span>
         </div>
         <div className="hidden md:flex items-center gap-8 font-bold text-sm text-slate-600">
-          {['plans', 'coverage', 'support', 'about'].map((item) => (
+          {['plans', 'coverage', 'community', 'support', 'about'].map((item) => (
             <button 
               key={item}
               onClick={() => onNavigate(item)}
@@ -7060,6 +7034,126 @@ const CoveragePage = ({ onNavigate, onLogin, db, appId }) => {
           {filtered.length === 0 && <p className="col-span-full text-center text-slate-400">No areas found matching your search.</p>}
         </div>
       </div>
+    </div>
+  );
+};
+
+// --- 3. COMMUNITY PAGE (Social + Signup) ---
+const CommunityPage = ({ onNavigate, onLogin, db, appId, user }) => {
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeCommentId, setActiveCommentId] = useState(null);
+  const [showCommunitySignup, setShowCommunitySignup] = useState(false); // <--- NEW STATE
+
+  // Fetch Posts
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_community_posts'), orderBy('date', 'desc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [db, appId]);
+
+  // Interaction Handler
+  const handleInteraction = () => {
+    if (user) return; // If logged in, do nothing (allow action)
+    // If guest, show option
+    if (confirm("You need an account to post or comment.\n\nOK = Login\nCancel = Stay Here")) {
+        onLogin();
+    }
+  };
+
+  const toggleComments = (id) => setActiveCommentId(activeCommentId === id ? null : id);
+
+  const hotlines = [
+    { name: 'PNP Santa Ana', number: '0917-123-4567', color: 'bg-blue-600' },
+    { name: 'Fire Station', number: '0917-987-6543', color: 'bg-red-600' },
+    { name: 'Rural Health Unit', number: '0918-555-0000', color: 'bg-green-600' },
+  ];
+
+  return (
+    <div className="min-h-screen bg-[#f0f2f5] font-sans text-slate-800">
+      {/* Only show Navbar if NOT inside the Dashboard (user is null implies public view) */}
+      {!user && <PublicNavbar onNavigate={onNavigate} onLogin={onLogin} activePage="community" />}
+
+      <div className="max-w-7xl mx-auto px-0 md:px-4 py-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
+        
+        {/* LEFT SIDEBAR */}
+        <div className="hidden lg:block space-y-4">
+           {/* NEW: JOIN CARD (Only for Guests) */}
+           {!user && (
+             <div className="bg-white p-4 rounded-xl shadow-sm border border-teal-100 text-center">
+                <h3 className="font-bold text-slate-800 text-sm mb-1">New here?</h3>
+                <p className="text-xs text-slate-500 mb-3">Join the conversation for free.</p>
+                <button onClick={() => setShowCommunitySignup(true)} className="w-full bg-teal-600 text-white py-2 rounded-lg font-bold text-xs hover:bg-teal-700 shadow-md">
+                  Sign Up for Community
+                </button>
+             </div>
+           )}
+
+           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+              <h3 className="font-bold text-slate-500 text-xs uppercase mb-3">Community Hotlines</h3>
+              <div className="space-y-2">
+                {hotlines.map((line, i) => (
+                  <div key={i} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer" onClick={() => window.open(`tel:${line.number}`)}>
+                    <div className={`w-8 h-8 rounded-full ${line.color} flex items-center justify-center text-white`}><PhoneCall size={14}/></div>
+                    <div><p className="text-sm font-bold text-slate-700">{line.name}</p><p className="text-xs text-slate-400">{line.number}</p></div>
+                  </div>
+                ))}
+              </div>
+           </div>
+        </div>
+
+        {/* CENTER FEED */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Create Post Widget */}
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mx-2 md:mx-0">
+             <div className="flex gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-slate-400"><User size={20}/></div>
+                <div onClick={handleInteraction} className="flex-1 bg-slate-100 rounded-full px-4 flex items-center text-slate-500 text-sm cursor-pointer hover:bg-slate-200 transition-colors">
+                  What's on your mind, {user ? user.username : 'Guest'}?
+                </div>
+             </div>
+             <div className="border-t border-slate-100 pt-3 flex justify-between px-2">
+                <button onClick={handleInteraction} className="flex items-center gap-2 text-slate-500 hover:bg-slate-50 px-4 py-2 rounded-lg transition-colors"><Camera size={20} className="text-red-500"/> <span className="text-sm font-bold">Photo</span></button>
+                <button onClick={handleInteraction} className="flex items-center gap-2 text-slate-500 hover:bg-slate-50 px-4 py-2 rounded-lg transition-colors"><Smile size={20} className="text-yellow-500"/> <span className="text-sm font-bold">Feeling</span></button>
+             </div>
+          </div>
+
+          {/* Posts Feed */}
+          {loading ? <div className="p-8 text-center text-slate-400"><Loader2 className="animate-spin inline mr-2"/> Loading feed...</div> : posts.length === 0 ? <div className="p-8 text-center text-slate-400">No posts yet. Be the first!</div> : (
+            posts.map(post => (
+              <div key={post.id} className="bg-white rounded-xl shadow-sm border border-slate-200 mx-2 md:mx-0 overflow-hidden">
+                <div className="p-4 flex justify-between items-start">
+                   <div className="flex gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold">{post.author ? post.author[0] : 'A'}</div>
+                      <div><h4 className="font-bold text-slate-800 text-sm">{post.author || 'Admin'}</h4><p className="text-xs text-slate-400 flex items-center gap-1">{new Date(post.date).toLocaleDateString()} • <Globe size={10}/></p></div>
+                   </div>
+                   <button className="text-slate-400 hover:bg-slate-100 p-2 rounded-full"><MoreHorizontal size={20}/></button>
+                </div>
+                <div className="px-4 pb-2">{post.title && <h3 className="font-bold text-lg mb-2">{post.title}</h3>}<p className="text-slate-800 text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p></div>
+                <div className="px-4 py-3 flex justify-between items-center text-xs text-slate-500 border-b border-slate-100"><div className="flex items-center gap-1"><div className="bg-blue-500 text-white p-1 rounded-full"><ThumbsUp size={10} fill="white"/></div><span>{post.likes || 0}</span></div><div className="flex gap-3"><span>{post.comments ? post.comments.length : 0} comments</span></div></div>
+                <div className="flex px-2 py-1">
+                   <button onClick={handleInteraction} className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-slate-50 rounded-lg text-slate-600 font-bold text-sm transition-colors"><ThumbsUp size={18}/> Like</button>
+                   <button onClick={() => user ? toggleComments(post.id) : handleInteraction()} className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-slate-50 rounded-lg text-slate-600 font-bold text-sm transition-colors"><MessageSquare size={18}/> Comment</button>
+                   <button onClick={handleInteraction} className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-slate-50 rounded-lg text-slate-600 font-bold text-sm transition-colors"><Share2 size={18}/> Share</button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* RIGHT SIDEBAR */}
+        <div className="hidden lg:block space-y-4">
+           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200"><h3 className="font-bold text-slate-500 text-xs uppercase mb-3">Sponsored</h3><div className="flex items-center gap-3 mb-4 cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors"><div className="w-24 h-24 bg-slate-800 rounded-lg overflow-hidden relative"><img src="https://images.unsplash.com/photo-1593642532744-d377ab507dc8?auto=format&fit=crop&w=200&q=80" className="object-cover w-full h-full" alt="Ad"/></div><div><p className="font-bold text-sm leading-tight text-slate-800">Work from Home</p><p className="text-xs text-slate-500 mt-1">swiftnet.com</p></div></div></div>
+        </div>
+      </div>
+
+      {/* RENDER SIGNUP MODAL */}
+      {showCommunitySignup && (
+        <CommunitySignupModal onClose={() => setShowCommunitySignup(false)} db={db} appId={appId} />
+      )}
     </div>
   );
 };
@@ -7622,6 +7716,8 @@ export default function App() {
         <>
             {publicPage === 'support' && <SupportPage onNavigate={setPublicPage} onLogin={handleLoginClick} />}
             {publicPage === 'coverage' && <CoveragePage onNavigate={setPublicPage} onLogin={handleLoginClick} db={db} appId={appId} />}
+            {/* --- ADD THIS LINE HERE --- */}
+            {publicPage === 'community' && <CommunityPage onNavigate={setPublicPage} onLogin={handleLoginClick} db={db} appId={appId} />}
             {publicPage === 'plans' && <PlansPage onNavigate={setPublicPage} onLogin={handleLoginClick} plans={plans} />}
             {publicPage === 'about' && <AboutPage onNavigate={setPublicPage} onLogin={handleLoginClick} />}
             {publicPage === 'privacy' && <PrivacyPage onNavigate={setPublicPage} onLogin={handleLoginClick} />}
