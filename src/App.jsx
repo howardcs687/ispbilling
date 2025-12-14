@@ -91,6 +91,7 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
   measurementId: "G-7S6DBEDDMP"
 };
 
+
 // Initialize Default App
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -7067,7 +7068,7 @@ const compressImage = (file) => {
     });
 };
 
-// --- COMPONENT: FRIEND MANAGER ---
+// --- COMPONENT: FRIEND MANAGER (FIXED) ---
 const FriendManager = ({ user, db, appId }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
@@ -7076,48 +7077,67 @@ const FriendManager = ({ user, db, appId }) => {
 
     // Load Friends & Requests
     useEffect(() => {
-        const fetchFriends = async () => {
-            const userDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', user.uid));
-            if (userDoc.exists()) {
-                setFriends(userDoc.data().friends || []);
-                setRequests(userDoc.data().friendRequests || []);
+        if (!user?.uid) return;
+        const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', user.uid), (docSnap) => {
+            if (docSnap.exists()) {
+                setFriends(docSnap.data().friends || []);
+                setRequests(docSnap.data().friendRequests || []);
             }
-        };
-        fetchFriends();
+        });
+        return () => unsub();
     }, [user, db, appId]);
 
     const handleSearch = async () => {
         if (!searchTerm) return;
-        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1'), 
+        setSearchResults([]); // Clear previous
+        
+        // Simple search: Find users where username >= searchTerm
+        // Note: Firestore is case-sensitive. Ideally, store a lowercase username field.
+        const q = query(
+            collection(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1'), 
             where('username', '>=', searchTerm), 
-            where('username', '<=', searchTerm + '\uf8ff'));
+            where('username', '<=', searchTerm + '\uf8ff')
+        );
+        
         const snap = await getDocs(q);
-        setSearchResults(snap.docs.map(d => ({uid: d.id, ...d.data()})).filter(u => u.uid !== user.uid));
+        const results = snap.docs
+            .map(d => ({uid: d.id, ...d.data()}))
+            .filter(u => u.uid !== user.uid); // Don't show self
+
+        setSearchResults(results);
+        if(results.length === 0) alert("No users found.");
     };
 
     const sendRequest = async (targetUser) => {
-        // Add to target's request list
-        const targetRef = doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', targetUser.uid);
-        await updateDoc(targetRef, {
-            friendRequests: arrayUnion({ uid: user.uid, username: user.username })
-        });
-        alert(`Request sent to ${targetUser.username}!`);
+        try {
+            const targetRef = doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', targetUser.uid);
+            await updateDoc(targetRef, {
+                friendRequests: arrayUnion({ uid: user.uid, username: user.username })
+            });
+            alert(`Request sent to ${targetUser.username}!`);
+        } catch (e) {
+            console.error(e);
+            alert("Error sending request.");
+        }
     };
 
     const acceptRequest = async (requester) => {
-        // Add to MY friends, remove request
-        const myRef = doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', user.uid);
-        await updateDoc(myRef, {
-            friends: arrayUnion({ uid: requester.uid, username: requester.username }),
-            friendRequests: arrayRemove(requester)
-        });
+        try {
+            const myRef = doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', user.uid);
+            const theirRef = doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', requester.uid);
 
-        // Add ME to THEIR friends
-        const theirRef = doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', requester.uid);
-        await updateDoc(theirRef, {
-            friends: arrayUnion({ uid: user.uid, username: user.username })
-        });
-        alert("Friend Added!");
+            // Add to both sides
+            await updateDoc(myRef, {
+                friends: arrayUnion({ uid: requester.uid, username: requester.username }),
+                friendRequests: arrayRemove(requester)
+            });
+            await updateDoc(theirRef, {
+                friends: arrayUnion({ uid: user.uid, username: user.username })
+            });
+            alert("Friend Added!");
+        } catch (e) {
+            alert("Error accepting request.");
+        }
     };
 
     return (
@@ -7126,12 +7146,12 @@ const FriendManager = ({ user, db, appId }) => {
             
             {/* Friend Requests */}
             {requests.length > 0 && (
-                <div className="mb-4 bg-yellow-50 p-3 rounded-lg">
+                <div className="mb-4 bg-yellow-50 p-3 rounded-lg animate-in slide-in-from-top-2">
                     <p className="text-xs font-bold text-yellow-800 uppercase mb-2">Pending Requests</p>
                     {requests.map((req, i) => (
-                        <div key={i} className="flex justify-between items-center mb-2">
+                        <div key={i} className="flex justify-between items-center mb-2 last:mb-0">
                             <span className="text-sm font-bold">{req.username}</span>
-                            <button onClick={() => acceptRequest(req)} className="bg-blue-600 text-white text-xs px-3 py-1 rounded">Accept</button>
+                            <button onClick={() => acceptRequest(req)} className="bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700">Accept</button>
                         </div>
                     ))}
                 </div>
@@ -7139,27 +7159,32 @@ const FriendManager = ({ user, db, appId }) => {
 
             {/* Search */}
             <div className="flex gap-2 mb-4">
-                <input className="border p-2 rounded w-full text-sm" placeholder="Find people..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)}/>
-                <button onClick={handleSearch} className="bg-slate-800 text-white p-2 rounded"><Search size={16}/></button>
+                <input className="border p-2 rounded-lg w-full text-sm outline-none focus:border-blue-500" placeholder="Find people..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()}/>
+                <button onClick={handleSearch} className="bg-slate-800 text-white p-2 rounded-lg hover:bg-slate-700"><Search size={16}/></button>
             </div>
             
-            {/* Results */}
-            <div className="max-h-32 overflow-y-auto mb-4">
-                {searchResults.map(u => (
-                    <div key={u.uid} className="flex justify-between items-center p-2 hover:bg-slate-50">
-                        <span className="text-sm">{u.username}</span>
-                        <button onClick={() => sendRequest(u)} className="text-blue-600 text-xs font-bold">+ Add</button>
-                    </div>
-                ))}
-            </div>
+            {/* Search Results */}
+            {searchResults.length > 0 && (
+                <div className="max-h-32 overflow-y-auto mb-4 border border-slate-100 rounded-lg">
+                    {searchResults.map(u => (
+                        <div key={u.uid} className="flex justify-between items-center p-2 hover:bg-slate-50 border-b border-slate-50 last:border-0">
+                            <span className="text-sm font-medium">{u.username}</span>
+                            <button onClick={() => sendRequest(u)} className="text-blue-600 text-xs font-bold hover:bg-blue-50 px-2 py-1 rounded">+ Add</button>
+                        </div>
+                    ))}
+                </div>
+            )}
 
             {/* Friend List */}
             <div>
                 <p className="text-xs font-bold text-slate-400 uppercase mb-2">My Friends ({friends.length})</p>
                 <div className="flex flex-wrap gap-2">
                     {friends.map((f, i) => (
-                        <span key={i} className="bg-slate-100 text-slate-700 px-2 py-1 rounded text-xs font-bold">{f.username}</span>
+                        <span key={i} className="bg-slate-100 text-slate-700 px-2 py-1 rounded text-xs font-bold flex items-center gap-1">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div> {f.username}
+                        </span>
                     ))}
+                    {friends.length === 0 && <p className="text-xs text-slate-400 italic">No friends yet.</p>}
                 </div>
             </div>
         </div>
@@ -7193,7 +7218,7 @@ const VideoCallModal = ({ roomName, onClose, username }) => {
     );
 };
 
-// --- COMPONENT: CHAT SYSTEM (Updated with Video Calls) ---
+// --- COMPONENT: CHAT SYSTEM (FIXED & ADDED GROUP CHAT) ---
 const ChatSystem = ({ user, db, appId }) => {
     const [activeChat, setActiveChat] = useState(null);
     const [chats, setChats] = useState([]);
@@ -7201,17 +7226,21 @@ const ChatSystem = ({ user, db, appId }) => {
     const [newMessage, setNewMessage] = useState('');
     const [chatImage, setChatImage] = useState(null);
     const [friends, setFriends] = useState([]);
+    
+    // Group Chat States
     const [showCreateGroup, setShowCreateGroup] = useState(false);
     const [newGroupName, setNewGroupName] = useState('');
     const [selectedMembers, setSelectedMembers] = useState([]);
     
-    // --- NEW: Video Call State ---
-    const [activeCall, setActiveCall] = useState(null); // Stores room name if in call
+    const [activeCall, setActiveCall] = useState(null);
 
     // 1. Fetch My Chats
     useEffect(() => {
+        if (!user?.uid) return;
         const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_chats_v1'), where('participants', 'array-contains', user.uid), orderBy('lastUpdated', 'desc'));
         const unsub = onSnapshot(q, (s) => setChats(s.docs.map(d => ({id: d.id, ...d.data()}))));
+        
+        // Fetch friends for group creation
         getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', user.uid)).then(s => {
             if(s.exists()) setFriends(s.data().friends || []);
         });
@@ -7237,7 +7266,7 @@ const ChatSystem = ({ user, db, appId }) => {
             senderName: user.username,
             text: customText || newMessage,
             image: imgUrl,
-            type: type, // 'text', 'image', or 'call'
+            type: type,
             timestamp: new Date().toISOString()
         };
 
@@ -7251,24 +7280,62 @@ const ChatSystem = ({ user, db, appId }) => {
         setChatImage(null);
     };
 
-    // --- NEW: Start Video Call Logic ---
+    // --- FIX: Check for existing chat before creating new one ---
+    const startDirectChat = async (friend) => {
+        // Check if chat exists
+        const existingChat = chats.find(c => c.type === 'direct' && c.participants.includes(friend.uid));
+        
+        if (existingChat) {
+            setActiveChat(existingChat);
+        } else {
+            // Create new
+            const ref = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_chats_v1'), { 
+                name: friend.username, 
+                participants: [user.uid, friend.uid], 
+                type: 'direct', 
+                lastMessage: 'Chat started', 
+                lastUpdated: new Date().toISOString() 
+            });
+            setActiveChat({ id: ref.id, name: friend.username, type: 'direct' });
+        }
+    };
+
+    // --- NEW: Handle Group Creation ---
+    const handleCreateGroup = async () => {
+        if (!newGroupName || selectedMembers.length === 0) return alert("Enter name and select members");
+        
+        const participantIds = [user.uid, ...selectedMembers.map(m => m.uid)];
+        
+        const ref = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_chats_v1'), {
+            name: newGroupName,
+            participants: participantIds,
+            type: 'group',
+            createdBy: user.username,
+            lastMessage: 'Group created',
+            lastUpdated: new Date().toISOString()
+        });
+        
+        setActiveChat({ id: ref.id, name: newGroupName, type: 'group' });
+        setShowCreateGroup(false);
+        setNewGroupName('');
+        setSelectedMembers([]);
+    };
+
+    const toggleMemberSelection = (friend) => {
+        if (selectedMembers.find(m => m.uid === friend.uid)) {
+            setSelectedMembers(prev => prev.filter(m => m.uid !== friend.uid));
+        } else {
+            setSelectedMembers(prev => [...prev, friend]);
+        }
+    };
+
     const startVideoCall = async () => {
-        // Generate a unique room name based on Chat ID and Timestamp to avoid collisions
         const roomName = `SwiftNet-${activeChat.id}-${Date.now()}`;
-        
-        // 1. Send a specialized message to the chat
         await handleSendMessage(`📞 Started a Video Call. Click to Join!`, 'call');
-        
-        // 2. Open the modal for the caller immediately
         setActiveCall(roomName);
     };
 
     const joinVideoCall = (text) => {
-        // Extract room name from message text logic (simplified for demo, usually stored in metadata)
-        // We assume the room name is hidden or we just regenerate a consistent one for the chat
-        // For this demo, let's just use the Chat ID + 'Room' for simplicity if clicking old links
-        // OR better: In a real app, store `roomName` in the message object. 
-        // Here we will just open a shared room for the chat:
         setActiveCall(`SwiftNet-${activeChat.id}-General`);
     };
 
@@ -7279,35 +7346,72 @@ const ChatSystem = ({ user, db, appId }) => {
             <div className="fixed bottom-0 right-4 w-80 bg-white shadow-2xl rounded-t-xl border border-slate-300 flex flex-col z-[100]" style={{height: activeChat ? '500px' : 'auto'}}>
                 
                 {/* Header */}
-                <div className="bg-slate-900 text-white p-3 rounded-t-xl flex justify-between items-center cursor-pointer" onClick={() => setActiveChat(null)}>
-                    <div className="font-bold flex items-center gap-2"><MessageCircle size={18}/> {activeChat ? activeChat.name : 'Messaging'}</div>
+                <div className="bg-slate-900 text-white p-3 rounded-t-xl flex justify-between items-center cursor-pointer shadow-md" onClick={() => !activeChat && setShowCreateGroup(false)}>
+                    <div className="font-bold flex items-center gap-2">
+                        {activeChat ? (
+                            <>
+                                <button onClick={(e) => { e.stopPropagation(); setActiveChat(null); }}><ArrowDownLeft size={16}/></button>
+                                <span>{activeChat.name}</span>
+                            </>
+                        ) : (
+                            <><MessageCircle size={18}/> Messaging</>
+                        )}
+                    </div>
                     <div className="flex items-center gap-2">
+                        {!activeChat && (
+                            <button onClick={(e) => { e.stopPropagation(); setShowCreateGroup(!showCreateGroup); }} className="bg-slate-700 p-1.5 rounded-full hover:bg-slate-600 text-xs" title="Create Group">
+                                <Plus size={14} />
+                            </button>
+                        )}
                         {activeChat && (
                             <button onClick={(e) => { e.stopPropagation(); startVideoCall(); }} className="bg-green-600 p-1.5 rounded-full hover:bg-green-500" title="Start Video Call">
                                 <Video size={14} />
                             </button>
                         )}
-                        {activeChat && <button onClick={(e) => {e.stopPropagation(); setActiveChat(null);}}><X size={16}/></button>}
+                        <button onClick={(e) => {e.stopPropagation(); setActiveChat(null); setShowCreateGroup(false);}}><X size={16}/></button>
                     </div>
                 </div>
 
                 {/* Content */}
                 {!activeChat ? (
-                    // Chat List View (Same as before)
+                    // Chat List View
                     <div className="p-4 h-96 overflow-y-auto bg-slate-50">
-                        {/* ... (Keep your existing Chat List code here - omitted for brevity, logic remains same) ... */}
+                        
+                        {/* Group Creation UI */}
+                        {showCreateGroup && (
+                            <div className="mb-4 bg-white p-3 rounded-lg border border-blue-200 shadow-sm animate-in slide-in-from-top-5">
+                                <input className="w-full border-b p-2 mb-2 text-sm outline-none" placeholder="Group Name" value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} />
+                                <p className="text-xs font-bold text-slate-400 mb-2">Select Members:</p>
+                                <div className="max-h-24 overflow-y-auto mb-2">
+                                    {friends.map(f => (
+                                        <div key={f.uid} onClick={() => toggleMemberSelection(f)} className={`flex items-center gap-2 p-1 cursor-pointer text-sm ${selectedMembers.find(m=>m.uid===f.uid) ? 'bg-blue-100 text-blue-700' : ''}`}>
+                                            <div className={`w-3 h-3 border rounded-full ${selectedMembers.find(m=>m.uid===f.uid) ? 'bg-blue-600 border-blue-600' : 'border-slate-400'}`}></div>
+                                            {f.username}
+                                        </div>
+                                    ))}
+                                </div>
+                                <button onClick={handleCreateGroup} className="w-full bg-blue-600 text-white text-xs font-bold py-2 rounded hover:bg-blue-700">Create Group</button>
+                            </div>
+                        )}
+
+                        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Recent Chats</p>
                         {chats.map(chat => (
-                            <div key={chat.id} onClick={() => setActiveChat(chat)} className="p-2 bg-white mb-1 rounded border hover:bg-blue-50 cursor-pointer">
-                                <p className="font-bold text-sm text-slate-800">{chat.name || 'Chat'}</p>
-                                <p className="text-xs text-slate-500 truncate">{chat.lastMessage}</p>
+                            <div key={chat.id} onClick={() => setActiveChat(chat)} className="p-3 bg-white mb-2 rounded-xl border border-slate-100 hover:bg-blue-50 cursor-pointer shadow-sm transition-colors flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${chat.type === 'group' ? 'bg-purple-500' : 'bg-blue-500'}`}>
+                                    {chat.name[0].toUpperCase()}
+                                </div>
+                                <div className="overflow-hidden">
+                                    <p className="font-bold text-sm text-slate-800 truncate">{chat.name}</p>
+                                    <p className="text-xs text-slate-500 truncate">{chat.lastMessage}</p>
+                                </div>
                             </div>
                         ))}
+                        
+                        <p className="text-xs font-bold text-slate-400 uppercase mt-4 mb-2">Start Chat</p>
                         {friends.map(f => (
-                            <div key={f.uid} onClick={async () => {
-                                const ref = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_chats_v1'), { name: f.username, participants: [user.uid, f.uid], type: 'direct', lastMessage: 'Chat started', lastUpdated: new Date().toISOString() });
-                                setActiveChat({ id: ref.id, name: f.username });
-                            }} className="flex items-center gap-2 p-2 hover:bg-slate-100 cursor-pointer">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div><span className="text-sm">{f.username}</span>
+                            <div key={f.uid} onClick={() => startDirectChat(f)} className="flex items-center gap-3 p-2 hover:bg-slate-100 cursor-pointer rounded-lg">
+                                <div className="w-8 h-8 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold text-xs">{f.username[0]}</div>
+                                <span className="text-sm font-medium">{f.username}</span>
                             </div>
                         ))}
                     </div>
@@ -7316,8 +7420,8 @@ const ChatSystem = ({ user, db, appId }) => {
                     <>
                         <div className="flex-1 p-3 overflow-y-auto bg-slate-100 flex flex-col gap-2">
                             {messages.map((m, i) => (
-                                <div key={i} className={`max-w-[85%] p-2 rounded-lg text-sm ${m.type === 'call' ? 'bg-slate-800 text-white self-center text-center w-full' : m.senderId === user.uid ? 'self-end bg-blue-600 text-white' : 'self-start bg-white border'}`}>
-                                    {m.type === 'group' && <p className="text-[9px] opacity-70 mb-1">{m.senderName}</p>}
+                                <div key={i} className={`max-w-[85%] p-2 rounded-lg text-sm ${m.type === 'call' ? 'bg-slate-800 text-white self-center text-center w-full' : m.senderId === user.uid ? 'self-end bg-blue-600 text-white rounded-tr-none' : 'self-start bg-white border rounded-tl-none'}`}>
+                                    {activeChat.type === 'group' && m.senderId !== user.uid && <p className="text-[9px] font-bold opacity-60 mb-1">{m.senderName}</p>}
                                     {m.image && <img src={m.image} className="rounded mb-1 max-w-full" alt="sent"/>}
                                     
                                     {/* Video Call Message Type */}
@@ -7335,11 +7439,11 @@ const ChatSystem = ({ user, db, appId }) => {
                             ))}
                         </div>
                         <div className="p-2 bg-white border-t">
-                            {chatImage && <div className="text-xs text-green-600 mb-1 flex justify-between">Image selected <button onClick={()=>setChatImage(null)} className="text-red-500">x</button></div>}
+                            {chatImage && <div className="text-xs text-green-600 mb-1 flex justify-between bg-green-50 p-1 rounded">Image selected <button onClick={()=>setChatImage(null)} className="text-red-500 font-bold">x</button></div>}
                             <div className="flex gap-2">
                                 <label className="cursor-pointer text-slate-400 hover:text-blue-600 p-2"><Camera size={20}/><input type="file" className="hidden" accept="image/*" onChange={e => setChatImage(e.target.files[0])}/></label>
-                                <input className="flex-1 border rounded-full px-3 text-sm outline-none" placeholder="Type..." value={newMessage} onChange={e=>setNewMessage(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleSendMessage()}/>
-                                <button onClick={() => handleSendMessage()} className="text-blue-600 p-2"><Send size={20}/></button>
+                                <input className="flex-1 border rounded-full px-3 text-sm outline-none focus:border-blue-500" placeholder="Type..." value={newMessage} onChange={e=>setNewMessage(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleSendMessage()}/>
+                                <button onClick={() => handleSendMessage()} className="text-blue-600 p-2 hover:bg-blue-50 rounded-full"><Send size={20}/></button>
                             </div>
                         </div>
                     </>
