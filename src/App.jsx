@@ -7194,7 +7194,8 @@ const FriendManager = ({ user, db, appId }) => {
 // --- COMPONENT: VIDEO CALL MODAL (Jitsi Embed) ---
 const VideoCallModal = ({ roomName, onClose, username }) => {
     // Generates a unique, secure room URL
-    const jitsiUrl = `https://meet.jit.si/${roomName}#config.prejoinPageEnabled=false&userInfo.displayName="${username}"`;
+    // Using a community server (Guifi.net) that allows anonymous rooms
+const jitsiUrl = `https://meet.guifi.net/${roomName}#config.prejoinPageEnabled=false&userInfo.displayName="${username}"`;
 
     return (
         <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col animate-in zoom-in-95 duration-300">
