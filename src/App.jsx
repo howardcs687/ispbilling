@@ -7219,7 +7219,7 @@ const jitsiUrl = `https://meet.guifi.net/${roomName}#config.prejoinPageEnabled=f
     );
 };
 
-// --- COMPONENT: CHAT SYSTEM (FIXED & ADDED GROUP CHAT) ---
+// --- COMPONENT: CHAT SYSTEM (FIXED VIDEO CALLS) ---
 const ChatSystem = ({ user, db, appId }) => {
     const [activeChat, setActiveChat] = useState(null);
     const [chats, setChats] = useState([]);
@@ -7241,7 +7241,6 @@ const ChatSystem = ({ user, db, appId }) => {
         const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_chats_v1'), where('participants', 'array-contains', user.uid), orderBy('lastUpdated', 'desc'));
         const unsub = onSnapshot(q, (s) => setChats(s.docs.map(d => ({id: d.id, ...d.data()}))));
         
-        // Fetch friends for group creation
         getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_users_v1', user.uid)).then(s => {
             if(s.exists()) setFriends(s.data().friends || []);
         });
@@ -7281,15 +7280,11 @@ const ChatSystem = ({ user, db, appId }) => {
         setChatImage(null);
     };
 
-    // --- FIX: Check for existing chat before creating new one ---
     const startDirectChat = async (friend) => {
-        // Check if chat exists
         const existingChat = chats.find(c => c.type === 'direct' && c.participants.includes(friend.uid));
-        
         if (existingChat) {
             setActiveChat(existingChat);
         } else {
-            // Create new
             const ref = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_chats_v1'), { 
                 name: friend.username, 
                 participants: [user.uid, friend.uid], 
@@ -7301,12 +7296,9 @@ const ChatSystem = ({ user, db, appId }) => {
         }
     };
 
-    // --- NEW: Handle Group Creation ---
     const handleCreateGroup = async () => {
         if (!newGroupName || selectedMembers.length === 0) return alert("Enter name and select members");
-        
         const participantIds = [user.uid, ...selectedMembers.map(m => m.uid)];
-        
         const ref = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_chats_v1'), {
             name: newGroupName,
             participants: participantIds,
@@ -7315,7 +7307,6 @@ const ChatSystem = ({ user, db, appId }) => {
             lastMessage: 'Group created',
             lastUpdated: new Date().toISOString()
         });
-        
         setActiveChat({ id: ref.id, name: newGroupName, type: 'group' });
         setShowCreateGroup(false);
         setNewGroupName('');
@@ -7330,23 +7321,31 @@ const ChatSystem = ({ user, db, appId }) => {
         }
     };
 
+    // --- FIX IS HERE ---
     const startVideoCall = async () => {
+        // 1. Generate unique Room ID
         const roomName = `SwiftNet-${activeChat.id}-${Date.now()}`;
-        await handleSendMessage(`📞 Started a Video Call. Click to Join!`, 'call');
+        
+        // 2. Embed the Room ID into the message text with a separator "||"
+        await handleSendMessage(`JOIN_CALL||${roomName}`, 'call');
+        
+        // 3. Join that specific room
         setActiveCall(roomName);
     };
 
-    const joinVideoCall = (text) => {
-        setActiveCall(`SwiftNet-${activeChat.id}-General`);
+    const joinVideoCall = (messageText) => {
+        // 1. Extract the Room ID from the message
+        const roomName = messageText.split('||')[1]; 
+        if(roomName) setActiveCall(roomName);
+        else alert("Error: Invalid Room ID");
     };
+    // -------------------
 
     return (
         <>
             {activeCall && <VideoCallModal roomName={activeCall} username={user.username} onClose={() => setActiveCall(null)} />}
 
             <div className="fixed bottom-0 right-4 w-80 bg-white shadow-2xl rounded-t-xl border border-slate-300 flex flex-col z-[100]" style={{height: activeChat ? '500px' : 'auto'}}>
-                
-                {/* Header */}
                 <div className="bg-slate-900 text-white p-3 rounded-t-xl flex justify-between items-center cursor-pointer shadow-md" onClick={() => !activeChat && setShowCreateGroup(false)}>
                     <div className="font-bold flex items-center gap-2">
                         {activeChat ? (
@@ -7360,25 +7359,17 @@ const ChatSystem = ({ user, db, appId }) => {
                     </div>
                     <div className="flex items-center gap-2">
                         {!activeChat && (
-                            <button onClick={(e) => { e.stopPropagation(); setShowCreateGroup(!showCreateGroup); }} className="bg-slate-700 p-1.5 rounded-full hover:bg-slate-600 text-xs" title="Create Group">
-                                <Plus size={14} />
-                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); setShowCreateGroup(!showCreateGroup); }} className="bg-slate-700 p-1.5 rounded-full hover:bg-slate-600 text-xs" title="Create Group"><Plus size={14} /></button>
                         )}
                         {activeChat && (
-                            <button onClick={(e) => { e.stopPropagation(); startVideoCall(); }} className="bg-green-600 p-1.5 rounded-full hover:bg-green-500" title="Start Video Call">
-                                <Video size={14} />
-                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); startVideoCall(); }} className="bg-green-600 p-1.5 rounded-full hover:bg-green-500" title="Start Video Call"><Video size={14} /></button>
                         )}
                         <button onClick={(e) => {e.stopPropagation(); setActiveChat(null); setShowCreateGroup(false);}}><X size={16}/></button>
                     </div>
                 </div>
 
-                {/* Content */}
                 {!activeChat ? (
-                    // Chat List View
                     <div className="p-4 h-96 overflow-y-auto bg-slate-50">
-                        
-                        {/* Group Creation UI */}
                         {showCreateGroup && (
                             <div className="mb-4 bg-white p-3 rounded-lg border border-blue-200 shadow-sm animate-in slide-in-from-top-5">
                                 <input className="w-full border-b p-2 mb-2 text-sm outline-none" placeholder="Group Name" value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} />
@@ -7394,20 +7385,13 @@ const ChatSystem = ({ user, db, appId }) => {
                                 <button onClick={handleCreateGroup} className="w-full bg-blue-600 text-white text-xs font-bold py-2 rounded hover:bg-blue-700">Create Group</button>
                             </div>
                         )}
-
                         <p className="text-xs font-bold text-slate-400 uppercase mb-2">Recent Chats</p>
                         {chats.map(chat => (
                             <div key={chat.id} onClick={() => setActiveChat(chat)} className="p-3 bg-white mb-2 rounded-xl border border-slate-100 hover:bg-blue-50 cursor-pointer shadow-sm transition-colors flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${chat.type === 'group' ? 'bg-purple-500' : 'bg-blue-500'}`}>
-                                    {chat.name[0].toUpperCase()}
-                                </div>
-                                <div className="overflow-hidden">
-                                    <p className="font-bold text-sm text-slate-800 truncate">{chat.name}</p>
-                                    <p className="text-xs text-slate-500 truncate">{chat.lastMessage}</p>
-                                </div>
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${chat.type === 'group' ? 'bg-purple-500' : 'bg-blue-500'}`}>{chat.name[0].toUpperCase()}</div>
+                                <div className="overflow-hidden"><p className="font-bold text-sm text-slate-800 truncate">{chat.name}</p><p className="text-xs text-slate-500 truncate">{chat.lastMessage}</p></div>
                             </div>
                         ))}
-                        
                         <p className="text-xs font-bold text-slate-400 uppercase mt-4 mb-2">Start Chat</p>
                         {friends.map(f => (
                             <div key={f.uid} onClick={() => startDirectChat(f)} className="flex items-center gap-3 p-2 hover:bg-slate-100 cursor-pointer rounded-lg">
@@ -7417,7 +7401,6 @@ const ChatSystem = ({ user, db, appId }) => {
                         ))}
                     </div>
                 ) : (
-                    // Active Chat View
                     <>
                         <div className="flex-1 p-3 overflow-y-auto bg-slate-100 flex flex-col gap-2">
                             {messages.map((m, i) => (
@@ -7425,13 +7408,10 @@ const ChatSystem = ({ user, db, appId }) => {
                                     {activeChat.type === 'group' && m.senderId !== user.uid && <p className="text-[9px] font-bold opacity-60 mb-1">{m.senderName}</p>}
                                     {m.image && <img src={m.image} className="rounded mb-1 max-w-full" alt="sent"/>}
                                     
-                                    {/* Video Call Message Type */}
                                     {m.type === 'call' ? (
                                         <div>
                                             <p className="font-bold mb-2 flex items-center justify-center gap-2"><Video size={16}/> Incoming Video Call</p>
-                                            <button onClick={() => joinVideoCall(m.text)} className="bg-green-600 hover:bg-green-500 text-white px-4 py-1 rounded-full text-xs font-bold w-full">
-                                                Join Call
-                                            </button>
+                                            <button onClick={() => joinVideoCall(m.text)} className="bg-green-600 hover:bg-green-500 text-white px-4 py-1 rounded-full text-xs font-bold w-full">Join Call</button>
                                         </div>
                                     ) : (
                                         <p>{m.text}</p>
