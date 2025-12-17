@@ -38,6 +38,7 @@ import { 
   deleteDoc, 
   query, 
   where,
+  limit,
   getDoc,
   orderBy,
   serverTimestamp,
