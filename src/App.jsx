@@ -558,7 +558,7 @@ const HotspotPortal = ({ onLogin, db, appId }) => {
                 <div className="animate-in zoom-in-95">
                     <p className="text-xs font-bold text-slate-400 uppercase mb-4">Ad ending in {timeLeft}s</p>
                     <div className="relative rounded-xl overflow-hidden bg-black aspect-video shadow-lg mb-6 group">
-                        <video autoPlay muted className="w-full h-full object-cover">
+                        <video autoPlay muted playsInline className="w-full h-full object-cover">
                             <source src={adData.videoUrl} type="video/mp4" />
                         </video>
                         <div className="absolute inset-0 bg-black/10"></div>

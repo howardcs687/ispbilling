@@ -40,3 +40,50 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  #root {
+    padding: 1.5rem;
+  }
+  .logo {
+    height: 5em;
+    padding: 1.2em;
+  }
+  .card {
+    padding: 1.5em;
+  }
+}
+
+@media (max-width: 768px) {
+  #root {
+    padding: 1rem;
+    max-width: 100%;
+  }
+  .logo {
+    height: 4em;
+    padding: 1em;
+  }
+  .card {
+    padding: 1em;
+  }
+  h1 {
+    font-size: 2.5em;
+  }
+}
+
+@media (max-width: 480px) {
+  #root {
+    padding: 0.5rem;
+  }
+  .logo {
+    height: 3em;
+    padding: 0.8em;
+  }
+  .card {
+    padding: 0.8em;
+  }
+  h1 {
+    font-size: 2em;
+  }
+}
