@@ -588,20 +588,89 @@ const HotspotPortal = ({ onLogin, db, appId }) => {
 };
 
 // --- [FEATURE 4] ADMIN AD MANAGER ---
+// --- [UPDATED FEATURE] ADMIN AD MANAGER WITH VIDEO UPLOAD ---
 const AdManager = ({ db, appId }) => {
     const [stats, setStats] = useState({ views: 0, revenue: 0 });
+    const [ads, setAds] = useState([]);
+    const [isUploading, setIsUploading] = useState(false);
+    
+    // New Ad Form State
+    const [newAd, setNewAd] = useState({ 
+        sponsor: '', 
+        videoFile: null 
+    });
+
+    // 1. Fetch Stats & Existing Ads
     useEffect(() => {
-        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_ad_views_v1'));
-        const unsub = onSnapshot(q, (snapshot) => {
+        // Stats Listener
+        const qStats = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_ad_views_v1'));
+        const unsubStats = onSnapshot(qStats, (snapshot) => {
             let totalViews = 0, totalRev = 0;
             snapshot.forEach(doc => { const data = doc.data(); totalViews += 1; totalRev += (data.revenue || 0); });
             setStats({ views: totalViews, revenue: totalRev });
         });
-        return () => unsub();
+
+        // Campaigns Listener
+        const qAds = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_ads_campaigns'));
+        const unsubAds = onSnapshot(qAds, (snapshot) => {
+            setAds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        });
+
+        return () => { unsubStats(); unsubAds(); };
     }, [db, appId]);
+
+    // 2. Handle File Selection
+    const handleFileChange = (e) => {
+        if(e.target.files[0]) {
+            setNewAd({ ...newAd, videoFile: e.target.files[0] });
+        }
+    };
+
+    // 3. Upload Video & Save Campaign
+    const handleUpload = async () => {
+        if (!newAd.sponsor || !newAd.videoFile) return alert("Please fill sponsor name and select a video.");
+        
+        setIsUploading(true);
+        try {
+            // A. Upload to Firebase Storage
+            // We use a timestamp in the name to make it unique
+            const videoRef = storageRef(storage, `ad_videos/${Date.now()}_${newAd.videoFile.name}`);
+            
+            // Uploading...
+            const snapshot = await uploadBytes(videoRef, newAd.videoFile);
+            
+            // Get the public URL
+            const downloadURL = await getDownloadURL(snapshot.ref);
+
+            // B. Save Metadata to Firestore
+            // We set status: 'active' so it shows up immediately
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_ads_campaigns'), {
+                sponsor: newAd.sponsor,
+                videoUrl: downloadURL,
+                status: 'active',
+                dateCreated: new Date().toISOString()
+            });
+
+            alert("Ad Campaign Created Successfully!");
+            setNewAd({ sponsor: '', videoFile: null }); // Reset form
+
+        } catch (error) {
+            console.error("Upload failed", error);
+            alert("Error uploading video: " + error.message);
+        }
+        setIsUploading(false);
+    };
+
+    // 4. Delete/Stop Campaign
+    const handleDelete = async (id) => {
+        if(confirm("Stop and delete this ad campaign?")) {
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_ads_campaigns', id));
+        }
+    };
 
     return (
         <div className="space-y-6 animate-in fade-in">
+            {/* Stats Header */}
             <div className="bg-gradient-to-r from-purple-900 to-slate-900 p-8 rounded-2xl text-white shadow-xl relative overflow-hidden">
                 <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16"></div>
                 <div className="relative z-10 flex justify-between items-center">
@@ -609,10 +678,71 @@ const AdManager = ({ db, appId }) => {
                     <div className="text-right"><p className="text-xs font-bold uppercase tracking-widest text-purple-300">Total Earnings</p><p className="text-4xl font-black text-white">₱{stats.revenue.toFixed(2)}</p></div>
                 </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><div className="flex items-center gap-3 mb-2"><div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Eye size={20}/></div><span className="text-sm font-bold text-slate-500 uppercase">Total Views</span></div><p className="text-2xl font-black text-slate-800">{stats.views}</p></div>
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><div className="flex items-center gap-3 mb-2"><div className="bg-green-50 p-2 rounded-lg text-green-600"><Clock size={20}/></div><span className="text-sm font-bold text-slate-500 uppercase">Time Sold</span></div><p className="text-2xl font-black text-slate-800">{((stats.views * 15) / 60).toFixed(1)} <span className="text-sm font-medium text-slate-400">mins</span></p></div>
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm"><div className="flex items-center gap-3 mb-2"><div className="bg-orange-50 p-2 rounded-lg text-orange-600"><TrendingUp size={20}/></div><span className="text-sm font-bold text-slate-500 uppercase">eCPM</span></div><p className="text-2xl font-black text-slate-800">₱500.00</p></div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Upload Form */}
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit">
+                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><UploadCloud size={20}/> Upload New Video Ad</h3>
+                    
+                    <div className="space-y-4">
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase">Sponsor Name</label>
+                            <input 
+                                className="w-full border p-3 rounded-xl mt-1" 
+                                placeholder="e.g. Aling Nena Store" 
+                                value={newAd.sponsor} 
+                                onChange={e => setNewAd({...newAd, sponsor: e.target.value})}
+                            />
+                        </div>
+
+                        <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:bg-slate-50 transition-colors relative">
+                            <input 
+                                type="file" 
+                                accept="video/mp4,video/webm" 
+                                onChange={handleFileChange} 
+                                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                            />
+                            {newAd.videoFile ? (
+                                <div className="text-green-600 font-bold flex flex-col items-center">
+                                    <FileBarChart size={32} className="mb-2"/>
+                                    {newAd.videoFile.name}
+                                    <span className="text-xs font-normal text-slate-500">{(newAd.videoFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                                </div>
+                            ) : (
+                                <div className="text-slate-400 flex flex-col items-center">
+                                    <Video size={32} className="mb-2"/>
+                                    <span className="text-sm font-bold">Click to Select Video</span>
+                                    <span className="text-xs">MP4 or WebM (Max 10MB recommended)</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <button 
+                            onClick={handleUpload} 
+                            disabled={isUploading}
+                            className="w-full bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700 disabled:opacity-50 flex justify-center gap-2"
+                        >
+                            {isUploading ? <Loader2 className="animate-spin"/> : <Upload size={20}/>}
+                            {isUploading ? 'Uploading Video...' : 'Launch Campaign'}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Active Campaigns List */}
+                <div className="space-y-4">
+                    <h3 className="font-bold text-slate-800">Active Campaigns</h3>
+                    {ads.map(ad => (
+                        <div key={ad.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-start gap-4">
+                            <video src={ad.videoUrl} className="w-24 h-16 bg-black rounded-lg object-cover" muted />
+                            <div className="flex-1">
+                                <h4 className="font-bold text-slate-800">{ad.sponsor}</h4>
+                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded font-bold uppercase">{ad.status}</span>
+                            </div>
+                            <button onClick={() => handleDelete(ad.id)} className="text-red-400 hover:text-red-600 p-2"><Trash2 size={18}/></button>
+                        </div>
+                    ))}
+                    {ads.length === 0 && <div className="p-8 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-300">No active ads. The default video will play.</div>}
+                </div>
             </div>
         </div>
     );
