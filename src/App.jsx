@@ -5168,7 +5168,16 @@ const CashierMode = ({ subscribers, db, appId }) => {
   const [mode, setMode] = useState('bill'); // 'bill', 'wallet', or 'prepaid'
   const [processing, setProcessing] = useState(false);
 
-  const filtered = queryText ? subscribers.filter(s => s.username.toLowerCase().includes(queryText.toLowerCase()) || s.accountNumber.includes(queryText)) : [];
+  const filtered = queryText 
+    ? subscribers.filter(s => {
+        // Ensure username and accountNumber exist before calling string methods
+        const name = s.username ? s.username.toLowerCase() : "";
+        const accNo = s.accountNumber ? s.accountNumber : "";
+        const search = queryText.toLowerCase();
+
+        return name.includes(search) || accNo.includes(queryText);
+      }) 
+    : [];
 
   const handleTransaction = async () => {
       if (!amount || !selectedUser) return;
