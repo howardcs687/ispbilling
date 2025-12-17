@@ -4481,6 +4481,49 @@ const DigitalGoodsAdmin = ({ db, appId }) => {
   );
 };
 
+// --- [NEW COMPONENT] PAYMENT HISTORY FOR PARTIALS ---
+const PaymentHistoryTable = ({ payments, userId }) => {
+  const myPayments = payments.filter(p => p.userId === userId && p.status === 'verified');
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in">
+      <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+        <h3 className="font-bold text-slate-700 flex items-center gap-2">
+          <History size={18} className="text-blue-600"/> Payment & Installment History
+        </h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-slate-50 text-slate-500 border-b">
+            <tr>
+              <th className="px-4 py-3 font-bold">Date</th>
+              <th className="px-4 py-3 font-bold">Reference</th>
+              <th className="px-4 py-3 font-bold">Amount Paid</th>
+              <th className="px-4 py-3 font-bold text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {myPayments.map((p, i) => (
+              <tr key={i} className="hover:bg-slate-50 transition-colors">
+                <td className="px-4 py-3 text-slate-500">{new Date(p.date).toLocaleDateString()}</td>
+                <td className="px-4 py-3 font-mono font-bold text-blue-600 text-xs">{p.refNumber}</td>
+                <td className="px-4 py-3 font-bold text-emerald-600">₱{parseFloat(p.amount || 0).toLocaleString()}</td>
+                <td className="px-4 py-3 text-right">
+                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-green-100 text-green-700">
+                     Posted
+                   </span>
+                </td>
+              </tr>
+            ))}
+            {myPayments.length === 0 && (
+              <tr><td colSpan="4" className="p-8 text-center text-slate-400 italic text-xs">No payment history found.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
 
 const AdminAnalytics = ({ subscribers, payments, tickets, db, appId }) => {
   const activeUsers = subscribers.filter(s => s.status === 'active').length;
@@ -6469,57 +6512,66 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   };
   
   const handleVerifyPayment = async (paymentId, userId, amountPaid, refNumber) => { 
-      if (!confirm("Verify payment and generate Official Receipt?")) return; 
-      
-      const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId);
-      const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) return alert("User error.");
-      const userData = userSnap.data();
+      // 1. Ask Admin for the exact amount received (supports partials)
+      const confirmedAmountStr = prompt(`Confirm actual amount received for Ref: ${refNumber}`, amountPaid);
+      if (confirmedAmountStr === null) return; 
+      const confirmedAmount = parseFloat(confirmedAmountStr);
 
+      if (!confirm(`Post ₱${confirmedAmount.toLocaleString()} to user account?`)) return; 
+      
       try { 
+          const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userId);
+          const userSnap = await getDoc(userRef);
+          if (!userSnap.exists()) return alert("User not found.");
+          const userData = userSnap.data();
+
+          // 2. Update the Payment Record
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION, paymentId), { 
               status: 'verified', 
+              amount: confirmedAmount, // Save the actual verified partial amount
               verifiedAt: new Date().toISOString() 
           }); 
 
-          const finalAmount = parseFloat(amountPaid) || 1500;
-          const newBalance = (userData.balance || 0) - finalAmount;
+          // 3. Subtract from current balance
+          const oldBalance = userData.balance || 0;
+          const newBalance = Math.max(0, oldBalance - confirmedAmount);
 
           await updateDoc(userRef, { 
               balance: newBalance, 
-              status: 'active', 
+              status: newBalance > 0 ? 'active' : 'active', 
               lastPaymentDate: new Date().toISOString(),
               points: increment(50) 
           }); 
 
-          const date = new Date();
-          const monthName = date.toLocaleString('default', { month: 'long', year: 'numeric' });
-          
+          // 4. Generate Receipt Doc for the subscriber to see
           await addDoc(collection(db, 'artifacts', appId, 'public', 'data', INVOICES_COLLECTION), {
               userId: userId,
-              title: `Official Receipt - ${monthName}`,
-              date: date.toISOString(),
+              title: `Official Receipt (Partial) - ${refNumber}`,
+              date: new Date().toISOString(),
               type: 'Receipt', 
-              refNumber: refNumber, 
-              amount: finalAmount, 
+              amount: confirmedAmount, 
               status: 'Paid',
-              items: [{ description: 'Payment Verified', amount: finalAmount }]
+              items: [
+                { description: `Payment Received via ${refNumber}`, amount: confirmedAmount },
+                { description: `Remaining Balance Carried Over`, amount: newBalance }
+              ]
           });
 
+          // 5. SEND AUTOMATIC EMAIL
           if (userData.email) {
               await sendCustomEmail('receipt', {
                   name: userData.username,
                   email: userData.email,
-                  amount: `₱${finalAmount.toLocaleString()}`,
+                  amount: `₱${confirmedAmount.toLocaleString()}`,
                   refNumber: refNumber,
-                  message: `Payment verified! We have added the Official Receipt to your Documents tab.`
+                  message: `Payment Verified! We received your partial payment of ₱${confirmedAmount.toLocaleString()}. Your remaining balance of ₱${newBalance.toLocaleString()} will be added to your next statement of account.`
               });
           }
 
-          alert("Success! Receipt generated & Email sent."); 
+          alert(`Success! ₱${confirmedAmount} posted. New Balance: ₱${newBalance}`); 
       } catch (e) { 
           console.error(e);
-          alert("Failed: " + e.message); 
+          alert("Error posting payment: " + e.message); 
       } 
   };
   
