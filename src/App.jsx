@@ -1059,53 +1059,6 @@ const PeakUsageGraph = ({ db, appId }) => {
   );
 };
 
-const OnboardingTour = () => {
-  const [step, setStep] = useState(0);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    // Check if user has seen tour
-    const hasSeen = localStorage.getItem('swiftnet_tour_completed');
-    if (!hasSeen) setVisible(true);
-  }, []);
-
-  if (!visible) return null;
-
-  const steps = [
-    { title: "Welcome to SwiftNet!", msg: "This is your new dashboard. Let's take a quick tour." },
-    { title: "Check Your Bill", msg: "See your balance and pay instantly via QR code in the Overview tab." },
-    { title: "Need Help?", msg: "Use the Support tab to file tickets or request a video call." },
-    { title: "All Set!", msg: "You are ready to explore. Enjoy the speed!" }
-  ];
-
-  const handleNext = () => {
-    if (step < steps.length - 1) setStep(step + 1);
-    else {
-        localStorage.setItem('swiftnet_tour_completed', 'true');
-        setVisible(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
-        <div className="bg-white p-8 rounded-2xl max-w-sm w-full shadow-2xl text-center">
-            <LifeBuoy size={48} className="mx-auto text-blue-600 mb-4"/>
-            <h3 className="text-xl font-bold text-slate-800 mb-2">{steps[step].title}</h3>
-            <p className="text-slate-500 mb-6">{steps[step].msg}</p>
-            <div className="flex gap-2">
-                <button onClick={() => { setVisible(false); localStorage.setItem('swiftnet_tour_completed', 'true'); }} className="flex-1 py-3 text-slate-400 font-bold text-sm">Skip</button>
-                <button onClick={handleNext} className="flex-[2] bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700">
-                    {step === steps.length - 1 ? 'Finish' : 'Next'}
-                </button>
-            </div>
-            <div className="flex justify-center gap-1 mt-4">
-                {steps.map((_, i) => <div key={i} className={`w-2 h-2 rounded-full ${i === step ? 'bg-blue-600' : 'bg-slate-200'}`}></div>)}
-            </div>
-        </div>
-    </div>
-  );
-};
-
 const ApplicationWizard = ({ plan, onClose, onSubmit, db, appId }) => {
   const [step, setStep] = useState(1);
   const [serviceStatus, setServiceStatus] = useState(null); 
@@ -3361,74 +3314,7 @@ const SmartDiagnostics = ({ user, db, appId, onTicketCreate }) => {
   );
 };
 
-// --- LIVE TRAFFIC WIDGET ---
-const LiveTrafficWidget = () => {
-  // Uses the global 'app' variable initialized at the top
-  const [data, setData] = useState([]);
-  const [currentSpeed, setCurrentSpeed] = useState({ rx: 0, tx: 0 });
 
-  useEffect(() => {
-    const db = getDatabase(app);
-    const trafficRef = ref(db, 'monitor/traffic');
-
-    const unsubscribe = onValue(trafficRef, (snapshot) => {
-        const traffic = snapshot.val();
-        if (traffic) {
-            const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            setCurrentSpeed({ rx: traffic.rx, tx: traffic.tx });
-            setData(prev => {
-                const newData = [...prev, { name: now, download: traffic.rx, upload: traffic.tx }];
-                if (newData.length > 20) newData.shift();
-                return newData;
-            });
-        }
-    });
-    return () => unsubscribe();
-  }, []);
-
-  return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 animate-in fade-in w-full">
-        <div className="flex justify-between items-center mb-6">
-            <div>
-                <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                    <Activity className="text-blue-600" size={20}/> Live Network Load
-                </h3>
-                <p className="text-xs text-slate-500">Real-time usage across the entire network.</p>
-            </div>
-            <div className="flex gap-4">
-                <div className="text-right">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Download</p>
-                    <p className="text-xl font-black text-blue-600">{currentSpeed.rx} <span className="text-xs text-slate-500">Mbps</span></p>
-                </div>
-                <div className="text-right">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Upload</p>
-                    <p className="text-xl font-black text-green-500">{currentSpeed.tx} <span className="text-xs text-slate-500">Mbps</span></p>
-                </div>
-            </div>
-        </div>
-        <div className="h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data}>
-                    <defs>
-                        <linearGradient id="colorRx" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
-                        </linearGradient>
-                        <linearGradient id="colorTx" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
-                        </linearGradient>
-                    </defs>
-                    <YAxis hide domain={[0, 'auto']} />
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
-                    <Area type="monotone" dataKey="download" stroke="#2563eb" strokeWidth={2} fillOpacity={1} fill="url(#colorRx)" isAnimationActive={false} />
-                    <Area type="monotone" dataKey="upload" stroke="#22c55e" strokeWidth={2} fillOpacity={1} fill="url(#colorTx)" isAnimationActive={false} />
-                </AreaChart>
-            </ResponsiveContainer>
-        </div>
-    </div>
-  );
-};
 
 // --- FEATURE 1: REFERRAL SYSTEM COMPONENT ---
 const ReferralSystem = ({ user }) => {
@@ -4149,7 +4035,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
 
           <MaintenanceBanner db={db} appId={appId} />
           <NetworkStatusWidget db={db} appId={appId} />
-          <LiveTrafficWidget />
+          
            
           {/* Welcome Banner */}
           <div className="relative overflow-hidden rounded-3xl bg-slate-900 text-white p-8 shadow-2xl">
@@ -5716,7 +5602,7 @@ const NetworkStatusManager = ({ db, appId }) => {
 
             <div className="space-y-6">
 
-              <LiveTrafficWidget />
+              
                 {/* Local Network */}
                 <div>
                     <div className="flex items-center gap-2 mb-2">
@@ -6645,7 +6531,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                </div>
               <WeatherWidget />
               <UserTrafficTable app={app} />
-               <LiveTrafficWidget />
+               
                
                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                    <h3 className="font-bold mb-4">Post New Outage/Alert</h3>
@@ -7892,7 +7778,7 @@ const LandingPage = ({ onLoginClick, onNavigate, plans, onQuickPay }) => {
 
       <div className="py-12 bg-slate-50 border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-4">
-          <LiveTrafficWidget />
+          
         </div>
       </div>
 
