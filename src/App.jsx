@@ -3948,7 +3948,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   // --- SUBSCRIBER / COMMUNITY VIEW ---
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <OnboardingTour />
+      
       
       {/* TABS MENU */}
       <div className="flex space-x-2 bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-fit mx-auto mb-6 overflow-x-auto max-w-full">
@@ -5593,7 +5593,7 @@ const NetworkStatusManager = ({ db, appId }) => {
     <div className="space-y-6 animate-in fade-in">
 
       {/* --- NEW: ADDED LIVE USER TABLE HERE --- */}
-        <UserTrafficTable app={app} />
+        
         
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
@@ -5734,141 +5734,6 @@ const PlanManageModal = ({ plan, onClose, onSave }) => {
   );
 };
 
-// --- USER TRAFFIC TABLE COMPONENT ---
-const UserTrafficTable = ({ app }) => {
-  const [users, setUsers] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-
-  // Define visual max limits for the bars (adjust these to match your average plan speeds)
-  const MAX_SPEED_SCALE = 50; // 50 Mbps = 100% bar width
-  const MAX_USAGE_SCALE = 100; // 100 GB = 100% bar width
-
-  useEffect(() => {
-    const db = getDatabase(app);
-    const queuesRef = ref(db, 'monitor/queues');
-
-    const unsubscribe = onValue(queuesRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-            const userList = Object.keys(data).map(key => ({
-                name: key.replace(/[<>]/g, ''), // Remove < > brackets for cleaner look
-                ...data[key]
-            }));
-            // Sort by active usage (Download speed) descending
-            setUsers(userList.sort((a, b) => b.dl - a.dl));
-        } else {
-            setUsers([]);
-        }
-    });
-    return () => unsubscribe();
-  }, [app]);
-
-  const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()));
-
-  // Helper Component for Bars
-  const SpeedBar = ({ value, colorClass, bgClass }) => {
-      // Calculate width percentage, cap at 100%
-      const width = Math.min((value / MAX_SPEED_SCALE) * 100, 100);
-      return (
-          <div className="w-full h-2 bg-slate-100 rounded-full mt-1 overflow-hidden">
-              <div 
-                  className={`h-full rounded-full transition-all duration-500 ${colorClass}`} 
-                  style={{ width: `${width}%` }}
-              ></div>
-          </div>
-      );
-  };
-
-  return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mt-6 animate-in fade-in">
-        <div className="flex justify-between items-center mb-6">
-            <div>
-                <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                    <Activity size={20} className="text-blue-600"/> Live PPP Connections
-                </h3>
-                <p className="text-xs text-slate-500">Real-time bandwidth usage per subscriber.</p>
-            </div>
-            <input 
-                placeholder="Search Subscriber..." 
-                className="border p-2.5 rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500 w-64"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-            />
-        </div>
-
-        <div className="overflow-x-auto max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-            <table className="w-full text-left text-sm border-collapse">
-                <thead className="bg-slate-50 text-slate-500 sticky top-0 z-10 shadow-sm">
-                    <tr>
-                        <th className="p-4 rounded-tl-xl font-bold uppercase text-xs tracking-wider">Subscriber</th>
-                        <th className="p-4 font-bold uppercase text-xs tracking-wider w-48">Download (Live)</th>
-                        <th className="p-4 font-bold uppercase text-xs tracking-wider w-48">Upload (Live)</th>
-                        <th className="p-4 font-bold uppercase text-xs tracking-wider w-48">Session Usage</th>
-                        <th className="p-4 rounded-tr-xl font-bold uppercase text-xs tracking-wider text-right">Uptime</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                    {filteredUsers.map((user, i) => (
-                        <tr key={i} className="hover:bg-blue-50/50 transition-colors group">
-                            <td className="p-4">
-                                <div className="font-bold text-slate-700 text-sm">{user.name}</div>
-                                <div className="text-[10px] text-slate-400 font-mono flex items-center gap-2">
-                                    {user.ip} <span className="w-1 h-1 rounded-full bg-slate-300"></span> {user.mac}
-                                </div>
-                            </td>
-                            
-                            {/* DOWNLOAD BAR */}
-                            <td className="p-4">
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className={`font-mono font-bold ${user.dl > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
-                                        {user.dl} <span className="text-[10px] text-slate-400">Mbps</span>
-                                    </span>
-                                    <ArrowDownCircle size={14} className={user.dl > 0 ? 'text-blue-500' : 'text-slate-200'}/>
-                                </div>
-                                <SpeedBar value={user.dl} colorClass="bg-blue-500" />
-                            </td>
-
-                            {/* UPLOAD BAR */}
-                            <td className="p-4">
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className={`font-mono font-bold ${user.ul > 0 ? 'text-green-600' : 'text-slate-400'}`}>
-                                        {user.ul} <span className="text-[10px] text-slate-400">Mbps</span>
-                                    </span>
-                                    <ArrowUpCircle size={14} className={user.ul > 0 ? 'text-green-500' : 'text-slate-200'}/>
-                                </div>
-                                <SpeedBar value={user.ul} colorClass="bg-green-500" />
-                            </td>
-
-                            {/* USAGE BAR */}
-                            <td className="p-4">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <HardDrive size={14} className="text-slate-400"/>
-                                    <span className="font-bold text-slate-700">
-                                        {user.usage > 1024 ? (user.usage/1024).toFixed(2) + " GB" : user.usage + " MB"}
-                                    </span>
-                                </div>
-                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                    {/* Converts MB to GB for the scale (user.usage / 1024) / 100GB Max * 100% */}
-                                    <div className="h-full bg-slate-400 rounded-full" style={{width: `${Math.min((user.usage/1024/MAX_USAGE_SCALE)*100, 100)}%`}}></div>
-                                </div>
-                            </td>
-
-                            <td className="p-4 text-right">
-                                <span className="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded">
-                                    {user.uptime}
-                                </span>
-                            </td>
-                        </tr>
-                    ))}
-                    {filteredUsers.length === 0 && (
-                        <tr><td colSpan="5" className="p-12 text-center text-slate-400">Waiting for data from MikroTik...</td></tr>
-                    )}
-                </tbody>
-            </table>
-        </div>
-    </div>
-  );
-};
 
 // --- NEW COMPONENT: Admin QR Code Uploader ---
 const PaymentQRSettings = ({ db, appId }) => {
