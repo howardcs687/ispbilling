@@ -6395,7 +6395,6 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                    <div><h2 className="text-2xl font-bold text-slate-800">Network Status Center</h2><p className="text-sm text-slate-500">Manage service outages and maintenance alerts.</p></div>
                </div>
               <WeatherWidget />
-              <UserTrafficTable app={app} />
                
                
                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
