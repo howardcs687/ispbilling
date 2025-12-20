@@ -5842,7 +5842,28 @@ const RetailerDashboard = ({ user, db, appId, onLogout }) => {
   const [goods, setGoods] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [buying, setBuying] = useState(null);
+  
+  // --- NEW STATES FOR TOP-UP FEATURE ---
+  const [showTopUpQR, setShowTopUpQR] = useState(false);
+  const [paymentQRUrl, setPaymentQRUrl] = useState(null);
+  const [topUpForm, setTopUpForm] = useState({ amount: '', ref: '' });
+  const [isSubmittingTopUp, setIsSubmittingTopUp] = useState(false);
 
+  // 1. Fetch Admin Payment QR
+  useEffect(() => {
+    const fetchQR = async () => {
+      try {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'payment_qr');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data().image) {
+          setPaymentQRUrl(docSnap.data().image);
+        }
+      } catch (e) { console.error("QR Fetch Error", e); }
+    };
+    fetchQR();
+  }, [db, appId]);
+
+  // Data Fetching for Shop & Inventory
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', DIGITAL_GOODS_COLLECTION));
     const unsub = onSnapshot(q, (s) => setGoods(s.docs.map(d => ({id: d.id, ...d.data()}))));
@@ -5855,38 +5876,66 @@ const RetailerDashboard = ({ user, db, appId, onLogout }) => {
     return () => unsub();
   }, [user, db, appId]);
 
-  const handleBuy = async (item) => {
-    if((user.walletCredits || 0) < item.wholesalePrice) return alert("Insufficient Wallet Credits. Please top up via Admin.");
-    if(!confirm(`Purchase ${item.name} for ₱${item.wholesalePrice}?`)) return;
+  // --- NEW HANDLER: Submit Top Up Request ---
+  const handleRequestTopUp = async (e) => {
+    e.preventDefault();
+    if(!topUpForm.amount || !topUpForm.ref) return alert("Please fill all fields");
     
+    setIsSubmittingTopUp(true);
+    try {
+        // 1. Create a Payment record for Admin to see in "Payments" tab
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
+            userId: user.uid,
+            username: user.username,
+            amount: parseFloat(topUpForm.amount),
+            refNumber: topUpForm.ref,
+            type: 'Retailer Wallet Top-up',
+            status: 'pending_approval',
+            date: new Date().toISOString()
+        });
+
+        // 2. Create a Ticket to ensure Admin gets a notification
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+            ticketId: Math.floor(Math.random() * 900000).toString(),
+            userId: user.uid,
+            username: user.username,
+            subject: "Retailer Top-up Request",
+            message: `URGENT: Retailer ${user.username} has sent ₱${topUpForm.amount}. Please verify Reference #${topUpForm.ref} and add credits to their wallet.`,
+            status: 'open',
+            date: new Date().toISOString(),
+            isOrder: true
+        });
+
+        alert("Top-up request sent! Admin will verify your payment and load your credits shortly.");
+        setShowTopUpQR(false);
+        setTopUpForm({ amount: '', ref: '' });
+    } catch(e) {
+        alert("Error sending request: " + e.message);
+    }
+    setIsSubmittingTopUp(false);
+  };
+
+  const handleBuy = async (item) => {
+    if((user.walletCredits || 0) < item.wholesalePrice) return alert("Insufficient credits. Please Top Up your wallet first.");
+    if(!confirm(`Purchase ${item.name} for ₱${item.wholesalePrice}?`)) return;
     setBuying(item.id);
     try {
         const newBalance = (user.walletCredits || 0) - item.wholesalePrice;
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id), { walletCredits: newBalance });
-
         const purchaseRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', USER_INVENTORY_COLLECTION), {
             userId: user.uid, itemId: item.id, itemName: item.name, cost: item.wholesalePrice, srp: item.srp,
             dateBought: new Date().toISOString(), status: 'Pending Delivery', credentials: '', customerName: ''
         });
-
         const ticketId = Math.floor(Math.random() * 9000000).toString();
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
             ticketId, userId: user.uid, username: user.username,
             subject: `Retailer Order: ${item.name}`,
-            message: `AUTO-ORDER: Retailer ${user.username} purchased ${item.name}. Please edit their Inventory Item #${purchaseRef.id} with the credentials/code.`,
+            message: `AUTO-ORDER: Retailer ${user.username} purchased ${item.name}. Please fulfill Item #${purchaseRef.id}.`,
             status: 'open', date: new Date().toISOString(), isOrder: true, targetInventoryId: purchaseRef.id
         });
-        alert("Purchase successful! Admin will send credentials shortly.");
-    } catch(e) { console.error(e); alert("Transaction failed."); }
+        alert("Purchase successful!");
+    } catch(e) { alert("Transaction failed."); }
     setBuying(null);
-  };
-
-  const handleMarkSold = async (invItem) => {
-      const customer = prompt("Enter Customer Name (Optional):");
-      if(customer === null) return;
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', USER_INVENTORY_COLLECTION, invItem.id), {
-          status: 'Sold', customerName: customer, dateSold: new Date().toISOString()
-      });
   };
 
   return (
@@ -5895,31 +5944,113 @@ const RetailerDashboard = ({ user, db, appId, onLogout }) => {
             <div className="max-w-6xl mx-auto flex justify-between items-center">
                 <div className="flex items-center gap-2"><ShoppingBag className="text-yellow-400"/><span className="font-bold text-lg">SwiftNet<span className="text-yellow-400">Retailer</span></span></div>
                 <div className="flex items-center gap-6">
-                    <div className="text-right hidden md:block"><p className="text-[10px] uppercase text-purple-300 font-bold">Wallet Balance</p><p className="font-mono text-xl font-bold text-yellow-400">₱{(user.walletCredits || 0).toLocaleString()}</p></div>
+                    <div className="text-right hidden md:block">
+                        <p className="text-[10px] uppercase text-purple-300 font-bold">Wallet Balance</p>
+                        <p className="font-mono text-xl font-bold text-yellow-400">₱{(user.walletCredits || 0).toLocaleString()}</p>
+                    </div>
                     <button onClick={onLogout} className="bg-purple-800 hover:bg-purple-700 p-2 rounded-lg"><LogOut size={18}/></button>
                 </div>
             </div>
         </nav>
+
         <div className="max-w-6xl mx-auto p-4 md:p-8">
             <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
                 <button onClick={()=>setActiveTab('shop')} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${activeTab==='shop' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-slate-600 border'}`}><ShoppingBag size={18}/> Buy Stock</button>
                 <button onClick={()=>setActiveTab('inventory')} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${activeTab==='inventory' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-slate-600 border'}`}><Server size={18}/> Inventory</button>
                 <button onClick={()=>setActiveTab('wallet')} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${activeTab==='wallet' ? 'bg-purple-600 text-white shadow-lg' : 'bg-white text-slate-600 border'}`}><Wallet size={18}/> Wallet</button>
             </div>
+            
             {activeTab === 'shop' && (
                 <div className="space-y-6">
-                    <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-8 text-white shadow-xl"><h2 className="text-3xl font-bold mb-2">Wholesale Digital Goods</h2><p className="opacity-90">Purchase premium accounts and vouchers at wholesale rates.</p></div>
+                    <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-8 text-white shadow-xl flex justify-between items-center">
+                        <div>
+                            <h2 className="text-3xl font-bold mb-2">Wholesale Catalog</h2>
+                            <p className="opacity-90">Purchase stock using your wallet balance.</p>
+                        </div>
+                        <button onClick={() => setShowTopUpQR(true)} className="bg-yellow-400 text-purple-900 px-6 py-3 rounded-xl font-black text-sm hover:scale-105 transition-all shadow-lg flex items-center gap-2">
+                            <PlusCircle size={18}/> TOP UP WALLET
+                        </button>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{goods.map(item => (<div key={item.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-xl transition-all flex flex-col"><div className="flex justify-between items-start mb-4"><span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-1 rounded uppercase">{item.category}</span><span className="text-xs font-bold text-slate-400">SRP: ₱{item.srp}</span></div><h3 className="text-xl font-bold text-slate-800 mb-2">{item.name}</h3><p className="text-slate-500 text-sm mb-6 flex-grow">{item.description || "Premium subscription ready for resale."}</p><div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-100"><div><p className="text-[10px] text-slate-400 uppercase font-bold">Your Cost</p><p className="text-2xl font-black text-purple-600">₱{item.wholesalePrice}</p></div><button onClick={() => handleBuy(item)} disabled={buying===item.id} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-slate-800 disabled:opacity-50">{buying===item.id ? 'Buying...' : 'Purchase'}</button></div></div>))}</div>
                 </div>
             )}
+
             {activeTab === 'inventory' && (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"><div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center"><h3 className="font-bold text-slate-700">Stock on Hand</h3><span className="bg-white border px-3 py-1 rounded-lg text-xs font-bold text-slate-500">Total Items: {inventory.length}</span></div><div className="divide-y divide-slate-100">{inventory.map(inv => (<div key={inv.id} className="p-6 flex flex-col md:flex-row justify-between items-center gap-4 hover:bg-slate-50 transition-colors"><div className="flex-1"><div className="flex items-center gap-2 mb-1"><h4 className="font-bold text-slate-800 text-lg">{inv.itemName}</h4><span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${inv.status==='Sold' ? 'bg-green-100 text-green-700' : inv.status==='Pending Delivery' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>{inv.status}</span></div><p className="text-xs text-slate-500">Purchased: {new Date(inv.dateBought).toLocaleDateString()} • Cost: ₱{inv.cost}</p>{inv.status !== 'Pending Delivery' && (<div className="mt-3 bg-slate-100 p-3 rounded-lg border border-slate-200 font-mono text-sm text-slate-700 break-all select-all">{inv.credentials || "No credentials provided yet."}</div>)}</div><div className="flex items-center gap-2">{inv.status === 'Pending Delivery' ? (<span className="text-xs text-slate-400 italic">Waiting for Admin...</span>) : inv.status === 'Sold' ? (<div className="text-right"><p className="text-xs font-bold text-slate-400 uppercase">Sold To</p><p className="font-bold text-slate-700">{inv.customerName}</p></div>) : (<button onClick={() => handleMarkSold(inv)} className="bg-green-600 text-white px-6 py-2 rounded-xl font-bold text-sm hover:bg-green-700 shadow-lg shadow-green-200">Mark as Sold</button>)}</div></div>))}{inventory.length === 0 && <div className="p-12 text-center text-slate-400">Your inventory is empty.</div>}</div></div>
             )}
+            
             {activeTab === 'wallet' && <SwiftWallet user={user} db={db} appId={appId} />}
         </div>
+
+        {/* --- MODAL: TOP UP QR & REQUEST FORM --- */}
+        {showTopUpQR && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
+                <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden relative flex flex-col max-h-[90vh]">
+                    <div className="bg-purple-700 p-6 text-center text-white shrink-0">
+                        <button onClick={() => setShowTopUpQR(false)} className="absolute top-4 right-4 text-white/50 hover:text-white"><X/></button>
+                        <h3 className="text-xl font-bold">Wallet Top-Up</h3>
+                        <p className="text-xs opacity-80">Scan QR and submit request below</p>
+                    </div>
+                    
+                    <div className="p-6 overflow-y-auto space-y-6">
+                        {/* 1. QR DISPLAY */}
+                        <div className="flex flex-col items-center">
+                            <div className="bg-slate-100 p-3 rounded-2xl border-2 border-dashed border-slate-200 mb-2">
+                                {paymentQRUrl ? (
+                                    <img src={paymentQRUrl} alt="Admin QR" className="w-44 h-44 object-contain rounded-lg" />
+                                ) : (
+                                    <div className="w-44 h-44 flex items-center justify-center text-slate-400 text-[10px] text-center p-4 italic">
+                                        QR code not yet uploaded by admin.
+                                    </div>
+                                )}
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Admin GCash/Maya QR</p>
+                        </div>
+
+                        {/* 2. REQUEST FORM */}
+                        <form onSubmit={handleRequestTopUp} className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                            <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2"><Send size={16} className="text-purple-600"/> Submit Request</h4>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Amount Sent (₱)</label>
+                                <input 
+                                    type="number" 
+                                    className="w-full border p-3 rounded-xl text-lg font-bold bg-white" 
+                                    placeholder="0.00" 
+                                    value={topUpForm.amount} 
+                                    onChange={e => setTopUpForm({...topUpForm, amount: e.target.value})} 
+                                    required 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Reference Number</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full border p-3 rounded-xl font-mono bg-white" 
+                                    placeholder="GCash Ref No." 
+                                    value={topUpForm.ref} 
+                                    onChange={e => setTopUpForm({...topUpForm, ref: e.target.value})} 
+                                    required 
+                                />
+                            </div>
+                            <button 
+                                disabled={isSubmittingTopUp} 
+                                className="w-full py-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg shadow-purple-200 disabled:opacity-50 transition-all"
+                            >
+                                {isSubmittingTopUp ? 'Sending Request...' : 'Submit Notification'}
+                            </button>
+                        </form>
+                        
+                        <p className="text-[10px] text-center text-slate-400 leading-tight">
+                            Admin will manually verify the reference number before credits are added to your wallet.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };
+
 // --- [FEATURE 3] ZONE STARTER MANAGER (ADMIN) ---
 const CrowdfundManager = ({ db, appId }) => {
   const [campaigns, setCampaigns] = useState([]);
