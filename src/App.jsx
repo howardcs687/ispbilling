@@ -4965,7 +4965,7 @@ const BillingModal = ({ user, onClose, db, appId }) => {
             name: user.username,
             email: user.email,
             amount: `₱${total.toLocaleString()}`,
-            message: `Dear ${user.username}, your new Statement of Account for ${monthName} has been generated. Please check your dashboard or view the attachment.`
+            message: `Dear ${user.username}, your new Statement of Account for ${monthName} has been generated. Please check your dashboard or view the attachment.You can access through this link: www.jwreport.site`
         });
 
         alert("Invoice Generated Successfully!");
@@ -5106,7 +5106,7 @@ const CashierMode = ({ subscribers, db, appId }) => {
                       email: selectedUser.email,
                       amount: `₱${val.toLocaleString()}`, 
                       refNumber: newRef,
-                      message: `Thank you for visiting our office. Your payment has been posted and the receipt is in your dashboard.`
+                      message: `Thank you for visiting our office. Your payment has been posted and the receipt is in your dashboard.You can access through this link: www.jwreport.site`
                   });
               }
 
@@ -5272,7 +5272,7 @@ const AddStaffModal = ({ onClose }) => {
             name: formData.username,
             email: formData.email,
             code: formData.password, 
-            message: `You have been assigned as a ${formData.role}. Use this password to log in.`
+            message: `You have been assigned as a ${formData.role}. Use this password to log in. You can access through this link: www.jwreport.site`
         });
         alert(`${formData.role.toUpperCase()} account created successfully!`);
         onClose();
@@ -6403,7 +6403,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                   email: userData.email,
                   amount: `₱${finalAmount.toLocaleString()}`,
                   refNumber: refNumber,
-                  message: `Payment verified! We have added the Official Receipt to your Documents tab.`
+                  message: `Payment verified! We have added the Official Receipt to your Documents tab. You can access through this link: www.jwreport.site`
               });
           }
 
