@@ -1600,7 +1600,9 @@ const GeminiChatWidget = ({ user }) => {
     if (!input.trim() || !GEMINI_API_KEY) return;
 
     const userMessage = input;
-    const currentMessages = [...messages]; // Capture current state
+    // Capture the state BEFORE updating it
+    const previousMessages = [...messages]; 
+    
     setInput('');
     setLoading(true);
 
@@ -1609,44 +1611,46 @@ const GeminiChatWidget = ({ user }) => {
 
     try {
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-
-      // 2. Define Persona using systemInstruction (The correct way for 1.5 Pro/Flash)
+      
+      // 2. Use systemInstruction for the Persona
       const model = genAI.getGenerativeModel({ 
         model: "gemini-1.5-flash",
-        systemInstruction: `
-          You are the helpful customer support AI for SwiftNet ISP. 
-          Keep answers concise (under 50 words). 
-          Current User: ${user?.username || 'Guest'} (${user?.plan || 'Unknown Plan'}).
-          Technical: Red LOS = fiber cut. Slow = restart router.
-          Billing: GCash/Maya accepted.
-        `,
+        systemInstruction: `You are the helpful customer support AI for SwiftNet ISP. 
+        Keep answers concise (under 50 words). 
+        Current User: ${user?.username || 'Guest'}.
+        Technical: Red LOS = fiber cut. Slow = restart router.
+        Billing: GCash/Maya accepted.`
       });
 
-      // 3. Construct History
-      // Gemini startChat history MUST alternate: user, model, user, model...
-      // Since your first message in state is 'model', we skip it for the history 
-      // because a chat cannot start with a 'model' role without a preceding 'user' role.
-      const chatHistory = currentMessages
-        .filter((m, index) => index > 0) // Skip the initial AI greeting
+      // 3. Format History
+      // IMPORTANT: We filter out the very first 'model' greeting because 
+      // Gemini history MUST start with a 'user' message.
+      const chatHistory = previousMessages
+        .filter((msg, index) => index !== 0) // Skip the initial "Hi!" greeting
         .map(m => ({
-          role: m.role,
+          role: m.role, // 'user' or 'model'
           parts: [{ text: m.text }]
         }));
 
+      // 4. Start Chat
       const chat = model.startChat({
         history: chatHistory,
       });
 
+      // 5. Send Message
       const result = await chat.sendMessage(userMessage);
       const response = await result.response;
       const text = response.text();
 
-      // 4. Add AI Response to UI
+      // 6. Add AI Response to UI
       setMessages(prev => [...prev, { role: 'model', text: text }]);
 
     } catch (error) {
-      console.error("Gemini Detail Error:", error);
-      setMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting. This usually happens if the conversation roles don't alternate correctly." }]);
+      console.error("Gemini Details:", error);
+      setMessages(prev => [...prev, { 
+        role: 'model', 
+        text: "I'm having trouble connecting. This usually happens if the API key is invalid or the conversation order is incorrect." 
+      }]);
     } finally {
       setLoading(false);
     }
