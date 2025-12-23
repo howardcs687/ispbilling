@@ -1581,11 +1581,11 @@ const BackgroundMusic = () => {
   );
 };
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 
 // --- CONFIGURATION ---
-const GEMINI_API_KEY = "AIzaSyC-PTQ5TZtpEQq0oHeCnyPwd57GDTldNEQ"; // <--- PASTE KEY HERE
+const GEMINI_API_KEY = "AIzaSyD4TVNm6C_7awuVHYGguSeKjc1BpHzGUM0"; // <--- PASTE KEY HERE
 
 const GeminiChatWidget = ({ user }) => {
   const [isOpen, setIsOpen] = useState(false);
