@@ -1581,7 +1581,7 @@ const BackgroundMusic = () => {
   );
 };
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 
 // --- CONFIGURATION ---
