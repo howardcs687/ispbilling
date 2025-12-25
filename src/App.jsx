@@ -6148,6 +6148,63 @@ const ZoneStarterWidget = ({ db, appId }) => {
   );
 };
 
+const RouterQRStickerModal = ({ user, onClose }) => {
+  useEffect(() => {
+    // Small delay to ensure the QR image has loaded before printing
+    const timer = setTimeout(() => {
+      window.print();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Use your actual deployed domain here
+  const baseUrl = window.location.origin;
+  const repairUrl = `${baseUrl}?mode=auto_repair&uid=${user.id}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(repairUrl)}`;
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm px-4 print:bg-white print:inset-0 print:absolute">
+      {/* Container - Hidden for screen, visible for print via CSS */}
+      <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-xs w-full text-center border-2 border-slate-100 print:shadow-none print:border-none print:m-0 print:p-4">
+        
+        <div className="flex flex-col items-center">
+          <div className="bg-red-600 text-white p-2 rounded-t-lg w-full mb-0">
+             <h2 className="font-black text-sm uppercase tracking-tighter">SwiftNet Support</h2>
+          </div>
+          
+          <div className="border-2 border-red-600 p-4 w-full rounded-b-lg">
+            <p className="text-[10px] font-bold text-slate-500 mb-2 uppercase">Scan for Technical Help</p>
+            <img src={qrUrl} alt="Repair QR" className="w-40 h-40 mx-auto mb-3" />
+            
+            <div className="bg-slate-100 p-2 rounded">
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Subscriber</p>
+              <p className="text-xs font-black text-slate-800 truncate">{user.username}</p>
+              <p className="text-[9px] font-mono text-slate-500">Acct: {user.accountNumber}</p>
+            </div>
+          </div>
+        </div>
+
+        <button 
+          onClick={onClose} 
+          className="mt-6 w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-xs print:hidden"
+        >
+          Close & Return
+        </button>
+      </div>
+
+      {/* Print-only CSS to hide everything else */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .print-area, .print-area * { visibility: visible; }
+          .fixed { position: absolute !important; top: 0; left: 0; }
+          button { display: none !important; }
+        }
+      `}</style>
+    </div>
+  );
+};
+
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs, user }) => {
   const [activeTab, setActiveTab] = useState('subscribers');
   const [searchTerm, setSearchTerm] = useState('');
@@ -6180,6 +6237,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const [expenses, setExpenses] = useState([]);
   const [newOutage, setNewOutage] = useState({ area: '', message: '', status: 'Active' });
   const [editingUser, setEditingUser] = useState(null);
+  const [qrStickerUser, setQrStickerUser] = useState(null);
   const [billingUser, setBillingUser] = useState(null);
   const [showStaffModal, setShowStaffModal] = useState(false);
 
@@ -6495,7 +6553,13 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
                       <td className="px-6 py-4 font-bold text-yellow-600 flex items-center gap-1"><Gift size={12}/> {sub.points || 0}</td>
                       <td className="px-6 py-4 text-slate-600 group relative"><div className="flex items-center gap-2">{new Date(sub.dueDate).toLocaleDateString()}<button onClick={() => { setShowDateModal(sub); setNewDueDate(new Date(sub.dueDate).toISOString().split('T')[0]); }} className="opacity-0 group-hover:opacity-100 text-blue-600 hover:bg-blue-100 p-1.5 rounded-md transition-all"><Calendar size={14} /></button></div></td>
                       <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold capitalize ${sub.status === 'active' ? 'bg-green-100 text-green-700' : sub.status === 'disconnected' ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'}`}>{sub.status}</span></td>
-                      <td className="px-6 py-4 text-right space-x-2 flex justify-end items-center">{sub.role !== 'admin' && sub.role !== 'technician' && (<><button onClick={() => setEditingUser(sub)} className="text-slate-500 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-md transition-colors mr-1" title="Edit Details"><Edit size={16} /></button><button onClick={() => handleOpenNotify(sub)} className="text-slate-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md transition-colors" title="Send Notification"><Bell size={16} /></button><button onClick={() => setBillingUser(sub)} className="text-blue-600 hover:text-blue-900 text-xs font-bold border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">+ Bill</button>{sub.status === 'active' ? <button onClick={() => handleStatusChange(sub.id, 'disconnected')} className="text-red-600 hover:text-red-900 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">Cut</button> : <button onClick={() => handleStatusChange(sub.id, 'active')} className="text-green-600 hover:text-green-900 text-xs font-bold border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors">Restore</button>}<button onClick={() => handleDeleteSubscriber(sub.id)} className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md transition-colors ml-2" title="Delete User"><UserX size={16} /></button></>)}</td>
+                      <td className="px-6 py-4 text-right space-x-2 flex justify-end items-center">{sub.role !== 'admin' && sub.role !== 'technician' && (<><button onClick={() => setEditingUser(sub)} className="text-slate-500 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-md transition-colors mr-1" title="Edit Details"><Edit size={16} /></button><button 
+  onClick={() => setQrStickerUser(sub)} 
+  className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-md transition-colors" 
+  title="Print Router Sticker"
+>
+  <QrCode size={16} />
+</button><button onClick={() => handleOpenNotify(sub)} className="text-slate-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md transition-colors" title="Send Notification"><Bell size={16} /></button><button onClick={() => setBillingUser(sub)} className="text-blue-600 hover:text-blue-900 text-xs font-bold border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">+ Bill</button>{sub.status === 'active' ? <button onClick={() => handleStatusChange(sub.id, 'disconnected')} className="text-red-600 hover:text-red-900 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">Cut</button> : <button onClick={() => handleStatusChange(sub.id, 'active')} className="text-green-600 hover:text-green-900 text-xs font-bold border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors">Restore</button>}<button onClick={() => handleDeleteSubscriber(sub.id)} className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md transition-colors ml-2" title="Delete User"><UserX size={16} /></button></>)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -6842,6 +6906,12 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
         />
         )}
        {showNotifyModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Bell size={18} /> Notify {notifyData.targetName}</h3><button onClick={() => setShowNotifyModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div><form onSubmit={handleSendNotification}><div className="space-y-3"><div><label className="text-xs font-bold text-slate-500 uppercase">Title</label><input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500" placeholder="e.g. Payment Received" value={notifyData.title} onChange={(e) => setNotifyData({...notifyData, title: e.target.value})} required /></div><div><label className="text-xs font-bold text-slate-500 uppercase">Message</label><textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 h-24 resize-none" placeholder="Write your message here..." value={notifyData.message} onChange={(e) => setNotifyData({...notifyData, message: e.target.value})} required ></textarea></div><button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700">Send Notification</button></div></form></div></div>)}
+       
+       {qrStickerUser && (
+          <div className="print-area">
+            <RouterQRStickerModal user={qrStickerUser} onClose={() => setQrStickerUser(null)} />
+          </div>
+        )}
        {/* Billing Modal Render */}
      {billingUser && (
        <BillingModal 
@@ -7883,11 +7953,90 @@ const LandingPage = ({ onLoginClick, onNavigate, plans, onQuickPay }) => {
     </div>
   );
 };
-// 6. Main App Logic
-// 6. Main App Logic
+
+// --- NEW COMPONENT: QR REPAIR PORTAL ---
+const QRRepairPortal = ({ db, appId }) => {
+  const [status, setStatus] = useState('verifying'); // verifying, confirming, success
+  const [targetUser, setTargetUser] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const uid = params.get('uid');
+
+    if (uid) {
+      const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, uid);
+      getDoc(userRef).then(snap => {
+        if (snap.exists()) {
+          setTargetUser({ id: snap.id, ...snap.data() });
+          setStatus('confirming');
+        } else {
+          alert("Invalid Router ID. Please contact support.");
+        }
+      });
+    }
+  }, [db, appId]);
+
+  const handleAutoFile = async () => {
+    setLoading(true);
+    try {
+      const ticketId = Math.floor(100000 + Math.random() * 900000).toString();
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+        ticketId,
+        userId: targetUser.uid,
+        username: targetUser.username,
+        subject: "🔴 ROUTER QR SCAN: Signal/Service Issue",
+        message: `EMERGENCY: User scanned physical router QR code. Location: ${targetUser.address || 'Not set'}. Contact: ${targetUser.contactNumber || 'Check Profile'}.`,
+        status: 'open',
+        priority: 'High',
+        date: new Date().toISOString(),
+        isAutoGenerated: true
+      });
+      setStatus('success');
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95">
+        <div className="bg-red-600 p-8 text-center text-white">
+          <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-md">
+            <QrCode size={32} />
+          </div>
+          <h2 className="text-xl font-black uppercase">SwiftNet Support</h2>
+          <p className="text-red-100 text-xs">Direct Router Link</p>
+        </div>
+        <div className="p-8 text-center">
+          {status === 'verifying' && <Loader2 className="animate-spin mx-auto text-red-600" size={40} />}
+          {status === 'confirming' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4">
+              <h3 className="text-xl font-bold text-slate-800 mb-2">Need Technical Help?</h3>
+              <p className="text-slate-500 mb-8 text-sm">Hi <strong>{targetUser?.username}</strong>, click below to alert our team that your internet is down.</p>
+              <button onClick={handleAutoFile} disabled={loading} className="w-full bg-red-600 text-white py-4 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2">
+                {loading ? <Loader2 className="animate-spin" /> : <AlertTriangle size={20} />} Report Connection Issue
+              </button>
+            </div>
+          )}
+          {status === 'success' && (
+            <div className="py-6 animate-in scale-in">
+              <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4"><Check size={32} /></div>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">Request Sent</h3>
+              <p className="text-slate-500 text-sm">A technician will check your line shortly.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // 6. Main App Logic
 export default function App() {
   // --- STATE: SYSTEM & UI ---
+  const [isQRRepairMode, setIsQRRepairMode] = useState(false);
   const [isHotspotMode, setIsHotspotMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
@@ -7921,12 +8070,16 @@ export default function App() {
   const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
 
   // --- EFFECT: CHECK HOTSPOT MODE ---
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('mode') === 'hotspot') {
-      setIsHotspotMode(true);
-    }
-  }, []);
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('mode') === 'hotspot') {
+    setIsHotspotMode(true);
+  }
+  // --- ADD THIS LINE ---
+  if (params.get('mode') === 'auto_repair') {
+    setIsQRRepairMode(true);
+  }
+}, []);
 
   // --- EFFECT: FETCH PUBLIC PLANS ---
   useEffect(() => {
@@ -8129,9 +8282,14 @@ export default function App() {
   );
 
   // 1. Hotspot Portal (No Auth Required)
-  if (isHotspotMode) {
-      return <HotspotPortal onLogin={() => setIsHotspotMode(false)} db={db} appId={appId} />;
-  }
+if (isHotspotMode) {
+    return <HotspotPortal onLogin={() => setIsHotspotMode(false)} db={db} appId={appId} />;
+}
+
+// --- ADD THIS BLOCK ---
+if (isQRRepairMode) {
+    return <QRRepairPortal db={db} appId={appId} />;
+}
 
   // 2. Main Application
   return (
