@@ -4753,7 +4753,7 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
                 name: formData.username,
                 email: formData.email,
                 code: formData.accountNumber,
-                message: `Congratulations! Your SwiftNet account is now active. Your official Account Number is ${formData.accountNumber}. Use this for all your future payments and support requests.`
+                message: `Congratulations! Your SwiftNet account is now active. Your official Account Number is ${formData.accountNumber}. Use this for all your future payments and support requests. You may now proceed on your payment for the Activation.`
             });
         }
         
