@@ -4709,7 +4709,7 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
   const [formData, setFormData] = useState({
     username: user.username || '',
     email: user.email || '',
-    contactNumber: user.contactNumber || '', // <--- NEW FIELD
+    contactNumber: user.contactNumber || '',
     accountNumber: user.accountNumber || '',
     plan: user.plan || '',
     address: user.address || '',
@@ -4720,24 +4720,47 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
   });
   const [loading, setLoading] = useState(false);
 
+  // --- AUTOMATION LOGIC ---
+  // When status changes to active, auto-generate account number if missing
+  useEffect(() => {
+    if (formData.status === 'active' && (formData.accountNumber === 'PENDING' || !formData.accountNumber)) {
+      const newGeneratedNo = Math.floor(100000 + Math.random() * 900000).toString();
+      setFormData(prev => ({ ...prev, accountNumber: newGeneratedNo }));
+    }
+  }, [formData.status]);
+
   const handleUpdate = async (e) => {
     e.preventDefault();
+    if (formData.status === 'active' && !formData.plan) {
+        return alert("Please assign a Plan before activating.");
+    }
+
     setLoading(true);
     try {
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id);
+        
+        // Check if we are activating an applicant for the first time
+        const activatingNow = user.status === 'applicant' && formData.status === 'active';
+
         await updateDoc(docRef, {
             ...formData,
             balance: parseFloat(formData.balance)
         });
+
+        // Trigger Welcome Email with Account Number if just activated
+        if (activatingNow && formData.email) {
+            await sendCustomEmail('otp', {
+                name: formData.username,
+                email: formData.email,
+                code: formData.accountNumber,
+                message: `Congratulations! Your SwiftNet account is now active. Your official Account Number is ${formData.accountNumber}. Use this for all your future payments and support requests.`
+            });
+        }
         
-        // Note: Updating email here only updates the database record, NOT the Authentication login email.
-        // Changing Auth email requires re-authentication which is complex for Admins to do for others.
-        
-        alert("Subscriber details updated successfully!");
+        alert("Subscriber updated and activation email sent!");
         onClose();
     } catch (e) {
-        console.error(e);
-        alert("Error updating user: " + e.message);
+        alert("Error: " + e.message);
     }
     setLoading(false);
   };
@@ -4746,87 +4769,64 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
         <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-slate-800 p-5 flex justify-between items-center text-white">
-                <h3 className="font-bold text-lg flex items-center gap-2">
-                    <Edit size={20} /> Edit Subscriber
-                </h3>
+                <h3 className="font-bold text-lg flex items-center gap-2"><Edit size={20} /> Edit Subscriber</h3>
                 <button onClick={onClose}><X className="text-slate-400 hover:text-white"/></button>
             </div>
 
             <form onSubmit={handleUpdate} className="p-6 overflow-y-auto space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Full Name</label>
-                        <input className="w-full border p-2 rounded-lg" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required />
-                    </div>
-                    
-                    {/* NEW: Contact Info Section */}
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Email Address</label>
-                        <input type="email" className="w-full border p-2 rounded-lg" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Phone Number</label>
-                        <input type="tel" className="w-full border p-2 rounded-lg" placeholder="0917xxxxxxx" value={formData.contactNumber} onChange={e => setFormData({...formData, contactNumber: e.target.value})} />
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Status</label>
+                        <select 
+                            className={`w-full border p-3 rounded-lg font-bold ${formData.status === 'active' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white'}`} 
+                            value={formData.status} 
+                            onChange={e => setFormData({...formData, status: e.target.value})}
+                        >
+                            <option value="applicant">Applicant (Pending)</option>
+                            <option value="active">Active (Assign Account No.)</option>
+                            <option value="overdue">Overdue</option>
+                            <option value="disconnected">Disconnected</option>
+                        </select>
                     </div>
 
                     <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Account No.</label>
-                        <input className="w-full border p-2 rounded-lg bg-slate-50 font-mono" value={formData.accountNumber} onChange={e => setFormData({...formData, accountNumber: e.target.value})} />
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Account Number</label>
+                        <input 
+                            className="w-full border p-2 rounded-lg bg-slate-50 font-mono font-bold text-blue-600" 
+                            placeholder="Auto-generated on Active"
+                            value={formData.accountNumber} 
+                            onChange={e => setFormData({...formData, accountNumber: e.target.value})} 
+                        />
                     </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">User Role</label>
-                        <select className="w-full border p-2 rounded-lg bg-yellow-50" value={formData.role || 'subscriber'} onChange={e => setFormData({...formData, role: e.target.value})}>
-                            <option value="subscriber">Residential</option>
-                            <option value="business">Business Owner (Multi-Site)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Status</label>
-                        <select className="w-full border p-2 rounded-lg" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
-                            <option value="active">Active</option>
-                            <option value="overdue">Overdue</option>
-                            <option value="disconnected">Disconnected</option>
-                            <option value="applicant">Applicant</option>
-                        </select>
-                    </div>
+
                     <div>
                         <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Internet Plan</label>
-                        <select className="w-full border p-2 rounded-lg" value={formData.plan} onChange={e => setFormData({...formData, plan: e.target.value})}>
+                        <select className="w-full border p-2 rounded-lg" value={formData.plan} onChange={e => setFormData({...formData, plan: e.target.value})} required>
                             <option value="">-- Select Plan --</option>
                             {plans.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                         </select>
                     </div>
+
+                    <div className="col-span-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Full Name</label>
+                        <input className="w-full border p-2 rounded-lg" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required />
+                    </div>
+
                     <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Current Balance</label>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Balance (₱)</label>
                         <input type="number" className="w-full border p-2 rounded-lg" value={formData.balance} onChange={e => setFormData({...formData, balance: e.target.value})} />
                     </div>
+                    
                     <div className="col-span-2">
                         <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Address</label>
-                        <textarea className="w-full border p-2 rounded-lg h-20 resize-none" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})}></textarea>
+                        <textarea className="w-full border p-2 rounded-lg h-20 resize-none text-sm" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})}></textarea>
                     </div>
-                    
-                    {/* KYC Section (Preserved) */}
-                    {user.kycImage && (
-                        <div className="col-span-2 mt-4 pt-4 border-t border-slate-100">
-                            <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Identity Verification ({user.kycType})</label>
-                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex gap-4 items-start">
-                                <img src={user.kycImage} alt="KYC" className="w-32 h-24 object-cover rounded-lg border border-slate-300 bg-white cursor-pointer" onClick={() => window.open(user.kycImage, '_blank')} />
-                                <div className="flex-1">
-                                    <p className="font-bold text-sm text-slate-800 mb-1">Status: <span className="uppercase text-blue-600">{formData.kycStatus}</span></p>
-                                    <div className="flex gap-2 mt-2">
-                                        <button type="button" onClick={() => setFormData({...formData, kycStatus: 'verified'})} className={`px-3 py-1 rounded text-xs font-bold border ${formData.kycStatus === 'verified' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-green-600 border-green-600'}`}>Approve</button>
-                                        <button type="button" onClick={() => setFormData({...formData, kycStatus: 'rejected'})} className={`px-3 py-1 rounded text-xs font-bold border ${formData.kycStatus === 'rejected' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-600 border-red-600'}`}>Reject</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 <div className="pt-4 flex gap-3">
-                    <button type="button" onClick={onClose} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-xl transition-colors">Cancel</button>
-                    <button type="submit" disabled={loading} className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg transition-all">
-                        {loading ? 'Saving...' : 'Save Changes'}
+                    <button type="button" onClick={onClose} className="flex-1 py-3 text-slate-500 font-bold">Cancel</button>
+                    <button type="submit" disabled={loading} className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700">
+                        {loading ? 'Saving...' : 'Save & Activate'}
                     </button>
                 </div>
             </form>
@@ -6328,60 +6328,55 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   const handleApprovePlanChange = async (ticket) => { if(!confirm(`Approve plan change to ${ticket.targetPlan} for ${ticket.username}?`)) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, ticket.userId), { plan: ticket.targetPlan }); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), { status: 'resolved', adminReply: `Plan change to ${ticket.targetPlan} approved and updated.` }); alert("Plan updated successfully!"); } catch (e) { console.error(e); alert("Failed to update plan."); } };
   
   const handleApproveApplication = async (ticket) => {
-    // FIX 1: Identify the user ID
     const targetUid = ticket.targetUserId || ticket.userId;
-    
-    if (!targetUid) return alert("Error: Cannot identify the user ID for this ticket.");
+    if (!targetUid) return alert("Error: Cannot identify the user ID.");
 
-    // --- NEW FIX START: Fetch User Data to check for existing plan ---
     const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, targetUid);
     const userSnap = await getDoc(userRef);
-    let existingPlan = '';
-    
-    if (userSnap.exists()) {
-        existingPlan = userSnap.data().plan;
-    }
-    // --- NEW FIX END ---
+    let planToAssign = ticket.targetPlan || (userSnap.exists() ? userSnap.data().plan : '');
 
-    const amountStr = prompt("Enter initial balance/installation fee for this user:", "1500");
+    if (!planToAssign) {
+        planToAssign = prompt("Please confirm the Plan to assign:", "Fiber 1699");
+        if (!planToAssign) return;
+    }
+
+    const amountStr = prompt(`Set initial balance/installation fee for ${ticket.username}:`, "1500");
     if (amountStr === null) return;
-    
-    const amount = parseFloat(amountStr);
-    if (isNaN(amount)) {
-      alert("Invalid amount. Please enter a number.");
-      return;
-    }
+    const amount = parseFloat(amountStr) || 0;
 
-    const newAccountNo = Math.floor(Math.random() * 1000000).toString();
-    
-    // FIX 2: Priority Logic for Plan Name
-    let planName = ticket.targetPlan || existingPlan;
-    
-    if (!planName) {
-        planName = prompt("Plan name not found. Please enter the Plan to assign:", "Fiber 1699");
-        if (!planName) return; 
-    }
+    // --- AUTOMATIC ACCOUNT NUMBER GENERATION ---
+    const autoAccountNo = Math.floor(100000 + Math.random() * 900000).toString();
 
     try {
-      // Update the User Profile
+      // 1. Update User Profile
       await updateDoc(userRef, {
         status: 'active',
-        accountNumber: newAccountNo,
-        plan: planName, 
+        accountNumber: autoAccountNo,
+        plan: planToAssign,
         balance: amount,
         dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
       });
 
-      // Update the Ticket
+      // 2. Resolve Ticket
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION, ticket.id), {
         status: 'resolved',
-        adminReply: `Approved! Account Number: ${newAccountNo}. Plan: ${planName}. Initial Balance: ₱${amount}.`
+        adminReply: `Approved! Account Number ${autoAccountNo} assigned. Plan: ${planToAssign}.`
       });
 
-      alert(`Application Approved! Assigned Account #${newAccountNo} with Plan: ${planName}`);
+      // 3. Send Email via EmailJS
+      if (userSnap.exists() && userSnap.data().email) {
+          await sendCustomEmail('otp', { 
+              name: ticket.username,
+              email: userSnap.data().email,
+              code: autoAccountNo, // Using the 'otp' template logic to highlight the Account No.
+              message: `Your application has been approved! Your account is now active under the ${planToAssign}. You can now log in to the portal using your registered email.`
+          });
+      }
+
+      alert(`Success! Account #${autoAccountNo} is now active and email sent.`);
     } catch (e) {
       console.error(e);
-      alert("Failed to approve: " + e.message);
+      alert("Error: " + e.message);
     }
   };
 
