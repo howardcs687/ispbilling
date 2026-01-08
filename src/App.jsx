@@ -1976,6 +1976,143 @@ const AgentDashboard = ({ user, db, appId, onLogout }) => {
 };
 // --- [END NEW COMPONENTS] ---
 
+// --- [NEW FEATURE] REMOTE ACCESS SERVICE MANAGER (ADMIN) ---
+const RemoteAccessAdmin = ({ db, appId }) => {
+  const [settings, setSettings] = useState({ price: 100, enabled: true });
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const unsubConfig = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'remote_access_config'), (snap) => {
+      if (snap.exists()) setSettings(snap.data());
+    });
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1'));
+    const unsubSubs = onSnapshot(q, (snap) => {
+      setSubscriptions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsubConfig(); unsubSubs(); };
+  }, [db, appId]);
+
+  const handleUpdatePrice = async () => {
+    setLoading(true);
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'remote_access_config'), settings);
+    alert("Service Settings Updated!");
+    setLoading(false);
+  };
+
+  const handleUpdateDetails = async (subId, details) => {
+    const vpnUrl = prompt("Enter the Remote Connection URL (e.g. your-isp.com:8081):", details || "");
+    if (vpnUrl === null) return;
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1', subId), {
+      vpnUrl: vpnUrl, status: 'Ready'
+    });
+    alert("Subscriber notified!");
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Server size={20} className="text-indigo-600"/> Remote Access Service Config</h3>
+        <div className="flex flex-col md:flex-row gap-4 items-end">
+          <div className="flex-1">
+            <label className="text-xs font-bold text-slate-500 uppercase">Monthly Service Price (₱)</label>
+            <input type="number" className="w-full border p-3 rounded-xl mt-1 font-bold text-lg" value={settings.price} onChange={e => setSettings({...settings, price: parseFloat(e.target.value)})}/>
+          </div>
+          <button onClick={handleUpdatePrice} disabled={loading} className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all">{loading ? <Loader2 className="animate-spin"/> : 'Save Price'}</button>
+        </div>
+      </div>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-4 bg-slate-50 border-b font-bold text-slate-700">Service Subscribers</div>
+        <div className="divide-y divide-slate-100">
+          {subscriptions.map(sub => (
+            <div key={sub.id} className="p-4 flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="flex-1">
+                <p className="font-bold text-slate-800">{sub.username}</p>
+                <p className="text-xs text-slate-500">Subscribed: {new Date(sub.date).toLocaleDateString()}</p>
+                {sub.vpnUrl && <code className="text-[10px] bg-slate-100 px-2 py-1 rounded text-indigo-600 mt-1 block w-fit">{sub.vpnUrl}</code>}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${sub.status === 'Ready' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{sub.status}</span>
+                <button onClick={() => handleUpdateDetails(sub.id, sub.vpnUrl)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-700">Set Remote URL</button>
+              </div>
+            </div>
+          ))}
+          {subscriptions.length === 0 && <p className="p-8 text-center text-slate-400">No active remote access subscribers.</p>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// --- [NEW FEATURE] REMOTE ACCESS WIDGET (SUBSCRIBER) ---
+const RemoteAccessSubscriber = ({ user, db, appId }) => {
+  const [config, setConfig] = useState({ price: 0 });
+  const [mySub, setMySub] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    getDoc(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'remote_access_config')).then(s => {
+      if(s.exists()) setConfig(s.data());
+    });
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1'), where('userId', '==', user.uid));
+    const unsub = onSnapshot(q, (snap) => {
+      if (!snap.empty) setMySub({ id: snap.docs[0].id, ...snap.docs[0].data() });
+    });
+    return () => unsub();
+  }, [user, db, appId]);
+
+  const handlePurchase = async () => {
+    if (!confirm(`Subscribe to MikroTik Remote Access for ₱${config.price}/month?`)) return;
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1'), {
+        userId: user.uid, username: user.username, date: new Date().toISOString(), status: 'Pending Setup', price: config.price
+      });
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
+        ticketId: Math.floor(Math.random() * 900000).toString(), userId: user.uid, username: user.username,
+        subject: "NEW SERVICE: Remote Access Setup",
+        message: `User purchased Remote Access (₱${config.price}). Please setup tunnel.`,
+        status: 'open', date: new Date().toISOString(), isOrder: true
+      });
+      alert("Purchase Successful! Our team is now configuring your router tunnel.");
+    } catch(e) { alert("Error: " + e.message); }
+    setLoading(false);
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+      <div className="flex justify-between items-start mb-6">
+        <div>
+          <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Globe size={20} className="text-blue-600"/> MikroTik Remote Access</h3>
+          <p className="text-sm text-slate-500">Access Winbox from anywhere.</p>
+        </div>
+        <div className="bg-blue-50 px-3 py-1 rounded-full text-blue-700 font-bold text-xs">₱{config.price}/mo</div>
+      </div>
+      {mySub ? (
+        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div className="flex justify-between items-center mb-3">
+             <span className="text-xs font-bold text-slate-400 uppercase">Service Status</span>
+             <span className={`text-xs font-bold px-2 py-0.5 rounded uppercase ${mySub.status === 'Ready' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{mySub.status}</span>
+          </div>
+          {mySub.vpnUrl ? (
+            <div>
+               <p className="text-xs text-slate-500 mb-1">Your Remote Address:</p>
+               <div className="flex gap-2">
+                 <code className="flex-1 bg-white border p-2 rounded text-sm font-mono text-blue-600 truncate">{mySub.vpnUrl}</code>
+                 <button onClick={() => {navigator.clipboard.writeText(mySub.vpnUrl); alert("Copied!")}} className="p-2 bg-white border rounded hover:bg-slate-50"><Copy size={16}/></button>
+               </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-slate-500 text-sm italic"><Loader2 size={16} className="animate-spin"/> Configuration in progress...</div>
+          )}
+        </div>
+      ) : (
+        <button onClick={handlePurchase} disabled={loading} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-blue-600 transition-all shadow-lg">{loading ? 'Processing...' : 'Subscribe Now'}</button>
+      )}
+    </div>
+  );
+};
 // Existing Code continues...
 
 const Layout = ({ children, user, onLogout }) => {
@@ -4020,6 +4157,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
 
           <MaintenanceBanner db={db} appId={appId} />
           <NetworkStatusWidget db={db} appId={appId} />
+          <RemoteAccessSubscriber user={userData} db={db} appId={appId} />
           
            
           {/* Welcome Banner */}
@@ -6484,7 +6622,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex space-x-1 overflow-x-auto max-w-[95vw] mx-auto md:mx-0 scrollbar-hide">
-         {['analytics', 'marketing', 'status', 'ads', 'reports', 'cashier', 'coverage', 'expansion', 'expenses', 'store', 'digital_goods', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest', 'setting'].map(tab => (
+         {['analytics', 'marketing', 'remote_access', 'status', 'ads', 'reports', 'cashier', 'coverage', 'expansion', 'expenses', 'store', 'digital_goods', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest', 'setting'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
                 {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'marketing' ? <><Sparkles size={16}/> Marketing</> : tab === 'status' ? <><Activity size={16}/> Network Status</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'expansion' ? <><Rocket size={16}/> Expansion</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'digital_goods' ? <><Server size={16}/> Digital Goods</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
@@ -6493,6 +6631,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       
       {activeTab === 'store' && <ProductManager appId={appId} db={db} />}
       {activeTab === 'digital_goods' && <DigitalGoodsAdmin db={db} appId={appId} />}
+      {activeTab === 'remote_access' && <RemoteAccessAdmin db={db} appId={appId} />}
       {activeTab === 'status' && <NetworkStatusManager db={db} appId={appId} />}
       {activeTab === 'ads' && <AdManager db={db} appId={appId} />}
       {activeTab === 'expenses' && <ExpenseManager appId={appId} db={db} subscribers={subscribers} payments={payments} />}
