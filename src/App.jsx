@@ -1978,15 +1978,14 @@ const AgentDashboard = ({ user, db, appId, onLogout }) => {
 
 // --- [NEW FEATURE] REMOTE ACCESS SERVICE MANAGER (ADMIN) ---
 const RemoteAccessAdmin = ({ db, appId }) => {
-  const [settings, setSettings] = useState({ price: 100 });
+  const [settings, setSettings] = useState({ price: 1200, lastPort: 10000 });
   const [subscriptions, setSubscriptions] = useState([]);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const unsubConfig = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'remote_access_config'), (snap) => {
       if (snap.exists()) setSettings(snap.data());
     });
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1'), orderBy('date', 'desc'));
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1'), orderBy('expiryDate', 'asc'));
     const unsubSubs = onSnapshot(q, (snap) => {
       setSubscriptions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
@@ -1996,106 +1995,74 @@ const RemoteAccessAdmin = ({ db, appId }) => {
   const handleManualFulfill = async (subId, currentUrl) => {
     const url = prompt("Enter Remote URL:PORT (e.g. 124.6.182.10:10001):", currentUrl || "");
     if (url === null) return;
+    
+    // Extract port from the URL if possible for the 'Last Port' tracker
+    const portMatch = url.match(/:(\d+)$/);
+    const usedPort = portMatch ? parseInt(portMatch[1]) : settings.lastPort;
 
-    try {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1', subId), {
-        vpnUrl: url,
-        status: 'Ready'
-      });
-      alert("Subscriber notified! Link is now live on their dashboard.");
-    } catch(e) { alert("Error: " + e.message); }
-  };
-
-  const handleCancelService = async (subId) => {
-    if(!confirm("Are you sure? This will remove the record from the dashboard. (Doesn't refund credits)")) return;
-    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1', subId));
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1', subId), { vpnUrl: url, status: 'Ready' });
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'remote_access_config'), { lastPort: usedPort });
+    alert("Subscriber updated!");
   };
 
   const handleUpdatePrice = async () => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'remote_access_config'), settings);
-    alert("Service Price Updated!");
+    alert("Settings Saved!");
   };
-
-  // Filter lists
-  const pending = subscriptions.filter(s => s.status !== 'Ready');
-  const activeRegistry = subscriptions.filter(s => s.status === 'Ready');
 
   return (
     <div className="space-y-6 animate-in fade-in">
-      {/* 1. CONFIGURATION CARD */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <Settings size={20} className="text-slate-400"/> Service Settings
-        </h3>
-        <div className="flex gap-4 items-end">
-          <div className="flex-1">
-            <label className="text-xs font-bold text-slate-500 uppercase">Monthly Subscription Price (₱)</label>
-            <input type="number" className="w-full border p-3 rounded-xl mt-1 font-bold text-lg" value={settings.price} onChange={e => setSettings({...settings, price: parseFloat(e.target.value)})}/>
+      {/* HEADER STATS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg">
+             <p className="text-xs font-bold text-slate-400 uppercase mb-1">Last Assigned Port</p>
+             <h2 className="text-4xl font-black text-yellow-400">{settings.lastPort}</h2>
+             <p className="text-[10px] mt-2 opacity-60 italic">Check this before creating a new NAT rule in Winbox.</p>
           </div>
-          <button onClick={handleUpdatePrice} className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all">Update Price</button>
-        </div>
-      </div>
-
-      {/* 2. PENDING REQUESTS */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-4 bg-orange-50 border-b flex justify-between items-center">
-            <h3 className="font-bold text-orange-800 flex items-center gap-2"><Clock size={18}/> Pending Setup ({pending.length})</h3>
-        </div>
-        <div className="divide-y divide-slate-100">
-          {pending.map(sub => (
-            <div key={sub.id} className="p-4 flex flex-col md:flex-row justify-between items-center gap-4 bg-orange-50/20">
-              <div className="flex-1">
-                <p className="font-bold text-slate-800">{sub.username}</p>
-                <p className="text-xs text-slate-500 italic">Paid ₱{sub.price} on {new Date(sub.date).toLocaleDateString()}</p>
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+              <label className="text-xs font-bold text-slate-500 uppercase">Set Yearly Price (₱)</label>
+              <div className="flex gap-2">
+                  <input type="number" className="flex-1 border-b-2 border-slate-200 p-2 text-xl font-bold outline-none" value={settings.price} onChange={e => setSettings({...settings, price: parseFloat(e.target.value)})}/>
+                  <button onClick={handleUpdatePrice} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-xs">Save</button>
               </div>
-              <button onClick={() => handleManualFulfill(sub.id)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-700 shadow-md">
-                Configure Port & Fulfill
-              </button>
-            </div>
-          ))}
-          {pending.length === 0 && <p className="p-8 text-center text-slate-400 text-sm">No pending orders.</p>}
-        </div>
+          </div>
       </div>
 
-      {/* 3. PORT MANAGEMENT REGISTRY */}
+      {/* PORT REGISTRY TABLE */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
-            <h3 className="font-bold flex items-center gap-2"><Hash size={18} className="text-indigo-400"/> Active Port Registry</h3>
-            <span className="text-[10px] font-bold uppercase opacity-60">Subscriber Count: {activeRegistry.length}</span>
+        <div className="p-4 bg-slate-50 border-b font-bold text-slate-700 flex justify-between items-center">
+            <span>Subscriber Port Registry</span>
+            <span className="text-[10px] bg-white px-2 py-1 rounded border">Ordered by Expiration</span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-500 border-b">
-              <tr>
-                <th className="px-6 py-3 font-bold">Subscriber</th>
-                <th className="px-6 py-3 font-bold">Remote Address (Link)</th>
-                <th className="px-6 py-3 font-bold text-right">Actions</th>
-              </tr>
+        <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-black tracking-widest border-b">
+                <tr>
+                    <th className="px-6 py-3">Subscriber</th>
+                    <th className="px-6 py-3">Address & Port</th>
+                    <th className="px-6 py-3">Expires</th>
+                    <th className="px-6 py-3 text-right">Actions</th>
+                </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {activeRegistry.map(sub => (
-                <tr key={sub.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <p className="font-bold text-slate-800">{sub.username}</p>
-                    <p className="text-[10px] text-slate-400 uppercase">Status: Active</p>
-                  </td>
-                  <td className="px-6 py-4 font-mono text-indigo-600 font-bold">
-                    {sub.vpnUrl}
-                  </td>
-                  <td className="px-6 py-4 text-right flex justify-end gap-2">
-                    <button onClick={() => handleManualFulfill(sub.id, sub.vpnUrl)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
-                      <Edit size={16}/>
-                    </button>
-                    <button onClick={() => handleCancelService(sub.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
-                      <Trash2 size={16}/>
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                {subscriptions.map(sub => (
+                    <tr key={sub.id} className={new Date(sub.expiryDate) < new Date() ? 'bg-red-50' : ''}>
+                        <td className="px-6 py-4">
+                            <p className="font-bold text-slate-800">{sub.username}</p>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${sub.status === 'Ready' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700 animate-pulse'}`}>{sub.status}</span>
+                        </td>
+                        <td className="px-6 py-4 font-mono font-bold text-blue-600">{sub.vpnUrl || '---'}</td>
+                        <td className="px-6 py-4">
+                            <p className="text-xs text-slate-600">{new Date(sub.expiryDate).toLocaleDateString()}</p>
+                            {new Date(sub.expiryDate) < new Date() && <p className="text-[9px] text-red-600 font-bold uppercase">Expired</p>}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                            <button onClick={() => handleManualFulfill(sub.id, sub.vpnUrl)} className="text-blue-600 hover:underline font-bold text-xs">Configure</button>
+                        </td>
+                    </tr>
+                ))}
             </tbody>
-          </table>
-          {activeRegistry.length === 0 && <p className="p-12 text-center text-slate-400">No active remote access users in registry.</p>}
-        </div>
+        </table>
+        {subscriptions.length === 0 && <p className="p-12 text-center text-slate-400">No subscriptions found.</p>}
       </div>
     </div>
   );
@@ -2104,16 +2071,14 @@ const RemoteAccessAdmin = ({ db, appId }) => {
 
 // --- [NEW FEATURE] REMOTE ACCESS WIDGET (SUBSCRIBER) ---
 const RemoteAccessSubscriber = ({ user, db, appId }) => {
-  const [config, setConfig] = useState({ price: 100 });
+  const [config, setConfig] = useState({ price: 1200 }); // Default to 1200/year
   const [mySub, setMySub] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Load the price from settings
     getDoc(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'remote_access_config')).then(s => {
       if(s.exists()) setConfig(s.data());
     });
-    // Listen for this specific user's VPN subscription
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1'), where('userId', '==', user.uid));
     const unsub = onSnapshot(q, (snap) => {
       if (!snap.empty) setMySub({ id: snap.docs[0].id, ...snap.docs[0].data() });
@@ -2123,39 +2088,41 @@ const RemoteAccessSubscriber = ({ user, db, appId }) => {
 
   const handlePurchase = async () => {
     if ((user.walletCredits || 0) < config.price) {
-      return alert(`Insufficient credits. You need ₱${config.price} in your SwiftWallet.`);
+      return alert(`Insufficient credits. You need ₱${config.price} for a 1-year subscription.`);
     }
 
-    if (!confirm(`Subscribe to MikroTik Remote Access for ₱${config.price}? Credits will be deducted.`)) return;
+    if (!confirm(`Subscribe to MikroTik Remote Access for 1 FULL YEAR for ₱${config.price}?`)) return;
 
     setLoading(true);
     try {
-      // 1. Create the Service Record
+      // Calculate Expiry: Exactly 365 days from now
+      const expiry = new Date();
+      expiry.setFullYear(expiry.getFullYear() + 1);
+
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1'), {
         userId: user.uid,
         username: user.username,
-        date: new Date().toISOString(),
+        datePurchased: new Date().toISOString(),
+        expiryDate: expiry.toISOString(), // <--- 1 Year Expiry
         status: 'Pending Admin Setup',
         price: config.price,
         vpnUrl: '' 
       });
 
-      // 2. Deduct from SwiftWallet
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id), {
         walletCredits: increment(-config.price)
       });
 
-      // 3. Log to Wallet History
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
           userId: user.uid,
           username: user.username,
           amount: -config.price,
-          type: 'Remote Access Purchase',
+          type: 'Remote Access (1 Year Plan)',
           date: new Date().toISOString(),
           status: 'verified'
       });
 
-      alert("Purchase Successful! Admin has been notified to configure your port.");
+      alert("Yearly Subscription Activated! Admin will now set up your unique port.");
     } catch(e) { alert("Error: " + e.message); }
     setLoading(false);
   };
@@ -2165,30 +2132,28 @@ const RemoteAccessSubscriber = ({ user, db, appId }) => {
       <div className="flex justify-between items-start mb-6">
         <div>
           <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Globe size={20} className="text-blue-600"/> MikroTik Remote Access</h3>
-          <p className="text-sm text-slate-500">Access Winbox remotely via unique port.</p>
+          <p className="text-sm text-slate-500">Access Winbox from any network.</p>
         </div>
-        <div className="bg-blue-50 px-3 py-1 rounded-full text-blue-700 font-bold text-xs">₱{config.price}/mo</div>
+        <div className="bg-blue-600 px-3 py-1 rounded-full text-white font-bold text-xs">₱{config.price}/year</div>
       </div>
+
       {mySub ? (
         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
           <div className="flex justify-between items-center mb-3">
-             <span className="text-xs font-bold text-slate-400 uppercase">Status</span>
-             <span className={`text-xs font-bold px-2 py-0.5 rounded uppercase ${mySub.status === 'Ready' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{mySub.status}</span>
+             <span className="text-[10px] font-bold text-slate-400 uppercase">Valid Until: {new Date(mySub.expiryDate).toLocaleDateString()}</span>
+             <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${mySub.status === 'Ready' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{mySub.status}</span>
           </div>
           {mySub.vpnUrl ? (
-            <div>
-               <p className="text-xs text-slate-500 mb-1">Remote Address:</p>
-               <div className="flex gap-2">
+            <div className="flex gap-2">
                  <code className="flex-1 bg-white border p-2 rounded text-sm font-mono text-blue-600 truncate">{mySub.vpnUrl}</code>
                  <button onClick={() => {navigator.clipboard.writeText(mySub.vpnUrl); alert("Copied!")}} className="p-2 bg-white border rounded hover:bg-slate-50"><Copy size={16}/></button>
-               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-slate-500 text-sm italic"><Loader2 size={16} className="animate-spin"/> Configuration in progress...</div>
+            <div className="flex items-center gap-2 text-slate-500 text-xs italic"><Loader2 size={14} className="animate-spin"/> Configuring your port...</div>
           )}
         </div>
       ) : (
-        <button onClick={handlePurchase} disabled={loading} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-blue-600 transition-all shadow-lg">{loading ? 'Processing...' : 'Subscribe Now'}</button>
+        <button onClick={handlePurchase} disabled={loading} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-blue-600 transition-all shadow-lg">Buy 1 Year Access</button>
       )}
     </div>
   );
