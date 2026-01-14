@@ -1978,7 +1978,7 @@ const AgentDashboard = ({ user, db, appId, onLogout }) => {
 
 // --- [NEW FEATURE] REMOTE ACCESS SERVICE MANAGER (ADMIN) ---
 const RemoteAccessAdmin = ({ db, appId }) => {
-  const [settings, setSettings] = useState({ price: 100, enabled: true });
+  const [settings, setSettings] = useState({ price: 100 });
   const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -1986,58 +1986,115 @@ const RemoteAccessAdmin = ({ db, appId }) => {
     const unsubConfig = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'remote_access_config'), (snap) => {
       if (snap.exists()) setSettings(snap.data());
     });
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1'));
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1'), orderBy('date', 'desc'));
     const unsubSubs = onSnapshot(q, (snap) => {
       setSubscriptions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     return () => { unsubConfig(); unsubSubs(); };
   }, [db, appId]);
 
-  const handleUpdatePrice = async () => {
-    setLoading(true);
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'remote_access_config'), settings);
-    alert("Service Settings Updated!");
-    setLoading(false);
+  const handleManualFulfill = async (subId, currentUrl) => {
+    const url = prompt("Enter Remote URL:PORT (e.g. 124.6.182.10:10001):", currentUrl || "");
+    if (url === null) return;
+
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1', subId), {
+        vpnUrl: url,
+        status: 'Ready'
+      });
+      alert("Subscriber notified! Link is now live on their dashboard.");
+    } catch(e) { alert("Error: " + e.message); }
   };
 
-  const handleUpdateDetails = async (subId, details) => {
-    const vpnUrl = prompt("Enter the Remote Connection URL (e.g. your-isp.com:8081):", details || "");
-    if (vpnUrl === null) return;
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1', subId), {
-      vpnUrl: vpnUrl, status: 'Ready'
-    });
-    alert("Subscriber notified!");
+  const handleCancelService = async (subId) => {
+    if(!confirm("Are you sure? This will remove the record from the dashboard. (Doesn't refund credits)")) return;
+    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1', subId));
   };
+
+  const handleUpdatePrice = async () => {
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'remote_access_config'), settings);
+    alert("Service Price Updated!");
+  };
+
+  // Filter lists
+  const pending = subscriptions.filter(s => s.status !== 'Ready');
+  const activeRegistry = subscriptions.filter(s => s.status === 'Ready');
 
   return (
     <div className="space-y-6 animate-in fade-in">
+      {/* 1. CONFIGURATION CARD */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Server size={20} className="text-indigo-600"/> Remote Access Service Config</h3>
-        <div className="flex flex-col md:flex-row gap-4 items-end">
+        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <Settings size={20} className="text-slate-400"/> Service Settings
+        </h3>
+        <div className="flex gap-4 items-end">
           <div className="flex-1">
-            <label className="text-xs font-bold text-slate-500 uppercase">Monthly Service Price (₱)</label>
+            <label className="text-xs font-bold text-slate-500 uppercase">Monthly Subscription Price (₱)</label>
             <input type="number" className="w-full border p-3 rounded-xl mt-1 font-bold text-lg" value={settings.price} onChange={e => setSettings({...settings, price: parseFloat(e.target.value)})}/>
           </div>
-          <button onClick={handleUpdatePrice} disabled={loading} className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all">{loading ? <Loader2 className="animate-spin"/> : 'Save Price'}</button>
+          <button onClick={handleUpdatePrice} className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all">Update Price</button>
         </div>
       </div>
+
+      {/* 2. PENDING REQUESTS */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-4 bg-slate-50 border-b font-bold text-slate-700">Service Subscribers</div>
+        <div className="p-4 bg-orange-50 border-b flex justify-between items-center">
+            <h3 className="font-bold text-orange-800 flex items-center gap-2"><Clock size={18}/> Pending Setup ({pending.length})</h3>
+        </div>
         <div className="divide-y divide-slate-100">
-          {subscriptions.map(sub => (
-            <div key={sub.id} className="p-4 flex flex-col md:flex-row justify-between items-center gap-4">
+          {pending.map(sub => (
+            <div key={sub.id} className="p-4 flex flex-col md:flex-row justify-between items-center gap-4 bg-orange-50/20">
               <div className="flex-1">
                 <p className="font-bold text-slate-800">{sub.username}</p>
-                <p className="text-xs text-slate-500">Subscribed: {new Date(sub.date).toLocaleDateString()}</p>
-                {sub.vpnUrl && <code className="text-[10px] bg-slate-100 px-2 py-1 rounded text-indigo-600 mt-1 block w-fit">{sub.vpnUrl}</code>}
+                <p className="text-xs text-slate-500 italic">Paid ₱{sub.price} on {new Date(sub.date).toLocaleDateString()}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${sub.status === 'Ready' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{sub.status}</span>
-                <button onClick={() => handleUpdateDetails(sub.id, sub.vpnUrl)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-700">Set Remote URL</button>
-              </div>
+              <button onClick={() => handleManualFulfill(sub.id)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-700 shadow-md">
+                Configure Port & Fulfill
+              </button>
             </div>
           ))}
-          {subscriptions.length === 0 && <p className="p-8 text-center text-slate-400">No active remote access subscribers.</p>}
+          {pending.length === 0 && <p className="p-8 text-center text-slate-400 text-sm">No pending orders.</p>}
+        </div>
+      </div>
+
+      {/* 3. PORT MANAGEMENT REGISTRY */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+            <h3 className="font-bold flex items-center gap-2"><Hash size={18} className="text-indigo-400"/> Active Port Registry</h3>
+            <span className="text-[10px] font-bold uppercase opacity-60">Subscriber Count: {activeRegistry.length}</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-500 border-b">
+              <tr>
+                <th className="px-6 py-3 font-bold">Subscriber</th>
+                <th className="px-6 py-3 font-bold">Remote Address (Link)</th>
+                <th className="px-6 py-3 font-bold text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {activeRegistry.map(sub => (
+                <tr key={sub.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4">
+                    <p className="font-bold text-slate-800">{sub.username}</p>
+                    <p className="text-[10px] text-slate-400 uppercase">Status: Active</p>
+                  </td>
+                  <td className="px-6 py-4 font-mono text-indigo-600 font-bold">
+                    {sub.vpnUrl}
+                  </td>
+                  <td className="px-6 py-4 text-right flex justify-end gap-2">
+                    <button onClick={() => handleManualFulfill(sub.id, sub.vpnUrl)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
+                      <Edit size={16}/>
+                    </button>
+                    <button onClick={() => handleCancelService(sub.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
+                      <Trash2 size={16}/>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {activeRegistry.length === 0 && <p className="p-12 text-center text-slate-400">No active remote access users in registry.</p>}
         </div>
       </div>
     </div>
@@ -2047,14 +2104,16 @@ const RemoteAccessAdmin = ({ db, appId }) => {
 
 // --- [NEW FEATURE] REMOTE ACCESS WIDGET (SUBSCRIBER) ---
 const RemoteAccessSubscriber = ({ user, db, appId }) => {
-  const [config, setConfig] = useState({ price: 0 });
+  const [config, setConfig] = useState({ price: 100 });
   const [mySub, setMySub] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // Load the price from settings
     getDoc(doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'remote_access_config')).then(s => {
       if(s.exists()) setConfig(s.data());
     });
+    // Listen for this specific user's VPN subscription
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1'), where('userId', '==', user.uid));
     const unsub = onSnapshot(q, (snap) => {
       if (!snap.empty) setMySub({ id: snap.docs[0].id, ...snap.docs[0].data() });
@@ -2063,19 +2122,40 @@ const RemoteAccessSubscriber = ({ user, db, appId }) => {
   }, [user, db, appId]);
 
   const handlePurchase = async () => {
-    if (!confirm(`Subscribe to MikroTik Remote Access for ₱${config.price}/month?`)) return;
+    if ((user.walletCredits || 0) < config.price) {
+      return alert(`Insufficient credits. You need ₱${config.price} in your SwiftWallet.`);
+    }
+
+    if (!confirm(`Subscribe to MikroTik Remote Access for ₱${config.price}? Credits will be deducted.`)) return;
+
     setLoading(true);
     try {
+      // 1. Create the Service Record
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_remote_access_v1'), {
-        userId: user.uid, username: user.username, date: new Date().toISOString(), status: 'Pending Setup', price: config.price
+        userId: user.uid,
+        username: user.username,
+        date: new Date().toISOString(),
+        status: 'Pending Admin Setup',
+        price: config.price,
+        vpnUrl: '' 
       });
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
-        ticketId: Math.floor(Math.random() * 900000).toString(), userId: user.uid, username: user.username,
-        subject: "NEW SERVICE: Remote Access Setup",
-        message: `User purchased Remote Access (₱${config.price}). Please setup tunnel.`,
-        status: 'open', date: new Date().toISOString(), isOrder: true
+
+      // 2. Deduct from SwiftWallet
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id), {
+        walletCredits: increment(-config.price)
       });
-      alert("Purchase Successful! Our team is now configuring your router tunnel.");
+
+      // 3. Log to Wallet History
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
+          userId: user.uid,
+          username: user.username,
+          amount: -config.price,
+          type: 'Remote Access Purchase',
+          date: new Date().toISOString(),
+          status: 'verified'
+      });
+
+      alert("Purchase Successful! Admin has been notified to configure your port.");
     } catch(e) { alert("Error: " + e.message); }
     setLoading(false);
   };
@@ -2085,19 +2165,19 @@ const RemoteAccessSubscriber = ({ user, db, appId }) => {
       <div className="flex justify-between items-start mb-6">
         <div>
           <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Globe size={20} className="text-blue-600"/> MikroTik Remote Access</h3>
-          <p className="text-sm text-slate-500">Access Winbox from anywhere.</p>
+          <p className="text-sm text-slate-500">Access Winbox remotely via unique port.</p>
         </div>
         <div className="bg-blue-50 px-3 py-1 rounded-full text-blue-700 font-bold text-xs">₱{config.price}/mo</div>
       </div>
       {mySub ? (
         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
           <div className="flex justify-between items-center mb-3">
-             <span className="text-xs font-bold text-slate-400 uppercase">Service Status</span>
+             <span className="text-xs font-bold text-slate-400 uppercase">Status</span>
              <span className={`text-xs font-bold px-2 py-0.5 rounded uppercase ${mySub.status === 'Ready' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{mySub.status}</span>
           </div>
           {mySub.vpnUrl ? (
             <div>
-               <p className="text-xs text-slate-500 mb-1">Your Remote Address:</p>
+               <p className="text-xs text-slate-500 mb-1">Remote Address:</p>
                <div className="flex gap-2">
                  <code className="flex-1 bg-white border p-2 rounded text-sm font-mono text-blue-600 truncate">{mySub.vpnUrl}</code>
                  <button onClick={() => {navigator.clipboard.writeText(mySub.vpnUrl); alert("Copied!")}} className="p-2 bg-white border rounded hover:bg-slate-50"><Copy size={16}/></button>
