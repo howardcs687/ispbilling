@@ -6907,7 +6907,7 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       } catch(e) { console.error(e); }
   };
 
-  const filteredSubscribers = subscribers.filter(sub => (sub.username?.toLowerCase().includes(searchTerm.toLowerCase()) || sub.accountNumber?.includes(searchTerm)));
+  const filteredSubscribers = subscribers.filter(sub => (sub.username?.toLowerCase().includes(searchTerm.toLowerCase()) || sub.accountNumber?.includes(searchTerm) || sub.resellerId?.includes(searchTerm)));
   const activeRepairs = (repairs || []).filter(r => r.status !== 'Completed');
   const historyRepairs = (repairs || []).filter(r => r.status === 'Completed');
 
@@ -6969,12 +6969,26 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden max-w-[90vw] mx-auto lg:max-w-full">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm min-w-[800px]">
-                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200"><tr><th className="px-6 py-4 font-bold">User</th><th className="px-6 py-4 font-bold">Role</th><th className="px-6 py-4 font-bold">Plan</th><th className="px-6 py-4 font-bold">Balance</th><th className="px-6 py-4 font-bold">Points</th><th className="px-6 py-4 font-bold">Due Date</th><th className="px-6 py-4 font-bold">Status</th><th className="px-6 py-4 font-bold text-right">Actions</th></tr></thead>
+                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200"><tr><th className="px-6 py-4 font-bold">User</th><th className="px-6 py-4 font-bold">Role</th><th className="px-6 py-4 font-bold">Reseller</th><th className="px-6 py-4 font-bold">Plan</th><th className="px-6 py-4 font-bold">Balance</th><th className="px-6 py-4 font-bold">Points</th><th className="px-6 py-4 font-bold">Due Date</th><th className="px-6 py-4 font-bold">Status</th><th className="px-6 py-4 font-bold text-right">Actions</th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredSubscribers.map((sub) => (
                     <tr key={sub.id} className="hover:bg-blue-50/30 transition-colors">
                       <td className="px-6 py-4"><div>{sub.username}</div><div className="text-xs text-slate-500 flex flex-col"><span>#{sub.accountNumber}</span><span className="text-indigo-500">{sub.email}</span></div></td>
                       <td className="px-6 py-4">{sub.role === 'admin' ? <span className="bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider flex items-center gap-1 w-fit"><Shield size={10} /> Admin</span> : sub.role === 'technician' ? <span className="bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider flex items-center gap-1 w-fit"><HardHat size={10} /> Tech</span> : <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Subscriber</span>}</td>
+                      <td className="px-6 py-4">
+                      {sub.resellerId ? (
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full w-fit uppercase">
+                            IPTV Client
+                          </span>
+                          <span className="text-[10px] text-slate-400 mt-1">ID: {sub.resellerId.slice(-6)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full w-fit uppercase">
+                          Direct
+                        </span>
+                      )}
+                    </td>
                       <td className="px-6 py-4 text-slate-600 font-medium">{sub.plan}</td>
                       <td className="px-6 py-4 font-mono font-bold text-slate-700">₱{sub.balance?.toFixed(2) || "0.00"}</td>
                       <td className="px-6 py-4 font-bold text-yellow-600 flex items-center gap-1"><Gift size={12}/> {sub.points || 0}</td>
