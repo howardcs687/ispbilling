@@ -3953,53 +3953,27 @@ const CommunitySignupModal = ({ onClose, db, appId, onLoginSuccess }) => {
 
 
 const LiveIPTV = () => {
-  // 🔴 REPLACE THIS URL with your actual IPTV website or embed lin
-  const IPTV_SOURCE_URL = "https://iptv-two-delta.vercel.app/";
+  // Try using an embed-specific link if available
+  const IPTV_SOURCE_URL = "https://iptv-two-delta.vercel.app/"; 
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-700 relative">
-        {/* Decorative Header */}
         <div className="bg-slate-800 p-4 border-b border-slate-700 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="bg-red-600 p-1.5 rounded-lg">
-              <Tv className="text-white" size={18} />
-            </div>
-            <div>
-              <span className="font-bold text-white text-sm block leading-none">SwiftNet Live</span>
-              <span className="text-[10px] text-slate-400 uppercase tracking-widest">Entertainment Hub</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-             <span className="text-[10px] font-black text-red-500 uppercase tracking-tighter">Live Stream</span>
+            <div className="bg-red-600 p-1.5 rounded-lg"><Tv className="text-white" size={18} /></div>
+            <span className="font-bold text-white text-sm">SwiftNet Live</span>
           </div>
         </div>
-
-        {/* Video Player Container */}
-        <div className="aspect-video w-full bg-black flex items-center justify-center">
-          {/* Iframe for the IPTV website */}
-          <iframe
-            src={IPTV_SOURCE_URL}
-            className="w-full h-full"
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
-            title="SwiftNet IPTV Player"
-            onError={(e) => console.log("IPTV Load Error", e)}
+        <div className="aspect-video w-full bg-black">
+          <iframe 
+            src={IPTV_SOURCE_URL} 
+            className="w-full h-full" 
+            // Add these specific permissions to fix "Load Failed"
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            sandbox="allow-forms allow-modals allow-orientation-lock allow-pointer-lock allow-presentation allow-same-origin allow-scripts allow-top-navigation"
+            allowFullScreen 
           />
-        </div>
-      </div>
-
-      {/* Disclaimer Card */}
-      <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 flex gap-4 items-start">
-        <div className="bg-indigo-600 p-2 rounded-full text-white shrink-0">
-          <Info size={16}/>
-        </div>
-        <div>
-          <h4 className="font-bold text-indigo-900 text-sm">Streaming Performance</h4>
-          <p className="text-xs text-indigo-700 leading-relaxed">
-            Streaming Live TV requires a stable connection. For the best experience, we recommend using a 5Ghz WiFi frequency or a LAN cable. This content is provided by our external content partner.
-          </p>
         </div>
       </div>
     </div>
