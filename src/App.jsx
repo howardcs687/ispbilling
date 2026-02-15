@@ -5500,6 +5500,7 @@ const AddStaffModal = ({ onClose }) => {
                     <select className="w-full border p-2 rounded-lg bg-blue-50 font-bold text-blue-700" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
                         <option value="cashier">Cashier (Billing Only)</option>
                         <option value="technician">Technician (Repairs Only)</option>
+                        <option value="iptv_reseller">IPTV Reseller (Create Subs)</option>
                         <option value="retailer">Retailer (Digital Goods)</option>
                         <option value="agent">Sales Agent (Reseller)</option>
                         <option value="admin">Admin (Full Access)</option>
@@ -6247,6 +6248,220 @@ const RetailerDashboard = ({ user, db, appId, onLogout }) => {
                 </div>
             </div>
         )}
+    </div>
+  );
+};
+
+// --- [UPDATED] IPTV RESELLER DASHBOARD WITH RENEWAL & SECONDARY INSTANCE ---
+const IPTVResellerDashboard = ({ user, db, appId, onLogout }) => {
+  const [subscribers, setSubscribers] = useState([]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newSub, setNewSub] = useState({ username: '', email: '', password: '' });
+  const [loading, setLoading] = useState(false);
+
+  // 1. Fetch Reseller's Clients
+  useEffect(() => {
+    const q = query(
+      collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME),
+      where('resellerId', '==', user.uid)
+    );
+    const unsub = onSnapshot(q, (s) => {
+      setSubscribers(s.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsub();
+  }, [user.uid, db, appId]);
+
+  // 2. CREATE CLIENT (Using Secondary Instance)
+  const handleCreateSubscriber = async (e) => {
+    e.preventDefault();
+    
+    // Check if Reseller's own account is active
+    if (user.status !== 'active') {
+      return alert("Your reseller account is EXPIRED. Please renew your own account with Super Admin to create or renew clients.");
+    }
+
+    if ((user.walletCredits || 0) < 1) return alert("No Credits! Contact Admin to top up.");
+    
+    setLoading(true);
+    let secondaryApp = null;
+    try {
+      // THE SECONDARY INSTANCE: Prevents Reseller from being logged out
+      // We use a random string to ensure the instance name is unique every time
+      const instanceName = `IPTV_Creator_${Date.now()}`;
+      secondaryApp = initializeApp(firebaseConfig, instanceName);
+      const secondaryAuth = getAuth(secondaryApp);
+      
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newSub.email, newSub.password);
+      const newUid = userCredential.user.uid;
+
+      // Define Client Expiry (30 Days from now)
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + 30);
+
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), {
+        uid: newUid,
+        username: newSub.username,
+        email: newSub.email,
+        role: 'subscriber',
+        status: 'active',
+        resellerId: user.uid,
+        isIPTVOnly: true,
+        accountNumber: `IPTV-${Math.floor(100000 + Math.random() * 900000)}`,
+        balance: 0,
+        dueDate: expiryDate.toISOString(),
+        dateCreated: new Date().toISOString()
+      });
+
+      // Deduct Credit
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id), {
+        walletCredits: increment(-1)
+      });
+
+      alert("Client Created! 1 Credit Deducted.");
+      setShowAddModal(false);
+      setNewSub({ username: '', email: '', password: '' });
+      
+      // Clean up secondary instance
+      await deleteApp(secondaryApp);
+    } catch (error) {
+      alert("Error: " + error.message);
+      if (secondaryApp) await deleteApp(secondaryApp);
+    }
+    setLoading(false);
+  };
+
+  // 3. RENEW CLIENT LOGIC
+  const handleRenewClient = async (client) => {
+    // Check Reseller Status First
+    if (user.status !== 'active') {
+      return alert("Access Denied: Your Reseller account is inactive. Renew your account with Admin first.");
+    }
+
+    if ((user.walletCredits || 0) < 1) {
+      return alert("Insufficient Credits! Please top up to renew clients.");
+    }
+
+    if (!confirm(`Renew ${client.username} for another 30 days? (-1 Credit)`)) return;
+
+    try {
+      const currentDueDate = new Date(client.dueDate || Date.now());
+      const now = new Date();
+      
+      // If already expired, start from today. If not, add 30 days to existing due date.
+      const baseDate = currentDueDate > now ? currentDueDate : now;
+      const newDueDate = new Date(baseDate);
+      newDueDate.setDate(newDueDate.getDate() + 30);
+
+      const clientRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, client.id);
+      await updateDoc(clientRef, {
+        dueDate: newDueDate.toISOString(),
+        status: 'active'
+      });
+
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id), {
+        walletCredits: increment(-1)
+      });
+
+      alert(`${client.username} renewed until ${newDueDate.toLocaleDateString()}`);
+    } catch (e) {
+      alert("Renewal failed: " + e.message);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <nav className="bg-indigo-900 text-white p-4 shadow-lg sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="bg-yellow-400 p-1.5 rounded-lg text-indigo-900"><Tv size={20}/></div>
+            <span className="font-black text-xl tracking-tight">IPTV<span className="text-yellow-400">Panel</span></span>
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="text-right">
+              <p className="text-[10px] uppercase text-indigo-300 font-bold">Reseller Status: <span className={user.status === 'active' ? 'text-green-400' : 'text-red-400'}>{user.status}</span></p>
+              <p className="font-mono text-xl font-bold text-yellow-400">{user.walletCredits || 0} Credits</p>
+            </div>
+            <button onClick={onLogout} className="bg-indigo-800 p-2 rounded-lg hover:bg-indigo-700 transition-colors"><LogOut size={18}/></button>
+          </div>
+        </div>
+      </nav>
+
+      <div className="max-w-6xl mx-auto p-4 md:p-8">
+        {user.status !== 'active' && (
+          <div className="mb-6 bg-red-600 text-white p-4 rounded-xl shadow-lg flex items-center gap-3 animate-pulse">
+            <AlertTriangle size={24}/>
+            <p className="font-bold">Your Reseller Account has EXPIRED. Creation and Renewals are disabled.</p>
+          </div>
+        )}
+
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="text-2xl font-bold text-slate-800">My IPTV Subscribers</h2>
+          <button 
+            disabled={user.status !== 'active'}
+            onClick={() => setShowAddModal(true)} 
+            className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg disabled:opacity-50"
+          >
+            <UserPlus size={20}/> New Account
+          </button>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-500 border-b">
+              <tr>
+                <th className="px-6 py-4 font-bold">Client Name</th>
+                <th className="px-6 py-4 font-bold">Due Date</th>
+                <th className="px-6 py-4 font-bold">Status</th>
+                <th className="px-6 py-4 font-bold text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {subscribers.map(s => {
+                const isExpired = new Date(s.dueDate) < new Date();
+                return (
+                  <tr key={s.id} className="hover:bg-slate-50">
+                    <td className="px-6 py-4 font-bold text-slate-800">{s.username}</td>
+                    <td className="px-6 py-4 font-mono">{new Date(s.dueDate).toLocaleDateString()}</td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${isExpired ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
+                        {isExpired ? 'Expired' : 'Active'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button 
+                        onClick={() => handleRenewClient(s)}
+                        disabled={user.status !== 'active'}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+                      >
+                        Renew (+30d)
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {subscribers.length === 0 && <div className="p-20 text-center text-slate-400">No clients yet.</div>}
+        </div>
+      </div>
+
+      {/* Modal remains the same but add status check to button */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6">
+            <h3 className="font-bold text-xl mb-6">Create IPTV User</h3>
+            <form onSubmit={handleCreateSubscriber} className="space-y-4">
+              <input className="w-full border p-3 rounded-xl" placeholder="Username" value={newSub.username} onChange={e=>setNewSub({...newSub, username: e.target.value})} required />
+              <input className="w-full border p-3 rounded-xl" type="email" placeholder="Email" value={newSub.email} onChange={e=>setNewSub({...newSub, email: e.target.value})} required />
+              <input className="w-full border p-3 rounded-xl" type="text" placeholder="Password" value={newSub.password} onChange={e=>setNewSub({...newSub, password: e.target.value})} required />
+              <button disabled={loading} className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">
+                {loading ? 'Creating Account...' : 'Activate (-1 Credit)'}
+              </button>
+              <button type="button" onClick={()=>setShowAddModal(false)} className="w-full text-slate-400 text-sm">Cancel</button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -8547,6 +8762,13 @@ if (isQRRepairMode) {
                 db={db} 
                 appId={appId} 
              />
+            ) : user.role === 'iptv_reseller' ? ( // ADD THIS BLOCK
+            <IPTVResellerDashboard 
+                user={user} 
+                db={db} 
+                appId={appId} 
+                onLogout={handleLogout} 
+            />
            ) : user.role === 'cashier' ? (
              <CashierDashboard subscribers={subscribers} db={db} appId={appId} />
            ) : user.role === 'technician' ? (
