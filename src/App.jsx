@@ -6699,13 +6699,14 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex space-x-1 overflow-x-auto max-w-[95vw] mx-auto md:mx-0 scrollbar-hide">
-         {['analytics', 'marketing', 'remote_access', 'status', 'ads', 'reports', 'cashier', 'coverage', 'expansion', 'expenses', 'store', 'digital_goods', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest', 'setting'].map(tab => (
+         {['analytics', 'live', 'marketing', 'remote_access', 'status', 'ads', 'reports', 'cashier', 'coverage', 'expansion', 'expenses', 'store', 'digital_goods', 'subscribers', 'network', 'repairs', 'payments', 'tickets', 'plans', 'speedtest', 'setting'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
-                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'marketing' ? <><Sparkles size={16}/> Marketing</> : tab === 'status' ? <><Activity size={16}/> Network Status</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'expansion' ? <><Rocket size={16}/> Expansion</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'digital_goods' ? <><Server size={16}/> Digital Goods</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
+                {tab === 'analytics' ? <><Activity size={16} /> Analytics</> : tab === 'live' ? <><Tv size={16}/> Live TV</> : tab === 'marketing' ? <><Sparkles size={16}/> Marketing</> : tab === 'status' ? <><Activity size={16}/> Network Status</> : tab === 'reports' ? <><FileBarChart size={16}/> Reports</> : tab === 'cashier' ? <><Calculator size={16}/> Cashier</> : tab === 'coverage' ? <><Map size={16}/> Coverage</> : tab === 'expansion' ? <><Rocket size={16}/> Expansion</> : tab === 'store' ? <><ShoppingBag size={16}/> Store Manager</> : tab === 'digital_goods' ? <><Server size={16}/> Digital Goods</> : tab === 'expenses' ? <><TrendingDown size={16}/> Expenses</> : tab === 'speedtest' ? <><Gauge size={16} /> Speed Test</> : tab === 'repairs' ? <><Wrench size={16}/> Repairs</> : tab === 'network' ? <><Signal size={16}/> Network</> : tab}
             </button>
          ))}
       </div>
       
+      {activeTab === 'live' && <LiveIPTV />}
       {activeTab === 'store' && <ProductManager appId={appId} db={db} />}
       {activeTab === 'digital_goods' && <DigitalGoodsAdmin db={db} appId={appId} />}
       {activeTab === 'remote_access' && <RemoteAccessAdmin db={db} appId={appId} />}
