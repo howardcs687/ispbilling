@@ -3885,7 +3885,7 @@ const BusinessDashboard = ({ user, db, appId, onPay }) => {
   );
 };
 
-// --- NEW COMPONENT: Community Sign Up Modal ---
+// --- NEW COMPONENT: Community Sign Up M
 const CommunitySignupModal = ({ onClose, db, appId, onLoginSuccess }) => {
   const [formData, setFormData] = useState({ username: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
@@ -3946,6 +3946,61 @@ const CommunitySignupModal = ({ onClose, db, appId, onLoginSuccess }) => {
         <p className="text-xs text-center text-slate-400 mt-4">
           Want internet? You can apply for a SwiftNet Fiber plan inside using this same account.
         </p>
+      </div>
+    </div>
+  );
+};
+
+
+const LiveIPTV = () => {
+  // 🔴 REPLACE THIS URL with your actual IPTV website or embed lin
+  const IPTV_SOURCE_URL = "https://iptv-two-delta.vercel.app/";
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-700 relative">
+        {/* Decorative Header */}
+        <div className="bg-slate-800 p-4 border-b border-slate-700 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="bg-red-600 p-1.5 rounded-lg">
+              <Tv className="text-white" size={18} />
+            </div>
+            <div>
+              <span className="font-bold text-white text-sm block leading-none">SwiftNet Live</span>
+              <span className="text-[10px] text-slate-400 uppercase tracking-widest">Entertainment Hub</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+             <span className="text-[10px] font-black text-red-500 uppercase tracking-tighter">Live Stream</span>
+          </div>
+        </div>
+
+        {/* Video Player Container */}
+        <div className="aspect-video w-full bg-black flex items-center justify-center">
+          {/* Iframe for the IPTV website */}
+          <iframe
+            src={IPTV_SOURCE_URL}
+            className="w-full h-full"
+            allow="autoplay; fullscreen; picture-in-picture"
+            allowFullScreen
+            title="SwiftNet IPTV Player"
+            onError={(e) => console.log("IPTV Load Error", e)}
+          />
+        </div>
+      </div>
+
+      {/* Disclaimer Card */}
+      <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 flex gap-4 items-start">
+        <div className="bg-indigo-600 p-2 rounded-full text-white shrink-0">
+          <Info size={16}/>
+        </div>
+        <div>
+          <h4 className="font-bold text-indigo-900 text-sm">Streaming Performance</h4>
+          <p className="text-xs text-indigo-700 leading-relaxed">
+            Streaming Live TV requires a stable connection. For the best experience, we recommend using a 5Ghz WiFi frequency or a LAN cable. This content is provided by our external content partner.
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -4110,7 +4165,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
   // --- DYNAMIC TABS LIST ---
   const tabs = isCommunityMember 
     ? ['community', 'plans', 'shop', 'settings']
-    : ['overview', 'community', 'family', 'auto_tech', 'wallet', 'shop', 'my_id', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'];
+    : ['overview', 'live', 'community', 'family', 'auto_tech', 'wallet', 'shop', 'my_id', 'repairs', 'plans', 'speedtest', 'documents', 'rewards', 'support', 'settings'];
 
   // --- SUBSCRIBER / COMMUNITY VIEW ---
   return (
@@ -4122,6 +4177,7 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
         {tabs.map(tab => (
            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-5 py-2.5 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>
               {tab === 'community' ? <><Users size={16}/> Community</> : 
+              tab === 'live' ? <><Tv size={16}/> Live TV</> :
                tab === 'speedtest' ? <><Gauge size={16}/> Speed Test</> : 
                tab === 'auto_tech' ? <><Zap size={16}/> Auto-Tech</> : 
                tab === 'wallet' ? <><Wallet size={16}/> Wallet</> : 
@@ -4261,6 +4317,8 @@ const SubscriberDashboard = ({ userData, onPay, announcements, notifications, ti
       )}
 
       {/* 4. OTHER TABS (Same logic as before) */}
+      {/* LIVE IPTV TAB */}
+      {activeTab === 'live' && <LiveIPTV />}
       {activeTab === 'speedtest' && <SpeedTest />}
       {activeTab === 'family' && (
         <div className="space-y-6 animate-in fade-in">
