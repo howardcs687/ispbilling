@@ -5472,7 +5472,7 @@ const AddStaffModal = ({ onClose }) => {
             name: formData.username,
             email: formData.email,
             code: formData.password, 
-            message: `You have been assigned as a ${formData.role}. Use this password to log in. You can access through this link: www.jwreport.site`
+            message: `You have been assigned as a ${formData.role}. Use your email that has been sent to us or the one you use in appylying. Use this password to log in. You can access through this link: www.jwreport.site`
         });
         alert(`${formData.role.toUpperCase()} account created successfully!`);
         onClose();
