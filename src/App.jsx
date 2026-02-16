@@ -8607,10 +8607,10 @@ useEffect(() => {
       if (currentUser) {
         try {
           const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, currentUser.uid);
-          await updateDoc(docRef, {
+          await setDoc(docRef, {
           lastLogin: new Date().toISOString(),
           isOnline: true
-          });
+        }, { merge: true });
           const docSnap = await getDoc(docRef);
           
           let firestoreData = {};
