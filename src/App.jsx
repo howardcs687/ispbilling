@@ -6636,6 +6636,31 @@ const RouterQRStickerModal = ({ user, onClose }) => {
 };
 
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs, user }) => {
+  // --- ADD THIS NEW LISTENER STARTING HERE ---
+  useEffect(() => {
+    // Create a timestamp for "now" minus 1 minute to avoid old notifications on load
+    const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
+
+    const q = query(
+      collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME),
+      where('dateCreated', '>', oneMinuteAgo)
+    );
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        // Only trigger if a NEW document is added to the database
+        if (change.type === "added") {
+          const newUser = change.doc.data();
+          
+          // Trigger the toast notification
+          if (typeof addToast === 'function') {
+            addToast(`New Subscriber: ${newUser.username}!`, 'success');
+          }
+        }
+      });
+    });
+    return () => unsub();
+  }, [db, appId, addToast]);
   const [activeTab, setActiveTab] = useState('subscribers');
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -6969,12 +6994,33 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden max-w-[90vw] mx-auto lg:max-w-full">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm min-w-[800px]">
-                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200"><tr><th className="px-6 py-4 font-bold">User</th><th className="px-6 py-4 font-bold">Role</th><th className="px-6 py-4 font-bold">Reseller</th><th className="px-6 py-4 font-bold">Plan</th><th className="px-6 py-4 font-bold">Balance</th><th className="px-6 py-4 font-bold">Points</th><th className="px-6 py-4 font-bold">Due Date</th><th className="px-6 py-4 font-bold">Status</th><th className="px-6 py-4 font-bold text-right">Actions</th></tr></thead>
+                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200"><tr><th className="px-6 py-4 font-bold">User</th><th className="px-6 py-4 font-bold">Role</th><th className="px-6 py-4 font-bold text-center">Activity</th><th className="px-6 py-4 font-bold">Reseller</th><th className="px-6 py-4 font-bold">Plan</th><th className="px-6 py-4 font-bold">Balance</th><th className="px-6 py-4 font-bold">Points</th><th className="px-6 py-4 font-bold">Due Date</th><th className="px-6 py-4 font-bold">Status</th><th className="px-6 py-4 font-bold text-right">Actions</th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredSubscribers.map((sub) => (
                     <tr key={sub.id} className="hover:bg-blue-50/30 transition-colors">
                       <td className="px-6 py-4"><div>{sub.username}</div><div className="text-xs text-slate-500 flex flex-col"><span>#{sub.accountNumber}</span><span className="text-indigo-500">{sub.email}</span></div></td>
                       <td className="px-6 py-4">{sub.role === 'admin' ? <span className="bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider flex items-center gap-1 w-fit"><Shield size={10} /> Admin</span> : sub.role === 'technician' ? <span className="bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider flex items-center gap-1 w-fit"><HardHat size={10} /> Tech</span> : <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Subscriber</span>}</td>
+                      <td className="px-6 py-4 text-center">
+                        {sub.isOnline ? (
+                          <div className="flex flex-col items-center justify-center relative">
+                            {/* Pulsing Dot Effect */}
+                            <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-ping absolute"></div>
+                            <div className="w-2.5 h-2.5 bg-green-500 rounded-full relative"></div>
+                            <span className="text-[9px] text-green-600 font-black mt-1 uppercase tracking-tighter">Live</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center">
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              {sub.lastLogin ? new Date(sub.lastLogin).toLocaleDateString() : 'Offline'}
+                            </span>
+                            {sub.lastLogin && (
+                              <span className="text-[8px] text-slate-300">
+                                {new Date(sub.lastLogin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                       {sub.resellerId ? (
                         <div className="flex flex-col">
@@ -8561,6 +8607,10 @@ useEffect(() => {
       if (currentUser) {
         try {
           const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, currentUser.uid);
+          await updateDoc(docRef, {
+          lastLogin: new Date().toISOString(),
+          isOnline: true
+          });
           const docSnap = await getDoc(docRef);
           
           let firestoreData = {};
@@ -8664,10 +8714,26 @@ useEffect(() => {
   // --- HANDLERS ---
 
   const handleLogout = async () => {
-      await signOut(auth);
-      setShowLogin(false);
-      setPublicPage('landing');
-      addToast("Logged out successfully", "info");
+      try {
+        // 1. If we have a user, mark them as OFFLINE in the database first
+        if (user) {
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.uid);
+          await updateDoc(docRef, { isOnline: false });
+        }
+        
+        // 2. Perform the actual Firebase Sign Out
+        await signOut(auth);
+        
+        // 3. Reset the UI states
+        setShowLogin(false);
+        setPublicPage('landing');
+        addToast("Logged out successfully", "info");
+        
+      } catch (e) {
+        console.error("Logout error:", e);
+        // Fallback signout if the database update fails
+        await signOut(auth);
+      }
   };
 
   const handleLoginClick = () => setShowLogin(true);
@@ -8775,6 +8841,7 @@ if (isQRRepairMode) {
                 user={user} 
                 db={db} 
                 appId={appId} 
+                addToast={addToast}
              />
             ) : user.role === 'iptv_reseller' ? ( // ADD THIS BLOCK
             <IPTVResellerDashboard 
