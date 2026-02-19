@@ -2341,70 +2341,80 @@ const Login = ({ onLogin }) => {
   const [recoveryLoading, setRecoveryLoading] = useState(false);
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      let userUid;
-      
-      if (isSignUp) {
-         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-         userUid = userCredential.user.uid; // Fix: Use userUid variable
-         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid), {
-           uid: userUid,
-           username: name || email.split('@')[0],
-           email: email,
-           role: 'subscriber',
-           status: 'applicant', 
-           accountNumber: 'PENDING',
-           plan: null, 
-           balance: 0,
-           address: '', 
-           dueDate: new Date().toISOString()
-         });
+  e.preventDefault();
+  setLoading(true);
+  setError('');
+  try {
+    let userUid;
+    
+    if (isSignUp) {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        userUid = userCredential.user.uid;
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid), {
+          uid: userUid,
+          username: name || email.split('@')[0],
+          email: email,
+          role: 'subscriber',
+          status: 'applicant', 
+          accountNumber: 'PENDING',
+          isOnline: false, // Default to offline
+          plan: null, 
+          balance: 0,
+          address: '', 
+          dueDate: new Date().toISOString()
+        });
+    } else {
+        // 1. Authenticate with Firebase
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        userUid = userCredential.user.uid;
 
-         // Send welcome email if enabled (Optional, based on your previous features)
-         if (typeof sendCustomEmail === 'function') {
-             await sendCustomEmail('welcome', {
-                name: name,
-                email: email,
-                message: 'Welcome to the SwiftNet family! Your application is under review.'
-             });
-         }
+        // 2. Fetch User Profile from Firestore
+        const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid);
+        const userSnap = await getDoc(userRef);
 
-      } else {
-         // 1. Authenticate
-         const userCredential = await signInWithEmailAndPassword(auth, email, password);
-         userUid = userCredential.user.uid;
+        if (userSnap.exists()) {
+            const userData = userSnap.data();
 
-         // 2. Check Maintenance Mode
-         const configRef = doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'main_settings');
-         const configSnap = await getDoc(configRef);
-         
-         if (configSnap.exists() && configSnap.data().maintenanceMode) {
-             // 3. Check User Role
-             const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid);
-             const userSnap = await getDoc(userRef);
-             
-             // If user is NOT admin, kick them out with YOUR CUSTOM MESSAGE
-             if (userSnap.exists() && userSnap.data().role !== 'admin') {
-                 await signOut(auth);
-                 throw new Error("⚠️ SYSTEM UNDER MAINTENANCE, A NEW FEATURE WILL BE DEPLOYED SOON, PLEASE TRY AGAIN LATER. ⚠️");
-             }
-         }
-      }
-    } catch (err) {
-      console.error(err);
-      
-      // THIS IS THE NEW LINE THAT MAKES IT POP UP
-      alert(err.message); 
-      
-      setError(err.message);
-      // Force logout if error occurred after auth but before validation
-      if (auth.currentUser) await signOut(auth);
+            // --- FEATURE: SINGLE LOGIN ENFORCEMENT ---
+            // If user is already online and NOT an admin (admins usually need multi-tab access)
+            if (userData.isOnline === true && userData.role !== 'admin') {
+                // RESTRICT ACCOUNT: Set status to restricted
+                await updateDoc(userRef, { 
+                    status: 'restricted', 
+                    isOnline: false,
+                    restrictionNote: "Multiple login attempt detected." 
+                });
+                
+                await signOut(auth); // Kick them out immediately
+                throw new Error("⚠️ SECURITY ALERT: This account is already logged in elsewhere. For security, your account has been RESTRICTED. Please contact a Super Admin to re-enable access.");
+            }
+
+            // --- FEATURE: CHECK RESTRICTION ---
+            if (userData.status === 'restricted') {
+                await signOut(auth);
+                throw new Error("⛔ ACCOUNT RESTRICTED: Your account is disabled. Please contact SwiftNet Super Admin for re-activation.");
+            }
+
+            // 3. Maintenance Check (Existing logic)
+            const configRef = doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'main_settings');
+            const configSnap = await getDoc(configRef);
+            if (configSnap.exists() && configSnap.data().maintenanceMode && userData.role !== 'admin') {
+                await signOut(auth);
+                throw new Error("⚠️ SYSTEM UNDER MAINTENANCE: Please try again later.");
+            }
+
+            // 4. If all checks pass, Mark as Online
+            await updateDoc(userRef, { isOnline: true, lastLogin: new Date().toISOString() });
+        }
     }
-    setLoading(false);
-  };
+  } catch (err) {
+    console.error(err);
+    alert(err.message); 
+    setError(err.message);
+    if (auth.currentUser) await signOut(auth);
+  }
+  setLoading(false);
+};
 
   const handleForgotPassword = async (e) => {
      e.preventDefault();
@@ -2608,37 +2618,46 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
   const [ocrStatus, setOcrStatus] = useState(''); // Text feedback
 
   const handleFileChange = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+    const file = e.target.files[0];
+    if (!file) return;
 
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    const img = new window.Image();
-    img.src = event.target.result;
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      
-      // 📉 AGGRESSIVE RESIZING: Limit width to 400px
-      // This ensures the data string doesn't overwhelm the browser or Firestore
-      const MAX_WIDTH = 400; 
-      const scaleSize = MAX_WIDTH / img.width;
-      canvas.width = MAX_WIDTH;
-      canvas.height = img.height * scaleSize;
+    // 1. Show preview immediately
+    const objectUrl = URL.createObjectURL(file);
+    setPreview(objectUrl);
+    setScanning(true);
+    setOcrStatus("Initializing AI Scanner...");
 
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      
-      // 📉 LOW QUALITY: Set to 0.2 (20%) quality
-      // This is the "magic number" to keep documents small enough for Spark Plan
-      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.2);
-      setBase64Image(compressedBase64);
+    // 2. Compress Image Logic (Existing)
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800; // Increased slightly for better OCR
+        const scaleSize = MAX_WIDTH / img.width;
+        
+        if (img.width > MAX_WIDTH) {
+            canvas.width = MAX_WIDTH;
+            canvas.height = img.height * scaleSize;
+        } else {
+            canvas.width = img.width;
+            canvas.height = img.height;
+        }
 
-      // Run your OCR on the small image
-      if (typeof runOCR === 'function') runOCR(compressedBase64);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        // Save compressed for upload
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+        setBase64Image(compressedBase64);
+
+        // 3. START AI SCANNING (Tesseract)
+        runOCR(compressedBase64);
+      };
     };
+    reader.readAsDataURL(file);
   };
-  reader.readAsDataURL(file);
-};
 
   const runOCR = async (imageSrc) => {
     setOcrStatus("Reading Receipt Details...");
@@ -2686,43 +2705,27 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!amount || !refNumber) return alert("Please fill in all fields.");
-  if (!base64Image) return alert("Please wait for image processing.");
-  
-  setLoading(true);
-  try {
-      // 1. Convert Base64 to Blob
-      const blob = await (await fetch(base64Image)).blob();
-
-      // 2. Upload to Storage Path: receipts/USER_ID_TIMESTAMP.jpg
-      const storagePath = `receipts/${user.uid}_${Date.now()}.jpg`;
-      const fileRef = storageRef(storage, storagePath);
-      const uploadResult = await uploadBytes(fileRef, blob);
-      
-      // 3. Get the URL
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-
-      // 4. Save to Firestore (Tiny document, no crash!)
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
-          userId: user.uid,
-          username: user.username,
-          refNumber: refNumber,
-          amount: parseFloat(amount),
-          method: method,
-          date: new Date().toISOString(),
-          status: 'pending_approval',
-          proofImage: downloadURL // Saving the URL link only
-      });
-
-      alert("Proof submitted successfully!");
-      onClose();
-  } catch(e) { 
-      console.error("Storage Error:", e);
-      alert("Upload failed: " + e.message); 
-  }
-  setLoading(false);
-};
+    e.preventDefault();
+    if (!amount || !refNumber) return alert("Please fill in all fields.");
+    if (!base64Image) return alert("Please wait for image processing.");
+    
+    setLoading(true);
+    try {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
+            userId: user.uid,
+            username: user.username,
+            refNumber: refNumber,
+            amount: parseFloat(amount),
+            method: method,
+            date: new Date().toISOString(),
+            status: 'pending_approval',
+            proofImage: base64Image
+        });
+        alert("Proof submitted successfully!");
+        onClose();
+    } catch(e) { alert("Error: " + e.message); }
+    setLoading(false);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
@@ -2974,31 +2977,23 @@ const KYCModal = ({ user, onClose, db, appId }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!base64Image) return alert("Please wait for the image to process.");
+    if (!base64Image) return alert("Please wait for the image to process or upload again.");
     setLoading(true);
 
     try {
-        // 1. Upload to Storage Path: kyc_ids/USER_ID.jpg
-        const blob = await (await fetch(base64Image)).blob();
-        const fileRef = storageRef(storage, `kyc_ids/${user.uid}.jpg`);
-        const uploadResult = await uploadBytes(fileRef, blob);
-        const downloadURL = await getDownloadURL(uploadResult.ref);
-
-        // 2. Update User Document with the URL
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id), {
             kycStatus: 'pending',
             kycType: idType,
-            kycImage: downloadURL, // Link to storage
+            kycImage: base64Image,
             kycDate: new Date().toISOString()
         });
-
-        alert("ID Submitted for review!");
+        alert("ID Submitted! Admin will review it shortly.");
         onClose();
     } catch (e) {
         alert("Error: " + e.message);
     }
     setLoading(false);
-};
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
@@ -3589,6 +3584,7 @@ const StudentPromoModal = ({ onClose, user, db, appId }) => {
   const [base64Image, setBase64Image] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // Handle Image Compression
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -3620,28 +3616,20 @@ const StudentPromoModal = ({ onClose, user, db, appId }) => {
     try {
         const ticketId = Math.floor(100000 + Math.random() * 900000).toString();
         
-        // 1. Convert Base64 to Blob
-        const blob = await (await fetch(base64Image)).blob();
-
-        // 2. Upload to Firebase Storage (Saves database space and prevents crash)
-        const fileRef = storageRef(getStorage(), `student_ids/${user.uid}_${Date.now()}.jpg`);
-        const uploadResult = await uploadBytes(fileRef, blob);
-        const downloadURL = await getDownloadURL(uploadResult.ref);
-        
-        // 3. Save only the URL to Firestore
+        // Save to Tickets Collection
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_tickets_v1'), {
             ticketId,
             userId: user.uid,
             username: user.username,
             subject: "Student Discount Application",
-            message: "I am applying for the 10% Student Discount.",
-            attachmentUrl: downloadURL, // <--- FIXED: Now a short URL, not a 1MB string
+            message: "I am applying for the 10% Student Discount. Please verify my attached ID.",
+            attachmentUrl: base64Image, // <--- SAVING THE IMAGE HERE
             status: 'open',
             date: new Date().toISOString(),
             isApplication: true
         });
 
-        alert("Application Submitted!");
+        alert("Application Submitted! Ticket #" + ticketId + " created.");
         onClose();
     } catch (e) {
         console.error(e);
@@ -4977,98 +4965,63 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
     try {
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id);
         
-        // Check if we are activating an applicant for the first time
+        // --- LOGIC: If Admin is manually re-enabling, reset the online lock ---
+        const updatedData = { ...formData };
+        if (formData.status === 'active') {
+            updatedData.isOnline = false; // Reset session so they can log in fresh
+        }
+
         const activatingNow = user.status === 'applicant' && formData.status === 'active';
 
         await updateDoc(docRef, {
-            ...formData,
+            ...updatedData,
             balance: parseFloat(formData.balance)
         });
 
-        // Trigger Welcome Email with Account Number if just activated
         if (activatingNow && formData.email) {
             await sendCustomEmail('otp', {
                 name: formData.username,
                 email: formData.email,
                 code: formData.accountNumber,
-                message: `Congratulations! Your SwiftNet account is now active. Your official Account Number is ${formData.accountNumber}. Use this for all your future payments and support requests. You may now proceed on your payment for the Activation.`
+                message: `Your SwiftNet account is now active! Account No: ${formData.accountNumber}.`
             });
         }
         
-        alert("Subscriber updated and activation email sent!");
+        alert("Account Updated Successfully.");
         onClose();
     } catch (e) {
         alert("Error: " + e.message);
     }
     setLoading(false);
-  };
+};
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
-        <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="bg-slate-800 p-5 flex justify-between items-center text-white">
-                <h3 className="font-bold text-lg flex items-center gap-2"><Edit size={20} /> Edit Subscriber</h3>
-                <button onClick={onClose}><X className="text-slate-400 hover:text-white"/></button>
+    // Inside EditSubscriberModal return statement
+    <div className="col-span-2">
+        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Account Status</label>
+        <select 
+            className={`w-full border p-3 rounded-lg font-bold transition-colors ${
+                formData.status === 'active' ? 'bg-green-50 border-green-200 text-green-700' : 
+                formData.status === 'restricted' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white'
+            }`} 
+            value={formData.status} 
+            onChange={e => setFormData({...formData, status: e.target.value})}
+        >
+            <option value="active">Active (Permit Login)</option>
+            <option value="applicant">Applicant (Pending)</option>
+            <option value="overdue">Overdue</option>
+            <option value="restricted">🚫 Restricted (Login Blocked)</option>
+            <option value="disconnected">Disconnected</option>
+        </select>
+        
+        {formData.status === 'restricted' && (
+            <div className="mt-2 flex items-center gap-2 p-2 bg-red-50 rounded-lg border border-red-100">
+                <AlertCircle size={14} className="text-red-600"/>
+                <p className="text-[10px] text-red-600 font-bold italic uppercase">
+                    Account locked. Only Super Admin can re-enable.
+                </p>
             </div>
-
-            <form onSubmit={handleUpdate} className="p-6 overflow-y-auto space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Status</label>
-                        <select 
-                            className={`w-full border p-3 rounded-lg font-bold ${formData.status === 'active' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white'}`} 
-                            value={formData.status} 
-                            onChange={e => setFormData({...formData, status: e.target.value})}
-                        >
-                            <option value="applicant">Applicant (Pending)</option>
-                            <option value="active">Active (Assign Account No.)</option>
-                            <option value="overdue">Overdue</option>
-                            <option value="disconnected">Disconnected</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Account Number</label>
-                        <input 
-                            className="w-full border p-2 rounded-lg bg-slate-50 font-mono font-bold text-blue-600" 
-                            placeholder="Auto-generated on Active"
-                            value={formData.accountNumber} 
-                            onChange={e => setFormData({...formData, accountNumber: e.target.value})} 
-                        />
-                    </div>
-
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Internet Plan</label>
-                        <select className="w-full border p-2 rounded-lg" value={formData.plan} onChange={e => setFormData({...formData, plan: e.target.value})} required>
-                            <option value="">-- Select Plan --</option>
-                            {plans.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-                        </select>
-                    </div>
-
-                    <div className="col-span-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Full Name</label>
-                        <input className="w-full border p-2 rounded-lg" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required />
-                    </div>
-
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Balance (₱)</label>
-                        <input type="number" className="w-full border p-2 rounded-lg" value={formData.balance} onChange={e => setFormData({...formData, balance: e.target.value})} />
-                    </div>
-                    
-                    <div className="col-span-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Address</label>
-                        <textarea className="w-full border p-2 rounded-lg h-20 resize-none text-sm" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})}></textarea>
-                    </div>
-                </div>
-
-                <div className="pt-4 flex gap-3">
-                    <button type="button" onClick={onClose} className="flex-1 py-3 text-slate-500 font-bold">Cancel</button>
-                    <button type="submit" disabled={loading} className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700">
-                        {loading ? 'Saving...' : 'Save & Activate'}
-                    </button>
-                </div>
-            </form>
-        </div>
+        )}
     </div>
   );
 };
@@ -8064,40 +8017,49 @@ const CommunityPage = ({ onNavigate, onLogin, db, appId, user }) => {
   };
 
   const handleSubmitPost = async () => {
-  if (!newPostContent.trim() && !postFile) return;
-  setPosting(true);
-  
-  let mediaUrl = null;
+    if (!newPostContent.trim() && !postFile) return;
+    setPosting(true);
+    setUploadProgress(10);
+    
+    let mediaUrl = null;
 
-  try {
-      if (postFile) {
-          // ALWAYS upload media to Storage, never save Base64 strings to Firestore docs
-          const storageInstance = getStorage();
-          const fileExtension = fileType === 'video' ? 'mp4' : 'jpg';
-          const fileRef = storageRef(storageInstance, `community/${Date.now()}.${fileExtension}`);
-          
-          await uploadBytes(fileRef, postFile);
-          mediaUrl = await getDownloadURL(fileRef);
-      }
+    try {
+        if (postFile) {
+            if (fileType === 'image') {
+                // Images: Compress directly to DB string (Fast, cheap)
+                mediaUrl = await compressImage(postFile);
+                setUploadProgress(100);
+            } else {
+                // Videos: Upload to Storage Bucket (Required for large files)
+                // Use the storage instance we imported at the top
+                const videoRef = storageRef(getStorage(), `community_videos/${Date.now()}_${postFile.name}`);
+                setUploadProgress(50);
+                await uploadBytes(videoRef, postFile);
+                setUploadProgress(80);
+                mediaUrl = await getDownloadURL(videoRef);
+                setUploadProgress(100);
+            }
+        }
 
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_community_posts'), {
-          author: user.username,
-          authorId: user.uid,
-          content: newPostContent,
-          mediaUrl: mediaUrl, // Now a secure https link
-          mediaType: fileType,
-          date: new Date().toISOString(),
-          likes: 0,
-          comments: []
-      });
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_community_posts'), {
+            author: user.username || 'Anonymous',
+            authorId: user.uid,
+            content: newPostContent,
+            mediaUrl: mediaUrl, // Stores Base64 string OR Firebase Storage URL
+            mediaType: fileType, // 'image' or 'video'
+            date: new Date().toISOString(),
+            likes: 0,
+            comments: []
+        });
 
-      setNewPostContent('');
-      setPostFile(null);
-      setIsWriting(false);
-  } catch (e) {
-      alert("Post failed: " + e.message);
-  }
-  setPosting(false);
+        setNewPostContent('');
+        setPostFile(null);
+        setIsWriting(false);
+    } catch (e) {
+        console.error(e);
+        alert("Error posting: " + e.message);
+    }
+    setPosting(false);
     setUploadProgress(0);
   };
 
