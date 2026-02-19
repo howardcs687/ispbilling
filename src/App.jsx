@@ -2608,46 +2608,37 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
   const [ocrStatus, setOcrStatus] = useState(''); // Text feedback
 
   const handleFileChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const file = e.target.files[0];
+  if (!file) return;
 
-    // 1. Show preview immediately
-    const objectUrl = URL.createObjectURL(file);
-    setPreview(objectUrl);
-    setScanning(true);
-    setOcrStatus("Initializing AI Scanner...");
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const img = new window.Image();
+    img.src = event.target.result;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      
+      // 📉 AGGRESSIVE RESIZING: Limit width to 400px
+      // This ensures the data string doesn't overwhelm the browser or Firestore
+      const MAX_WIDTH = 400; 
+      const scaleSize = MAX_WIDTH / img.width;
+      canvas.width = MAX_WIDTH;
+      canvas.height = img.height * scaleSize;
 
-    // 2. Compress Image Logic (Existing)
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new window.Image();
-      img.src = event.target.result;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800; // Increased slightly for better OCR
-        const scaleSize = MAX_WIDTH / img.width;
-        
-        if (img.width > MAX_WIDTH) {
-            canvas.width = MAX_WIDTH;
-            canvas.height = img.height * scaleSize;
-        } else {
-            canvas.width = img.width;
-            canvas.height = img.height;
-        }
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      
+      // 📉 LOW QUALITY: Set to 0.2 (20%) quality
+      // This is the "magic number" to keep documents small enough for Spark Plan
+      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.2);
+      setBase64Image(compressedBase64);
 
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        
-        // Save compressed for upload
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
-        setBase64Image(compressedBase64);
-
-        // 3. START AI SCANNING (Tesseract)
-        runOCR(compressedBase64);
-      };
+      // Run your OCR on the small image
+      if (typeof runOCR === 'function') runOCR(compressedBase64);
     };
-    reader.readAsDataURL(file);
   };
+  reader.readAsDataURL(file);
+};
 
   const runOCR = async (imageSrc) => {
     setOcrStatus("Reading Receipt Details...");
@@ -2695,27 +2686,43 @@ const PaymentProofModal = ({ user, onClose, db, appId }) => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!amount || !refNumber) return alert("Please fill in all fields.");
-    if (!base64Image) return alert("Please wait for image processing.");
-    
-    setLoading(true);
-    try {
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
-            userId: user.uid,
-            username: user.username,
-            refNumber: refNumber,
-            amount: parseFloat(amount),
-            method: method,
-            date: new Date().toISOString(),
-            status: 'pending_approval',
-            proofImage: base64Image
-        });
-        alert("Proof submitted successfully!");
-        onClose();
-    } catch(e) { alert("Error: " + e.message); }
-    setLoading(false);
-  };
+  e.preventDefault();
+  if (!amount || !refNumber) return alert("Please fill in all fields.");
+  if (!base64Image) return alert("Please wait for image processing.");
+  
+  setLoading(true);
+  try {
+      // 1. Convert Base64 to Blob
+      const blob = await (await fetch(base64Image)).blob();
+
+      // 2. Upload to Storage Path: receipts/USER_ID_TIMESTAMP.jpg
+      const storagePath = `receipts/${user.uid}_${Date.now()}.jpg`;
+      const fileRef = storageRef(storage, storagePath);
+      const uploadResult = await uploadBytes(fileRef, blob);
+      
+      // 3. Get the URL
+      const downloadURL = await getDownloadURL(uploadResult.ref);
+
+      // 4. Save to Firestore (Tiny document, no crash!)
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', PAYMENTS_COLLECTION), {
+          userId: user.uid,
+          username: user.username,
+          refNumber: refNumber,
+          amount: parseFloat(amount),
+          method: method,
+          date: new Date().toISOString(),
+          status: 'pending_approval',
+          proofImage: downloadURL // Saving the URL link only
+      });
+
+      alert("Proof submitted successfully!");
+      onClose();
+  } catch(e) { 
+      console.error("Storage Error:", e);
+      alert("Upload failed: " + e.message); 
+  }
+  setLoading(false);
+};
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
@@ -2967,23 +2974,31 @@ const KYCModal = ({ user, onClose, db, appId }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!base64Image) return alert("Please wait for the image to process or upload again.");
+    if (!base64Image) return alert("Please wait for the image to process.");
     setLoading(true);
 
     try {
+        // 1. Upload to Storage Path: kyc_ids/USER_ID.jpg
+        const blob = await (await fetch(base64Image)).blob();
+        const fileRef = storageRef(storage, `kyc_ids/${user.uid}.jpg`);
+        const uploadResult = await uploadBytes(fileRef, blob);
+        const downloadURL = await getDownloadURL(uploadResult.ref);
+
+        // 2. Update User Document with the URL
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id), {
             kycStatus: 'pending',
             kycType: idType,
-            kycImage: base64Image,
+            kycImage: downloadURL, // Link to storage
             kycDate: new Date().toISOString()
         });
-        alert("ID Submitted! Admin will review it shortly.");
+
+        alert("ID Submitted for review!");
         onClose();
     } catch (e) {
         alert("Error: " + e.message);
     }
     setLoading(false);
-  };
+};
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4 animate-in fade-in">
