@@ -79,6 +79,7 @@ import {
   Loader2, Save, Tv, Film, Users, Trophy, Target, Timer, Sparkles, Rocket, Flag, ThumbsUp, TimerReset,
   Flame, Heart, Share2, MoreHorizontal, CornerDownRight, Smile, Camera, 
 } from 'lucide-react';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // --- Firebase Configuration --
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
@@ -1581,7 +1582,7 @@ const BackgroundMusic = () => {
   );
 };
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+
 
 
 // --- CONFIGURATION ---
@@ -6635,7 +6636,7 @@ const RouterQRStickerModal = ({ user, onClose }) => {
   );
 };
 
-const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs, user }) => {
+const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs, user, addToast, db, appId }) => {
   // --- ADD THIS NEW LISTENER STARTING HERE ---
   useEffect(() => {
     // Create a timestamp for "now" minus 1 minute to avoid old notifications on load
@@ -6932,7 +6933,11 @@ const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs
       } catch(e) { console.error(e); }
   };
 
-  const filteredSubscribers = subscribers.filter(sub => (sub.username?.toLowerCase().includes(searchTerm.toLowerCase()) || sub.accountNumber?.includes(searchTerm) || sub.resellerId?.includes(searchTerm)));
+  const filteredSubscribers = (subscribers || []).filter(sub => (
+    sub.username?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    sub.accountNumber?.includes(searchTerm) || 
+    sub.resellerId?.includes(searchTerm)
+  ));
   const activeRepairs = (repairs || []).filter(r => r.status !== 'Completed');
   const historyRepairs = (repairs || []).filter(r => r.status === 'Completed');
 
@@ -8608,9 +8613,9 @@ useEffect(() => {
         try {
           const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, currentUser.uid);
           await setDoc(docRef, {
-          lastLogin: new Date().toISOString(),
-          isOnline: true
-        }, { merge: true });
+            lastLogin: new Date().toISOString(),
+            isOnline: true
+          }, { merge: true });
           const docSnap = await getDoc(docRef);
           
           let firestoreData = {};
