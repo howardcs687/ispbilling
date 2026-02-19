@@ -3589,7 +3589,6 @@ const StudentPromoModal = ({ onClose, user, db, appId }) => {
   const [base64Image, setBase64Image] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Handle Image Compression
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -3621,20 +3620,28 @@ const StudentPromoModal = ({ onClose, user, db, appId }) => {
     try {
         const ticketId = Math.floor(100000 + Math.random() * 900000).toString();
         
-        // Save to Tickets Collection
+        // 1. Convert Base64 to Blob
+        const blob = await (await fetch(base64Image)).blob();
+
+        // 2. Upload to Firebase Storage (Saves database space and prevents crash)
+        const fileRef = storageRef(getStorage(), `student_ids/${user.uid}_${Date.now()}.jpg`);
+        const uploadResult = await uploadBytes(fileRef, blob);
+        const downloadURL = await getDownloadURL(uploadResult.ref);
+        
+        // 3. Save only the URL to Firestore
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_tickets_v1'), {
             ticketId,
             userId: user.uid,
             username: user.username,
             subject: "Student Discount Application",
-            message: "I am applying for the 10% Student Discount. Please verify my attached ID.",
-            attachmentUrl: base64Image, // <--- SAVING THE IMAGE HERE
+            message: "I am applying for the 10% Student Discount.",
+            attachmentUrl: downloadURL, // <--- FIXED: Now a short URL, not a 1MB string
             status: 'open',
             date: new Date().toISOString(),
             isApplication: true
         });
 
-        alert("Application Submitted! Ticket #" + ticketId + " created.");
+        alert("Application Submitted!");
         onClose();
     } catch (e) {
         console.error(e);
@@ -8057,49 +8064,40 @@ const CommunityPage = ({ onNavigate, onLogin, db, appId, user }) => {
   };
 
   const handleSubmitPost = async () => {
-    if (!newPostContent.trim() && !postFile) return;
-    setPosting(true);
-    setUploadProgress(10);
-    
-    let mediaUrl = null;
+  if (!newPostContent.trim() && !postFile) return;
+  setPosting(true);
+  
+  let mediaUrl = null;
 
-    try {
-        if (postFile) {
-            if (fileType === 'image') {
-                // Images: Compress directly to DB string (Fast, cheap)
-                mediaUrl = await compressImage(postFile);
-                setUploadProgress(100);
-            } else {
-                // Videos: Upload to Storage Bucket (Required for large files)
-                // Use the storage instance we imported at the top
-                const videoRef = storageRef(getStorage(), `community_videos/${Date.now()}_${postFile.name}`);
-                setUploadProgress(50);
-                await uploadBytes(videoRef, postFile);
-                setUploadProgress(80);
-                mediaUrl = await getDownloadURL(videoRef);
-                setUploadProgress(100);
-            }
-        }
+  try {
+      if (postFile) {
+          // ALWAYS upload media to Storage, never save Base64 strings to Firestore docs
+          const storageInstance = getStorage();
+          const fileExtension = fileType === 'video' ? 'mp4' : 'jpg';
+          const fileRef = storageRef(storageInstance, `community/${Date.now()}.${fileExtension}`);
+          
+          await uploadBytes(fileRef, postFile);
+          mediaUrl = await getDownloadURL(fileRef);
+      }
 
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_community_posts'), {
-            author: user.username || 'Anonymous',
-            authorId: user.uid,
-            content: newPostContent,
-            mediaUrl: mediaUrl, // Stores Base64 string OR Firebase Storage URL
-            mediaType: fileType, // 'image' or 'video'
-            date: new Date().toISOString(),
-            likes: 0,
-            comments: []
-        });
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_community_posts'), {
+          author: user.username,
+          authorId: user.uid,
+          content: newPostContent,
+          mediaUrl: mediaUrl, // Now a secure https link
+          mediaType: fileType,
+          date: new Date().toISOString(),
+          likes: 0,
+          comments: []
+      });
 
-        setNewPostContent('');
-        setPostFile(null);
-        setIsWriting(false);
-    } catch (e) {
-        console.error(e);
-        alert("Error posting: " + e.message);
-    }
-    setPosting(false);
+      setNewPostContent('');
+      setPostFile(null);
+      setIsWriting(false);
+  } catch (e) {
+      alert("Post failed: " + e.message);
+  }
+  setPosting(false);
     setUploadProgress(0);
   };
 
