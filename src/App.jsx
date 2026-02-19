@@ -2364,49 +2364,39 @@ const Login = ({ onLogin }) => {
           dueDate: new Date().toISOString()
         });
     } else {
-        // 1. Authenticate with Firebase
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        userUid = userCredential.user.uid;
+    // 1. Authenticate
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const userUid = userCredential.user.uid;
 
-        // 2. Fetch User Profile from Firestore
-        const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid);
-        const userSnap = await getDoc(userRef);
+    // 2. Fetch User Profile
+    const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid);
+    const userSnap = await getDoc(userRef);
 
-        if (userSnap.exists()) {
-            const userData = userSnap.data();
+    if (userSnap.exists()) {
+        const userData = userSnap.data();
 
-            // --- FEATURE: SINGLE LOGIN ENFORCEMENT ---
-            // If user is already online and NOT an admin (admins usually need multi-tab access)
-            if (userData.isOnline === true && userData.role !== 'admin') {
-                // RESTRICT ACCOUNT: Set status to restricted
-                await updateDoc(userRef, { 
-                    status: 'restricted', 
-                    isOnline: false,
-                    restrictionNote: "Multiple login attempt detected." 
-                });
-                
-                await signOut(auth); // Kick them out immediately
-                throw new Error("⚠️ SECURITY ALERT: This account is already logged in elsewhere. For security, your account has been RESTRICTED. Please contact a Super Admin to re-enable access.");
-            }
+        // --- UPDATED LOGIC HERE ---
+        // Add a check for your specific admin email to bypass the lock
+        const isMasterAdmin = email === 'admin@swiftnet.com' || email === 'ramoshowardkingsley58@gmail.com';
 
-            // --- FEATURE: CHECK RESTRICTION ---
-            if (userData.status === 'restricted') {
-                await signOut(auth);
-                throw new Error("⛔ ACCOUNT RESTRICTED: Your account is disabled. Please contact SwiftNet Super Admin for re-activation.");
-            }
-
-            // 3. Maintenance Check (Existing logic)
-            const configRef = doc(db, 'artifacts', appId, 'public', 'data', CONFIG_COLLECTION, 'main_settings');
-            const configSnap = await getDoc(configRef);
-            if (configSnap.exists() && configSnap.data().maintenanceMode && userData.role !== 'admin') {
-                await signOut(auth);
-                throw new Error("⚠️ SYSTEM UNDER MAINTENANCE: Please try again later.");
-            }
-
-            // 4. If all checks pass, Mark as Online
-            await updateDoc(userRef, { isOnline: true, lastLogin: new Date().toISOString() });
+        if (userData.isOnline === true && !isMasterAdmin && userData.role !== 'admin') {
+            await updateDoc(userRef, { 
+                status: 'restricted', 
+                isOnline: false 
+            });
+            await signOut(auth);
+            throw new Error("⚠️ SECURITY ALERT: This account is already logged in elsewhere...");
         }
+
+        if (userData.status === 'restricted' && !isMasterAdmin) {
+            await signOut(auth);
+            throw new Error("⛔ ACCOUNT RESTRICTED: Contact Super Admin.");
+        }
+        
+        // Ensure we mark the login as successful
+        await updateDoc(userRef, { isOnline: true, lastLogin: new Date().toISOString() });
     }
+}
   } catch (err) {
     console.error(err);
     alert(err.message); 
