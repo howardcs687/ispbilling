@@ -2345,61 +2345,54 @@ const Login = ({ onLogin }) => {
   setLoading(true);
   setError('');
   try {
-    let userUid;
-    
     if (isSignUp) {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        userUid = userCredential.user.uid;
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid), {
-          uid: userUid,
-          username: name || email.split('@')[0],
-          email: email,
-          role: 'subscriber',
-          status: 'applicant', 
-          accountNumber: 'PENDING',
-          isOnline: false, // Default to offline
-          plan: null, 
-          balance: 0,
-          address: '', 
-          dueDate: new Date().toISOString()
-        });
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userUid = userCredential.user.uid;
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid), {
+        uid: userUid,
+        username: name || email.split('@')[0],
+        email: email,
+        role: 'subscriber',
+        status: 'applicant',
+        accountNumber: 'PENDING',
+        isOnline: false,
+        plan: null,
+        balance: 0,
+        address: '',
+        dueDate: new Date().toISOString()
+      });
     } else {
-    // 1. Authenticate
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const userUid = userCredential.user.uid;
+      // 1. Authenticate
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userUid = userCredential.user.uid;
 
-    // 2. Fetch User Profile
-    const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid);
-    const userSnap = await getDoc(userRef);
+      // 2. Fetch User Profile
+      const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid);
+      const userSnap = await getDoc(userRef);
 
-    if (userSnap.exists()) {
+      if (userSnap.exists()) {
         const userData = userSnap.data();
-
-        // --- UPDATED LOGIC HERE ---
-        // Add a check for your specific admin email to bypass the lock
         const isMasterAdmin = email === 'admin@swiftnet.com' || email === 'ramoshowardkingsley58@gmail.com';
 
-        if (userData.isOnline === true && !isMasterAdmin && userData.role !== 'admin') {
-            await updateDoc(userRef, { 
-                status: 'restricted', 
-                isOnline: false 
-            });
-            await signOut(auth);
-            throw new Error("⚠️ SECURITY ALERT: This account is already logged in elsewhere...");
+        // Check if account is restricted
+        if (userData.status === 'restricted' && !isMasterAdmin) {
+          await signOut(auth);
+          throw new Error("⛔ ACCOUNT RESTRICTED: Contact Super Admin.");
         }
 
-        if (userData.status === 'restricted' && !isMasterAdmin) {
-            await signOut(auth);
-            throw new Error("⛔ ACCOUNT RESTRICTED: Contact Super Admin.");
+        // Prevent multiple logins (Session Lock)
+        if (userData.isOnline === true && !isMasterAdmin && userData.role !== 'admin') {
+          await updateDoc(userRef, { status: 'restricted', isOnline: false });
+          await signOut(auth);
+          throw new Error("⚠️ SECURITY ALERT: This account is already logged in elsewhere...");
         }
-        
-        // Ensure we mark the login as successful
+
+        // Success: Mark online
         await updateDoc(userRef, { isOnline: true, lastLogin: new Date().toISOString() });
-    }
-}
+      }
+    } // <-- Properly closing the else block now
   } catch (err) {
     console.error(err);
-    alert(err.message); 
     setError(err.message);
     if (auth.currentUser) await signOut(auth);
   }
@@ -4925,93 +4918,64 @@ const EditSubscriberModal = ({ user, plans, onClose, db, appId }) => {
   const [formData, setFormData] = useState({
     username: user.username || '',
     email: user.email || '',
-    contactNumber: user.contactNumber || '',
     accountNumber: user.accountNumber || '',
     plan: user.plan || '',
     address: user.address || '',
     status: user.status || 'active',
     balance: user.balance || 0,
-    kycStatus: user.kycStatus || 'none',
     role: user.role || 'subscriber',
   });
   const [loading, setLoading] = useState(false);
 
-  // --- AUTOMATION LOGIC ---
-  // When status changes to active, auto-generate account number if missing
-  useEffect(() => {
-    if (formData.status === 'active' && (formData.accountNumber === 'PENDING' || !formData.accountNumber)) {
-      const newGeneratedNo = Math.floor(100000 + Math.random() * 900000).toString();
-      setFormData(prev => ({ ...prev, accountNumber: newGeneratedNo }));
-    }
-  }, [formData.status]);
-
   const handleUpdate = async (e) => {
     e.preventDefault();
-    if (formData.status === 'active' && !formData.plan) {
-        return alert("Please assign a Plan before activating.");
-    }
-
     setLoading(true);
     try {
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id);
-        
-        // --- LOGIC: If Admin is manually re-enabling, reset the online lock ---
-        const updatedData = { ...formData };
-        if (formData.status === 'active') {
-            updatedData.isOnline = false; // Reset session so they can log in fresh
-        }
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id);
+      
+      // If manually re-enabling an account, reset the session lock
+      const updatedData = { ...formData, balance: parseFloat(formData.balance) };
+      if (formData.status === 'active') {
+        updatedData.isOnline = false;
+      }
 
-        const activatingNow = user.status === 'applicant' && formData.status === 'active';
-
-        await updateDoc(docRef, {
-            ...updatedData,
-            balance: parseFloat(formData.balance)
-        });
-
-        if (activatingNow && formData.email) {
-            await sendCustomEmail('otp', {
-                name: formData.username,
-                email: formData.email,
-                code: formData.accountNumber,
-                message: `Your SwiftNet account is now active! Account No: ${formData.accountNumber}.`
-            });
-        }
-        
-        alert("Account Updated Successfully.");
-        onClose();
+      await updateDoc(docRef, updatedData);
+      alert("Account Updated Successfully.");
+      onClose();
     } catch (e) {
-        alert("Error: " + e.message);
+      alert("Error: " + e.message);
     }
     setLoading(false);
-};
+  };
 
   return (
-    // Inside EditSubscriberModal return statement
-    <div className="col-span-2">
-        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Account Status</label>
-        <select 
-            className={`w-full border p-3 rounded-lg font-bold transition-colors ${
-                formData.status === 'active' ? 'bg-green-50 border-green-200 text-green-700' : 
-                formData.status === 'restricted' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white'
-            }`} 
-            value={formData.status} 
-            onChange={e => setFormData({...formData, status: e.target.value})}
-        >
-            <option value="active">Active (Permit Login)</option>
-            <option value="applicant">Applicant (Pending)</option>
-            <option value="overdue">Overdue</option>
-            <option value="restricted">🚫 Restricted (Login Blocked)</option>
-            <option value="disconnected">Disconnected</option>
-        </select>
-        
-        {formData.status === 'restricted' && (
-            <div className="mt-2 flex items-center gap-2 p-2 bg-red-50 rounded-lg border border-red-100">
-                <AlertCircle size={14} className="text-red-600"/>
-                <p className="text-[10px] text-red-600 font-bold italic uppercase">
-                    Account locked. Only Super Admin can re-enable.
-                </p>
-            </div>
-        )}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
+      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6">
+        <h3 className="font-bold text-xl mb-4">Edit Subscriber</h3>
+        <form onSubmit={handleUpdate} className="grid grid-cols-2 gap-4">
+          <div className="col-span-2">
+            <label className="text-xs font-bold text-slate-500 uppercase">Username</label>
+            <input className="w-full border p-2 rounded" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase">Balance</label>
+            <input type="number" className="w-full border p-2 rounded" value={formData.balance} onChange={e => setFormData({...formData, balance: e.target.value})} />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase">Status</label>
+            <select className="w-full border p-2 rounded" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
+              <option value="active">Active</option>
+              <option value="restricted">Restricted</option>
+              <option value="overdue">Overdue</option>
+              <option value="disconnected">Disconnected</option>
+            </select>
+          </div>
+          <button type="submit" disabled={loading} className="col-span-2 bg-blue-600 text-white py-3 rounded-xl font-bold">
+            {loading ? 'Saving...' : 'Update Subscriber'}
+          </button>
+          <button type="button" onClick={onClose} className="col-span-2 text-slate-400 text-sm">Cancel</button>
+        </form>
+      </div>
     </div>
   );
 };
@@ -8022,7 +7986,7 @@ const CommunityPage = ({ onNavigate, onLogin, db, appId, user }) => {
             } else {
                 // Videos: Upload to Storage Bucket (Required for large files)
                 // Use the storage instance we imported at the top
-                const videoRef = storageRef(getStorage(), `community_videos/${Date.now()}_${postFile.name}`);
+                const videoRef = storageRef(storage, `community_videos/${Date.now()}_${postFile.name}`);
                 setUploadProgress(50);
                 await uploadBytes(videoRef, postFile);
                 setUploadProgress(80);
