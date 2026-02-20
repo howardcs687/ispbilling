@@ -4636,6 +4636,7 @@ const AdminAnalytics = ({ subscribers, payments, tickets, db, appId }) => {
         </div>
     </div>
   );
+};
 
 const ExpenseManager = ({ appId, db, subscribers, payments }) => {
   const [expenses, setExpenses] = useState([]);
@@ -6182,13 +6183,13 @@ const RetailerDashboard = ({ user, db, appId, onLogout }) => {
 };
 
 // --- [UPDATED] IPTV RESELLER DASHBOARD WITH RENEWAL & SECONDARY INSTANCE ---
+// --- [UPDATED] IPTV RESELLER DASHBOARD ---
 const IPTVResellerDashboard = ({ user, db, appId, onLogout }) => {
   const [subscribers, setSubscribers] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newSub, setNewSub] = useState({ username: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
 
-  // 1. Fetch Reseller's Clients
   useEffect(() => {
     const q = query(
       collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME),
@@ -6200,57 +6201,34 @@ const IPTVResellerDashboard = ({ user, db, appId, onLogout }) => {
     return () => unsub();
   }, [user.uid, db, appId]);
 
-  // 2. CREATE CLIENT (Using Secondary Instance)
   const handleCreateSubscriber = async (e) => {
     e.preventDefault();
-    
-    // Check if Reseller's own account is active
-    if (user.status !== 'active') {
-      return alert("Your reseller account is EXPIRED. Please renew your own account with Super Admin to create or renew clients.");
-    }
-
-    if ((user.walletCredits || 0) < 1) return alert("No Credits! Contact Admin to top up.");
+    if (user.status !== 'active') return alert("Reseller account expired.");
+    if ((user.walletCredits || 0) < 1) return alert("No Credits!");
     
     setLoading(true);
     let secondaryApp = null;
     try {
-      // THE SECONDARY INSTANCE: Prevents Reseller from being logged out
-      // We use a random string to ensure the instance name is unique every time
       const instanceName = `IPTV_Creator_${Date.now()}`;
       secondaryApp = initializeApp(firebaseConfig, instanceName);
       const secondaryAuth = getAuth(secondaryApp);
-      
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newSub.email, newSub.password);
       const newUid = userCredential.user.uid;
-
-      // Define Client Expiry (30 Days from now)
       const expiryDate = new Date();
       expiryDate.setDate(expiryDate.getDate() + 30);
 
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, newUid), {
-        uid: newUid,
-        username: newSub.username,
-        email: newSub.email,
-        role: 'subscriber',
-        status: 'active',
-        resellerId: user.uid,
-        isIPTVOnly: true,
-        accountNumber: `IPTV-${Math.floor(100000 + Math.random() * 900000)}`,
-        balance: 0,
-        dueDate: expiryDate.toISOString(),
-        dateCreated: new Date().toISOString()
+        uid: newUid, username: newSub.username, email: newSub.email, role: 'subscriber', status: 'active',
+        resellerId: user.uid, isIPTVOnly: true, accountNumber: `IPTV-${Math.floor(100000 + Math.random() * 900000)}`,
+        balance: 0, dueDate: expiryDate.toISOString(), dateCreated: new Date().toISOString()
       });
 
-      // Deduct Credit
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id), {
         walletCredits: increment(-1)
       });
 
-      alert("Client Created! 1 Credit Deducted.");
+      alert("Client Created!");
       setShowAddModal(false);
-      setNewSub({ username: '', email: '', password: '' });
-      
-      // Clean up secondary instance
       await deleteApp(secondaryApp);
     } catch (error) {
       alert("Error: " + error.message);
@@ -6259,42 +6237,25 @@ const IPTVResellerDashboard = ({ user, db, appId, onLogout }) => {
     setLoading(false);
   };
 
-  // 3. RENEW CLIENT LOGIC
   const handleRenewClient = async (client) => {
-    // Check Reseller Status First
-    if (user.status !== 'active') {
-      return alert("Access Denied: Your Reseller account is inactive. Renew your account with Admin first.");
-    }
-
-    if ((user.walletCredits || 0) < 1) {
-      return alert("Insufficient Credits! Please top up to renew clients.");
-    }
-
-    if (!confirm(`Renew ${client.username} for another 30 days? (-1 Credit)`)) return;
+    if (user.status !== 'active') return alert("Reseller account inactive.");
+    if ((user.walletCredits || 0) < 1) return alert("Insufficient Credits!");
+    if (!confirm(`Renew ${client.username}?`)) return;
 
     try {
-      const currentDueDate = new Date(client.dueDate || Date.now());
-      const now = new Date();
-      
-      // If already expired, start from today. If not, add 30 days to existing due date.
-      const baseDate = currentDueDate > now ? currentDueDate : now;
+      const currentDue = new Date(client.dueDate || Date.now());
+      const baseDate = currentDue > new Date() ? currentDue : new Date();
       const newDueDate = new Date(baseDate);
       newDueDate.setDate(newDueDate.getDate() + 30);
 
-      const clientRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, client.id);
-      await updateDoc(clientRef, {
-        dueDate: newDueDate.toISOString(),
-        status: 'active'
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, client.id), {
+        dueDate: newDueDate.toISOString(), status: 'active'
       });
-
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.id), {
         walletCredits: increment(-1)
       });
-
-      alert(`${client.username} renewed until ${newDueDate.toLocaleDateString()}`);
-    } catch (e) {
-      alert("Renewal failed: " + e.message);
-    }
+      alert("Renewed!");
+    } catch (e) { alert("Failed: " + e.message); }
   };
 
   return (
@@ -6307,85 +6268,44 @@ const IPTVResellerDashboard = ({ user, db, appId, onLogout }) => {
           </div>
           <div className="flex items-center gap-6">
             <div className="text-right">
-              <p className="text-[10px] uppercase text-indigo-300 font-bold">Reseller Status: <span className={user.status === 'active' ? 'text-green-400' : 'text-red-400'}>{user.status}</span></p>
-              <p className="font-mono text-xl font-bold text-yellow-400">{user.walletCredits || 0} Credits</p>
+              <p className="text-[10px] uppercase text-indigo-300 font-bold">Credits: {user.walletCredits || 0}</p>
             </div>
-            <button onClick={onLogout} className="bg-indigo-800 p-2 rounded-lg hover:bg-indigo-700 transition-colors"><LogOut size={18}/></button>
+            <button onClick={onLogout} className="bg-indigo-800 p-2 rounded-lg hover:bg-indigo-700"><LogOut size={18}/></button>
           </div>
         </div>
       </nav>
 
       <div className="max-w-6xl mx-auto p-4 md:p-8">
-        {user.status !== 'active' && (
-          <div className="mb-6 bg-red-600 text-white p-4 rounded-xl shadow-lg flex items-center gap-3 animate-pulse">
-            <AlertTriangle size={24}/>
-            <p className="font-bold">Your Reseller Account has EXPIRED. Creation and Renewals are disabled.</p>
-          </div>
-        )}
-
         <div className="flex justify-between items-center mb-8">
-          <h2 className="text-2xl font-bold text-slate-800">My IPTV Subscribers</h2>
-          <button 
-            disabled={user.status !== 'active'}
-            onClick={() => setShowAddModal(true)} 
-            className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg disabled:opacity-50"
-          >
-            <UserPlus size={20}/> New Account
-          </button>
+          <h2 className="text-2xl font-bold text-slate-800">IPTV Clients</h2>
+          <button onClick={() => setShowAddModal(true)} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold">New Account</button>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-500 border-b">
-              <tr>
-                <th className="px-6 py-4 font-bold">Client Name</th>
-                <th className="px-6 py-4 font-bold">Due Date</th>
-                <th className="px-6 py-4 font-bold">Status</th>
-                <th className="px-6 py-4 font-bold text-right">Action</th>
-              </tr>
-            </thead>
             <tbody className="divide-y divide-slate-100">
-              {subscribers.map(s => {
-                const isExpired = new Date(s.dueDate) < new Date();
-                return (
-                  <tr key={s.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 font-bold text-slate-800">{s.username}</td>
-                    <td className="px-6 py-4 font-mono">{new Date(s.dueDate).toLocaleDateString()}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${isExpired ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
-                        {isExpired ? 'Expired' : 'Active'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button 
-                        onClick={() => handleRenewClient(s)}
-                        disabled={user.status !== 'active'}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
-                      >
-                        Renew (+30d)
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+              {subscribers.map(s => (
+                <tr key={s.id} className="hover:bg-slate-50">
+                  <td className="px-6 py-4 font-bold">{s.username}</td>
+                  <td className="px-6 py-4 font-mono">{new Date(s.dueDate).toLocaleDateString()}</td>
+                  <td className="px-6 py-4 text-right">
+                    <button onClick={() => handleRenewClient(s)} className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold">Renew</button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
-          {subscribers.length === 0 && <div className="p-20 text-center text-slate-400">No clients yet.</div>}
         </div>
       </div>
 
-      {/* Modal remains the same but add status check to button */}
       {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm px-4">
-          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6">
-            <h3 className="font-bold text-xl mb-6">Create IPTV User</h3>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 p-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6">
             <form onSubmit={handleCreateSubscriber} className="space-y-4">
               <input className="w-full border p-3 rounded-xl" placeholder="Username" value={newSub.username} onChange={e=>setNewSub({...newSub, username: e.target.value})} required />
               <input className="w-full border p-3 rounded-xl" type="email" placeholder="Email" value={newSub.email} onChange={e=>setNewSub({...newSub, email: e.target.value})} required />
               <input className="w-full border p-3 rounded-xl" type="text" placeholder="Password" value={newSub.password} onChange={e=>setNewSub({...newSub, password: e.target.value})} required />
-              <button disabled={loading} className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">
-                {loading ? 'Creating Account...' : 'Activate (-1 Credit)'}
-              </button>
+              <button disabled={loading} className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl">{loading ? 'Creating...' : 'Activate (-1 Credit)'}</button>
               <button type="button" onClick={()=>setShowAddModal(false)} className="w-full text-slate-400 text-sm">Cancel</button>
             </form>
           </div>
@@ -6393,9 +6313,9 @@ const IPTVResellerDashboard = ({ user, db, appId, onLogout }) => {
       )}
     </div>
   );
-};
+}; // COMPONENT CLOSED PROPERLY
 
-// --- [FEATURE 3] ZONE STARTER MANAGER (ADMIN) ---
+// --- [FEATURE 3] ZONE STARTER MANAGER ---
 const CrowdfundManager = ({ db, appId }) => {
   const [campaigns, setCampaigns] = useState([]);
   const [newCamp, setNewCamp] = useState({ area: '', target: 20, deadline: '', description: '' });
@@ -6408,54 +6328,28 @@ const CrowdfundManager = ({ db, appId }) => {
 
   const handleLaunch = async (e) => {
     e.preventDefault();
-    if(!newCamp.area) return;
     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'isp_crowdfunds_v1'), {
         ...newCamp, current: 0, status: 'Active', dateCreated: new Date().toISOString()
     });
     setNewCamp({ area: '', target: 20, deadline: '', description: '' });
-    alert("Campaign Launched!");
-  };
-
-  const handleClose = async (id) => {
-      if(!confirm("End this campaign?")) return;
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_crowdfunds_v1', id), { status: 'Closed' });
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in">
-        <div className="bg-gradient-to-r from-blue-900 to-slate-900 p-8 rounded-2xl text-white shadow-xl relative overflow-hidden">
-            <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16"></div>
-            <div className="relative z-10"><h2 className="text-3xl font-black mb-2 flex items-center gap-3"><Rocket className="text-orange-500"/> Zone Starter</h2><p className="text-blue-200">Launch crowdfunding campaigns to fund new expansion areas risk-free.</p></div>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
-                <h3 className="font-bold text-slate-800 mb-4">Launch New Zone</h3>
-                <form onSubmit={handleLaunch} className="space-y-4">
-                    <div><label className="text-xs font-bold text-slate-500 uppercase">Target Area</label><input className="w-full border p-2 rounded-lg" placeholder="e.g. Brgy. San Juan" value={newCamp.area} onChange={e=>setNewCamp({...newCamp, area: e.target.value})} required/></div>
-                    <div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-slate-500 uppercase">Target Signups</label><input type="number" className="w-full border p-2 rounded-lg" value={newCamp.target} onChange={e=>setNewCamp({...newCamp, target: e.target.value})} required/></div><div><label className="text-xs font-bold text-slate-500 uppercase">Deadline</label><input type="date" className="w-full border p-2 rounded-lg" value={newCamp.deadline} onChange={e=>setNewCamp({...newCamp, deadline: e.target.value})} required/></div></div>
-                    <div><label className="text-xs font-bold text-slate-500 uppercase">Description / Hook</label><textarea className="w-full border p-2 rounded-lg h-20" placeholder="e.g. If we reach 20 signups, we build fiber next week!" value={newCamp.description} onChange={e=>setNewCamp({...newCamp, description: e.target.value})}></textarea></div>
-                    <button className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700">Launch Campaign</button>
-                </form>
-            </div>
-            <div className="lg:col-span-2 space-y-4">
-                {campaigns.map(camp => (
-                    <div key={camp.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-6">
-                        <div className="flex-1"><div className="flex justify-between items-start mb-2"><h3 className="font-bold text-xl text-slate-800">{camp.area}</h3><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${camp.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>{camp.status}</span></div><p className="text-sm text-slate-500 mb-4">{camp.description}</p><div className="space-y-2"><div className="flex justify-between text-xs font-bold text-slate-600"><span>{camp.current} Reserved</span><span>Goal: {camp.target}</span></div><div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-1000" style={{width: `${(camp.current/camp.target)*100}%`}}></div></div></div></div>
-                        <div className="flex flex-col justify-center border-l border-slate-100 pl-6 gap-2"><div className="text-center"><p className="text-3xl font-black text-slate-800">{Math.round((camp.current/camp.target)*100)}%</p><p className="text-xs text-slate-400 uppercase font-bold">Funded</p></div>{camp.status === 'Active' && <button onClick={() => handleClose(camp.id)} className="text-red-500 text-xs font-bold hover:underline mt-2">End Campaign</button>}</div>
-                    </div>
-                ))}
-                {campaigns.length === 0 && <div className="p-10 text-center text-slate-400">No active campaigns.</div>}
-            </div>
+    <div className="space-y-6">
+        <div className="bg-white p-6 rounded-2xl border border-slate-200">
+            <h3 className="font-bold text-slate-800 mb-4">Launch New Zone</h3>
+            <form onSubmit={handleLaunch} className="space-y-4">
+                <input className="w-full border p-2 rounded-lg" placeholder="Target Area" value={newCamp.area} onChange={e=>setNewCamp({...newCamp, area: e.target.value})} required/>
+                <button className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">Launch</button>
+            </form>
         </div>
     </div>
   );
-};
+}; // COMPONENT CLOSED PROPERLY
 
 // --- [FEATURE 3] PUBLIC ZONE WIDGET ---
 const ZoneStarterWidget = ({ db, appId }) => {
   const [campaigns, setCampaigns] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [form, setForm] = useState({ name: '', contact: '' });
 
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'isp_crowdfunds_v1'), where('status', '==', 'Active'));
@@ -6463,106 +6357,44 @@ const ZoneStarterWidget = ({ db, appId }) => {
     return () => unsub();
   }, [db, appId]);
 
-  const handleReserve = async (e) => {
-      e.preventDefault();
-      if(!selected || !form.name) return;
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'isp_crowdfunds_v1', selected.id), { current: increment(1) });
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', TICKETS_COLLECTION), {
-          ticketId: Math.floor(Math.random() * 9000000).toString(),
-          subject: `Zone Pre-Order: ${selected.area}`,
-          message: `NEW RESERVATION: ${form.name} (${form.contact}) wants to join the ${selected.area} expansion.`,
-          status: 'open',
-          date: new Date().toISOString(),
-          isApplication: true,
-          userId: 'GUEST', username: form.name
-      });
-      alert("Reservation Confirmed! We will contact you once the zone is activated.");
-      setSelected(null); setForm({ name: '', contact: '' });
-  };
-
   if(campaigns.length === 0) return null;
 
   return (
     <div className="my-12">
-        <div className="text-center mb-8"><h2 className="text-3xl font-black text-slate-900 mb-2 flex justify-center items-center gap-2"><Rocket className="text-red-600"/> Expansion Zones</h2><p className="text-slate-500">Vote for your area! If we reach the target, we build fiber lines next week.</p></div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {campaigns.map(camp => (
-                <div key={camp.id} className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden hover:-translate-y-1 transition-transform">
-                    <div className="bg-slate-900 p-4 text-white flex justify-between items-center"><h3 className="font-bold text-lg">{camp.area}</h3><div className="flex items-center gap-1 text-xs bg-white/20 px-2 py-1 rounded"><TimerReset size={12}/> {new Date(camp.deadline).toLocaleDateString()}</div></div>
-                    <div className="p-6">
-                        <p className="text-sm text-slate-600 mb-6 h-10">{camp.description}</p>
-                        <div className="mb-6"><div className="flex justify-between text-xs font-bold text-slate-500 mb-2"><span>{camp.current} Joined</span><span>Target: {camp.target}</span></div><div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${camp.current >= camp.target ? 'bg-green-500' : 'bg-red-500'} transition-all duration-1000`} style={{width: `${Math.min((camp.current/camp.target)*100, 100)}%`}}></div></div></div>
-                        {selected?.id === camp.id ? (
-                            <form onSubmit={handleReserve} className="animate-in fade-in">
-                                <input className="w-full border p-2 rounded mb-2 text-sm" placeholder="Your Name" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} required/>
-                                <input className="w-full border p-2 rounded mb-2 text-sm" placeholder="Phone Number" value={form.contact} onChange={e=>setForm({...form, contact: e.target.value})} required/>
-                                <div className="flex gap-2"><button type="button" onClick={()=>setSelected(null)} className="flex-1 bg-slate-200 text-slate-600 py-2 rounded text-xs font-bold">Cancel</button><button className="flex-1 bg-green-600 text-white py-2 rounded text-xs font-bold hover:bg-green-700">Confirm</button></div>
-                            </form>
-                        ) : (<button onClick={()=>setSelected(camp)} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-red-600 transition-colors flex items-center justify-center gap-2"><ThumbsUp size={18}/> Pre-Order Now</button>)}
+                <div key={camp.id} className="bg-white rounded-2xl shadow-lg border p-6">
+                    <h3 className="font-bold text-lg">{camp.area}</h3>
+                    <div className="w-full h-3 bg-slate-100 rounded-full mt-4">
+                        <div className="h-full bg-red-500 rounded-full" style={{width: `${Math.min((camp.current/camp.target)*100, 100)}%`}}></div>
                     </div>
                 </div>
             ))}
         </div>
     </div>
   );
-};
+}; // COMPONENT CLOSED PROPERLY
 
 const RouterQRStickerModal = ({ user, onClose }) => {
   useEffect(() => {
-    // Small delay to ensure the QR image has loaded before printing
-    const timer = setTimeout(() => {
-      window.print();
-    }, 1000);
+    const timer = setTimeout(() => { window.print(); }, 1000);
     return () => clearTimeout(timer);
   }, []);
 
-  // Use your actual deployed domain here
-  const baseUrl = window.location.origin;
-  const repairUrl = `${baseUrl}?mode=auto_repair&uid=${user.id}`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(repairUrl)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(window.location.origin + '?mode=auto_repair&uid=' + user.id)}`;
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm px-4 print:bg-white print:inset-0 print:absolute">
-      {/* Container - Hidden for screen, visible for print via CSS */}
-      <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-xs w-full text-center border-2 border-slate-100 print:shadow-none print:border-none print:m-0 print:p-4">
-        
-        <div className="flex flex-col items-center">
-          <div className="bg-red-600 text-white p-2 rounded-t-lg w-full mb-0">
-             <h2 className="font-black text-sm uppercase tracking-tighter">SwiftNet Support</h2>
-          </div>
-          
-          <div className="border-2 border-red-600 p-4 w-full rounded-b-lg">
-            <p className="text-[10px] font-bold text-slate-500 mb-2 uppercase">Scan for Technical Help</p>
-            <img src={qrUrl} alt="Repair QR" className="w-40 h-40 mx-auto mb-3" />
-            
-            <div className="bg-slate-100 p-2 rounded">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Subscriber</p>
-              <p className="text-xs font-black text-slate-800 truncate">{user.username}</p>
-              <p className="text-[9px] font-mono text-slate-500">Acct: {user.accountNumber}</p>
-            </div>
-          </div>
-        </div>
-
-        <button 
-          onClick={onClose} 
-          className="mt-6 w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-xs print:hidden"
-        >
-          Close & Return
-        </button>
+    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/90 p-4 print:bg-white print:static">
+      <div className="bg-white p-8 rounded-2xl max-w-xs w-full text-center print:shadow-none">
+        <img src={qrUrl} alt="QR" className="w-40 h-40 mx-auto" />
+        <p className="text-xs mt-2 font-bold">{user.username}</p>
+        <button onClick={onClose} className="mt-6 w-full py-2 bg-slate-800 text-white rounded-lg print:hidden">Close</button>
       </div>
-
-      {/* Print-only CSS to hide everything else */}
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          .print-area, .print-area * { visibility: visible; }
-          .fixed { position: absolute !important; top: 0; left: 0; }
-          button { display: none !important; }
-        }
-      `}</style>
     </div>
   );
-};
+}; // COMPONENT CLOSED PROPERLY
+
+
 
 const AdminDashboard = ({ subscribers, announcements, payments, tickets, repairs, user, addToast, db, appId }) => {
   // --- ADD THIS NEW LISTENER STARTING HERE ---
