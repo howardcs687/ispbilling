@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, 
   Legend, ResponsiveContainer, PieChart, Pie, Cell, 
-  AreaChart, Area // <--- These were missing!
+  AreaChart as RechartsAreaChart, Area as RechartsArea 
 } from 'recharts';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAnalytics } from "firebase/analytics";
@@ -993,8 +993,7 @@ const PeakUsageGraph = ({ db, appId }) => {
     const loadHistory = async () => {
         try {
             const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-            
-            // FIX: Use backticks ` ` and slashes / for the path
+            // Path must be precise
             const path = `artifacts/${appId}/public/data/isp_traffic_logs`;
             
             const q = query(
@@ -1008,52 +1007,47 @@ const PeakUsageGraph = ({ db, appId }) => {
                 const d = doc.data();
                 return {
                     time: new Date(d.date).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'}),
-                    usage: d.download
+                    usage: d.download || 0
                 };
             });
 
-            if(points.length === 0) {
-                setData([{ time: 'Now', usage: 0 }]);
-            } else {
-                setData(points);
-            }
+            setData(points.length > 0 ? points : [{ time: 'Now', usage: 0 }]);
         } catch (e) {
             console.error("Graph error:", e);
         }
         setLoading(false);
     };
-
     loadHistory();
   }, [db, appId]);
 
-  // ... (The rest of the render return code stays the same) ...
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-80 w-full flex flex-col">
         <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <Activity size={18} className="text-red-500"/> Peak Usage History (24h)
+            <Activity size={18} className="text-red-500"/> Network Load (24h)
         </h3>
         
         {loading ? (
-            <div className="flex-1 flex items-center justify-center text-slate-400">Loading history...</div>
+            <div className="flex-1 flex items-center justify-center text-slate-400">Loading...</div>
         ) : data.length <= 1 ? (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 text-sm">
                 <p>No history yet.</p>
-                <p className="text-xs mt-1">Keep the Admin dashboard open to record data.</p>
+                <p className="text-xs mt-1">Data is recorded every 10 minutes.</p>
             </div>
         ) : (
             <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data}>
+                <RechartsAreaChart data={data}>
                     <defs>
                         <linearGradient id="colorUsage" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
                             <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                         </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3}/>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1}/>
                     <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{fontSize: 10}} minTickGap={30}/>
+                    <YAxis hide />
                     <RechartsTooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}/>
-                    <Area type="monotone" dataKey="usage" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#colorUsage)" />
-                </AreaChart>
+                    <RechartsArea type="monotone" dataKey="usage" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#colorUsage)" />
+                </RechartsAreaChart>
             </ResponsiveContainer>
         )}
     </div>
@@ -4603,7 +4597,9 @@ const AdminAnalytics = ({ subscribers, payments, tickets, db, appId }) => {
                 </div>
             </div>
         </div>
+        {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left: Subscriber Health */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-80">
                 <h3 className="font-bold text-slate-700 mb-4">Subscriber Health</h3>
                 <ResponsiveContainer width="100%" height="100%">
@@ -4615,15 +4611,14 @@ const AdminAnalytics = ({ subscribers, payments, tickets, db, appId }) => {
                         <Legend />
                     </PieChart>
                 </ResponsiveContainer>
-                
-                {/* --- FIX APPLIED HERE: Passing the required props --- */}
-                <PeakUsageGraph db={db} appId={appId} />
             </div>
+
+            {/* Right: Support Tickets */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-80">
                 <h3 className="font-bold text-slate-700 mb-4">Support Ticket Status</h3>
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={ticketData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.2} />
                         <XAxis dataKey="name" axisLine={false} tickLine={false} />
                         <YAxis axisLine={false} tickLine={false} />
                         <RechartsTooltip cursor={{fill: 'transparent'}} />
@@ -4634,9 +4629,13 @@ const AdminAnalytics = ({ subscribers, payments, tickets, db, appId }) => {
                 </ResponsiveContainer>
             </div>
         </div>
+
+        {/* New Full Width Row for the History Graph */}
+        <div className="w-full">
+            <PeakUsageGraph db={db} appId={appId} />
+        </div>
     </div>
   );
-};
 
 const ExpenseManager = ({ appId, db, subscribers, payments }) => {
   const [expenses, setExpenses] = useState([]);
@@ -8765,6 +8764,7 @@ if (isQRRepairMode) {
       {/* 3. Authenticated Views */}
       {user ? (
         <Layout user={user} onLogout={handleLogout}>
+          <TrafficRecorder db={db} app={app} appId={appId} />
            {user.role === 'admin' ? (
              <AdminDashboard 
                 subscribers={subscribers} 
