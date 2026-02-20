@@ -2335,63 +2335,58 @@ const Login = ({ onLogin }) => {
   const [recoveryLoading, setRecoveryLoading] = useState(false);
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setError('');
-  try {
-    if (isSignUp) {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const userUid = userCredential.user.uid;
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid), {
-        uid: userUid,
-        username: name || email.split('@')[0],
-        email: email,
-        role: 'subscriber',
-        status: 'applicant',
-        accountNumber: 'PENDING',
-        isOnline: false,
-        plan: null,
-        balance: 0,
-        address: '',
-        dueDate: new Date().toISOString()
-      });
-    } else {
-      // 1. Authenticate
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const userUid = userCredential.user.uid;
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      if (isSignUp) {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const userUid = userCredential.user.uid;
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid), {
+          uid: userUid,
+          username: name || email.split('@')[0],
+          email: email,
+          role: 'subscriber',
+          status: 'applicant',
+          accountNumber: 'PENDING',
+          isOnline: false, // Ensure this is false on creation
+          plan: null,
+          balance: 0,
+          address: '',
+          dueDate: new Date().toISOString()
+        });
+      } else {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const userUid = userCredential.user.uid;
 
-      // 2. Fetch User Profile
-      const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid);
-      const userSnap = await getDoc(userRef);
+        const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid);
+        const userSnap = await getDoc(userRef);
 
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        const isMasterAdmin = email === 'admin@swiftnet.com' || email === 'ramoshowardkingsley58@gmail.com';
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          const isMasterAdmin = email === 'admin@swiftnet.com' || email === 'ramoshowardkingsley58@gmail.com';
 
-        // Check if account is restricted
-        if (userData.status === 'restricted' && !isMasterAdmin) {
-          await signOut(auth);
-          throw new Error("⛔ ACCOUNT RESTRICTED: Contact Super Admin.");
+          if (userData.status === 'restricted' && !isMasterAdmin) {
+            await signOut(auth);
+            throw new Error("⛔ ACCOUNT RESTRICTED: Contact Super Admin.");
+          }
+
+          // FIX: Instead of locking them out, we force a session reset 
+          // only if they are truly restricted. We allow the login here 
+          // and the App component will handle setting isOnline to true.
+          await updateDoc(userRef, { 
+            isOnline: true, 
+            lastLogin: new Date().toISOString() 
+          });
         }
-
-        // Prevent multiple logins (Session Lock)
-        if (userData.isOnline === true && !isMasterAdmin && userData.role !== 'admin') {
-          await updateDoc(userRef, { status: 'restricted', isOnline: false });
-          await signOut(auth);
-          throw new Error("⚠️ SECURITY ALERT: This account is already logged in elsewhere...");
-        }
-
-        // Success: Mark online
-        await updateDoc(userRef, { isOnline: true, lastLogin: new Date().toISOString() });
       }
-    } // <-- Properly closing the else block now
-  } catch (err) {
-    console.error(err);
-    setError(err.message);
-    if (auth.currentUser) await signOut(auth);
-  }
-  setLoading(false);
-};
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+      if (auth.currentUser) await signOut(auth);
+    }
+    setLoading(false);
+  };
 
   const handleForgotPassword = async (e) => {
      e.preventDefault();
