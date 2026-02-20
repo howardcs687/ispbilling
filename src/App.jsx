@@ -2356,28 +2356,34 @@ const Login = ({ onLogin }) => {
           dueDate: new Date().toISOString()
         });
       } else {
+        // 1. Initial Authentication
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const userUid = userCredential.user.uid;
 
+        // 2. Immediate Security Check
         const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, userUid);
         const userSnap = await getDoc(userRef);
 
         if (userSnap.exists()) {
           const userData = userSnap.data();
-          const isMasterAdmin = email === 'admin@swiftnet.com' || email === 'ramoshowardkingsley58@gmail.com';
+          const isSuperAdmin = email === 'admin@swiftnet.com' || email === 'ramoshowardkingsley58@gmail.com';
 
-          if (userData.status === 'restricted' && !isMasterAdmin) {
-            await signOut(auth);
-            throw new Error("⛔ ACCOUNT RESTRICTED: Contact Super Admin.");
+          // BLOCK Restricted Users
+          if (userData.status === 'restricted' && !isSuperAdmin) {
+            await signOut(auth); // Sign them back out immediately
+            throw new Error("⛔ ACCOUNT LOCKED: Your access has been suspended by the administrator.");
           }
 
-          // FIX: Instead of locking them out, we force a session reset 
-          // only if they are truly restricted. We allow the login here 
-          // and the App component will handle setting isOnline to true.
-          await updateDoc(userRef, { 
-            isOnline: true, 
-            lastLogin: new Date().toISOString() 
-          });
+          // BLOCK Simultaneous Logins (Optional but recommended)
+          if (userData.isOnline === true && !isSuperAdmin && userData.role !== 'admin') {
+            // Mark them as restricted automatically for security
+            await updateDoc(userRef, { status: 'restricted', isOnline: false });
+            await signOut(auth);
+            throw new Error("⚠️ SECURITY ALERT: Multiple logins detected. Account locked for your protection.");
+          }
+
+          // Success: Mark online
+          await updateDoc(userRef, { isOnline: true, lastLogin: new Date().toISOString() });
         }
       }
     } catch (err) {
@@ -8339,6 +8345,27 @@ export default function App() {
 
   const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
 
+
+// Add this inside your export default function App() { ... }
+useEffect(() => {
+  if (!user || user.role === 'admin') return;
+
+  const userRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, user.uid);
+  
+  const unsubscribe = onSnapshot(userRef, (docSnap) => {
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      
+      // If the account status becomes 'restricted', kick them out immediately
+      if (data.status === 'restricted') {
+        alert("⛔ SECURITY ALERT: Your account has been restricted. You have been logged out.");
+        handleLogout(); // This calls your existing sign-out logic
+      }
+    }
+  });
+
+  return () => unsubscribe();
+}, [user, db, appId]);
   // --- EFFECT: CHECK HOTSPOT MODE ---
 useEffect(() => {
   const params = new URLSearchParams(window.location.search);
